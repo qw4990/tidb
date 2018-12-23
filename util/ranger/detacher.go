@@ -331,6 +331,9 @@ func DetachSimpleCondAndBuildRangeForIndex(sctx sessionctx.Context, conditions [
 		newTpSlice = append(newTpSlice, newFieldType(col.RetType))
 	}
 	ranges, accessConds, _, _, err = detachCNFCondAndBuildRangeForIndex(sctx, conditions, cols, newTpSlice, lengths, false)
+	if err != nil {
+		return nil, nil, errors.Trace(err)
+	}
 	return ranges, accessConds, nil
 }
 
