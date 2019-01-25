@@ -753,6 +753,7 @@ func (e *LimitExec) Next(ctx context.Context, req *chunk.RecordBatch) error {
 }
 
 func (e *LimitExec) adjustRecordBatch(rb *chunk.RecordBatch) *chunk.RecordBatch {
+	// min(numRows the parent want, the numRows the Limit need)
 	return rb.SetRequiredRows(mathutil.Min(rb.RequiredRows(), int(e.end-e.cursor)))
 }
 

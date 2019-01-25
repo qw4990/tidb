@@ -37,7 +37,7 @@ func NewRecordBatch(chk *Chunk) *RecordBatch {
 
 // SetRequiredRows sets the number of rows the parent executor want.
 func (rb *RecordBatch) SetRequiredRows(numRows int) *RecordBatch {
-	if numRows < 0 {
+	if numRows <= 0 {
 		numRows = UnspecifiedNumRows
 	}
 	rb.requiredRows = numRows

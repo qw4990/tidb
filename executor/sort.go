@@ -19,7 +19,6 @@ import (
 	"sort"
 	"time"
 
-	"github.com/cznic/mathutil"
 	"github.com/opentracing/opentracing-go"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb/expression"
@@ -370,7 +369,7 @@ func (e *TopNExec) loadChunksUntilTotalLimit(ctx context.Context) error {
 }
 
 func (e *TopNExec) adjustRecordBatch(rb *chunk.RecordBatch) *chunk.RecordBatch {
-	return rb.SetRequiredRows(mathutil.Min(rb.RequiredRows(), int(e.totalLimit)-e.rowChunks.Len()))
+	return rb.SetRequiredRows(int(e.totalLimit) - e.rowChunks.Len())
 }
 
 const topNCompactionFactor = 4
