@@ -23,7 +23,7 @@ import (
 	"time"
 
 	"github.com/cznic/mathutil"
-	opentracing "github.com/opentracing/opentracing-go"
+	"github.com/opentracing/opentracing-go"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/parser/model"
@@ -711,7 +711,7 @@ func (e *LimitExec) Next(ctx context.Context, req *chunk.RecordBatch) error {
 		return nil
 	}
 	for !e.meetFirstBatch {
-		err := e.children[0].Next(ctx, chunk.NewRecordBatch(e.childResult))
+		err := e.children[0].Next(ctx, e.adjustRecordBatch(chunk.NewRecordBatch(e.childResult)))
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -735,7 +735,7 @@ func (e *LimitExec) Next(ctx context.Context, req *chunk.RecordBatch) error {
 		}
 		e.cursor += batchSize
 	}
-	err := e.children[0].Next(ctx, req)
+	err := e.children[0].Next(ctx, e.adjustRecordBatch(req))
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -750,6 +750,10 @@ func (e *LimitExec) Next(ctx context.Context, req *chunk.RecordBatch) error {
 	}
 	e.cursor += batchSize
 	return nil
+}
+
+func (e *LimitExec) adjustRecordBatch(rb *chunk.RecordBatch) *chunk.RecordBatch {
+	return rb.SetRequiredRows(mathutil.Min(rb.RequiredRows(), int(e.end-e.cursor)))
 }
 
 // Open implements the Executor Open interface.

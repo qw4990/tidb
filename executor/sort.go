@@ -19,7 +19,8 @@ import (
 	"sort"
 	"time"
 
-	opentracing "github.com/opentracing/opentracing-go"
+	"github.com/cznic/mathutil"
+	"github.com/opentracing/opentracing-go"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb/expression"
 	plannercore "github.com/pingcap/tidb/planner/core"
@@ -104,7 +105,7 @@ func (e *SortExec) Next(ctx context.Context, req *chunk.RecordBatch) error {
 		}
 		e.fetched = true
 	}
-	for req.NumRows() < e.maxChunkSize {
+	for !req.IsFull() {
 		if e.Idx >= len(e.rowPtrs) {
 			return nil
 		}
@@ -331,7 +332,7 @@ func (e *TopNExec) Next(ctx context.Context, req *chunk.RecordBatch) error {
 	if e.Idx >= len(e.rowPtrs) {
 		return nil
 	}
-	for req.NumRows() < e.maxChunkSize && e.Idx < len(e.rowPtrs) {
+	for !req.IsFull() && e.Idx < len(e.rowPtrs) {
 		row := e.rowChunks.GetRow(e.rowPtrs[e.Idx])
 		req.AppendRow(row)
 		e.Idx++
@@ -346,7 +347,7 @@ func (e *TopNExec) loadChunksUntilTotalLimit(ctx context.Context) error {
 	e.rowChunks.GetMemTracker().SetLabel("rowChunks")
 	for uint64(e.rowChunks.Len()) < e.totalLimit {
 		srcChk := e.children[0].newFirstChunk()
-		err := e.children[0].Next(ctx, chunk.NewRecordBatch(srcChk))
+		err := e.children[0].Next(ctx, e.adjustRecordBatch(chunk.NewRecordBatch(srcChk)))
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -366,6 +367,10 @@ func (e *TopNExec) loadChunksUntilTotalLimit(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+func (e *TopNExec) adjustRecordBatch(rb *chunk.RecordBatch) *chunk.RecordBatch {
+	return rb.SetRequiredRows(mathutil.Min(rb.RequiredRows(), int(e.totalLimit)-e.rowChunks.Len()))
 }
 
 const topNCompactionFactor = 4
