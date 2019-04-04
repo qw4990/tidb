@@ -551,10 +551,11 @@ func (b *builtinCastIntAsTimeSig) evalTime(row chunk.Row) (res types.Time, isNul
 	if isNull || err != nil {
 		return res, isNull, err
 	}
-	res, err = types.ParseTimeFromNum(b.ctx.GetSessionVars().StmtCtx, val, b.tp.Tp, b.tp.Decimal)
+	sc := b.ctx.GetSessionVars().StmtCtx
+	res, err = types.ParseTimeFromNum(sc, val, b.tp.Tp, b.tp.Decimal)
 	if err != nil {
-		if types.ErrInvalidTimeFormat.Equal(err) {
-			b.ctx.GetSessionVars().StmtCtx.AppendWarning(err)
+		if sc.InSelectStmt && types.ErrInvalidTimeFormat.Equal(err) {
+			sc.AppendWarning(err)
 			return res, true, nil
 		}
 		return res, true, err
@@ -838,7 +839,7 @@ func (b *builtinCastRealAsTimeSig) evalTime(row chunk.Row) (types.Time, bool, er
 	sc := b.ctx.GetSessionVars().StmtCtx
 	res, err := types.ParseTime(sc, strconv.FormatFloat(val, 'f', -1, 64), b.tp.Tp, b.tp.Decimal)
 	if err != nil {
-		if types.ErrInvalidTimeFormat.Equal(err) {
+		if sc.InSelectStmt && types.ErrInvalidTimeFormat.Equal(err) {
 			sc.AppendWarning(err)
 			return res, true, nil
 		}
@@ -999,7 +1000,7 @@ func (b *builtinCastDecimalAsTimeSig) evalTime(row chunk.Row) (res types.Time, i
 	sc := b.ctx.GetSessionVars().StmtCtx
 	res, err = types.ParseTimeFromFloatString(sc, string(val.ToString()), b.tp.Tp, b.tp.Decimal)
 	if err != nil {
-		if types.ErrInvalidTimeFormat.Equal(err) {
+		if sc.InSelectStmt && types.ErrInvalidTimeFormat.Equal(err) {
 			sc.AppendWarning(err)
 			return res, true, nil
 		}
@@ -1211,7 +1212,7 @@ func (b *builtinCastStringAsTimeSig) evalTime(row chunk.Row) (res types.Time, is
 	sc := b.ctx.GetSessionVars().StmtCtx
 	res, err = types.ParseTime(sc, val, b.tp.Tp, b.tp.Decimal)
 	if err != nil {
-		if types.ErrInvalidTimeFormat.Equal(err) {
+		if sc.InSelectStmt && types.ErrInvalidTimeFormat.Equal(err) {
 			sc.AppendWarning(err)
 			return res, true, nil
 		}
@@ -1530,7 +1531,7 @@ func (b *builtinCastDurationAsTimeSig) evalTime(row chunk.Row) (res types.Time, 
 	sc := b.ctx.GetSessionVars().StmtCtx
 	res, err = val.ConvertToTime(sc, b.tp.Tp)
 	if err != nil {
-		if types.ErrInvalidTimeFormat.Equal(err) {
+		if sc.InSelectStmt && types.ErrInvalidTimeFormat.Equal(err) {
 			b.ctx.GetSessionVars().StmtCtx.AppendWarning(err)
 			return res, true, nil
 		}
@@ -1658,8 +1659,8 @@ func (b *builtinCastJSONAsTimeSig) evalTime(row chunk.Row) (res types.Time, isNu
 	sc := b.ctx.GetSessionVars().StmtCtx
 	res, err = types.ParseTime(sc, s, b.tp.Tp, b.tp.Decimal)
 	if err != nil {
-		if types.ErrInvalidTimeFormat.Equal(err) {
-			b.ctx.GetSessionVars().StmtCtx.AppendWarning(err)
+		if sc.InSelectStmt && types.ErrInvalidTimeFormat.Equal(err) {
+			sc.AppendWarning(err)
 			return res, true, nil
 		}
 		return res, false, err
