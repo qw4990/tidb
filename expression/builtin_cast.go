@@ -553,6 +553,10 @@ func (b *builtinCastIntAsTimeSig) evalTime(row chunk.Row) (res types.Time, isNul
 	}
 	res, err = types.ParseTimeFromNum(b.ctx.GetSessionVars().StmtCtx, val, b.tp.Tp, b.tp.Decimal)
 	if err != nil {
+		if types.ErrInvalidTimeFormat.Equal(err) {
+			b.ctx.GetSessionVars().StmtCtx.AppendWarning(err)
+			return res, true, nil
+		}
 		return res, true, err
 	}
 	if b.tp.Tp == mysql.TypeDate {
@@ -834,6 +838,10 @@ func (b *builtinCastRealAsTimeSig) evalTime(row chunk.Row) (types.Time, bool, er
 	sc := b.ctx.GetSessionVars().StmtCtx
 	res, err := types.ParseTime(sc, strconv.FormatFloat(val, 'f', -1, 64), b.tp.Tp, b.tp.Decimal)
 	if err != nil {
+		if types.ErrInvalidTimeFormat.Equal(err) {
+			sc.AppendWarning(err)
+			return res, true, nil
+		}
 		return types.Time{}, true, err
 	}
 	if b.tp.Tp == mysql.TypeDate {
@@ -991,6 +999,10 @@ func (b *builtinCastDecimalAsTimeSig) evalTime(row chunk.Row) (res types.Time, i
 	sc := b.ctx.GetSessionVars().StmtCtx
 	res, err = types.ParseTimeFromFloatString(sc, string(val.ToString()), b.tp.Tp, b.tp.Decimal)
 	if err != nil {
+		if types.ErrInvalidTimeFormat.Equal(err) {
+			sc.AppendWarning(err)
+			return res, true, nil
+		}
 		return res, false, err
 	}
 	if b.tp.Tp == mysql.TypeDate {
@@ -1199,6 +1211,10 @@ func (b *builtinCastStringAsTimeSig) evalTime(row chunk.Row) (res types.Time, is
 	sc := b.ctx.GetSessionVars().StmtCtx
 	res, err = types.ParseTime(sc, val, b.tp.Tp, b.tp.Decimal)
 	if err != nil {
+		if types.ErrInvalidTimeFormat.Equal(err) {
+			sc.AppendWarning(err)
+			return res, true, nil
+		}
 		return types.Time{}, true, handleInvalidTimeError(b.ctx, err)
 	}
 	if b.tp.Tp == mysql.TypeDate {
@@ -1514,6 +1530,10 @@ func (b *builtinCastDurationAsTimeSig) evalTime(row chunk.Row) (res types.Time, 
 	sc := b.ctx.GetSessionVars().StmtCtx
 	res, err = val.ConvertToTime(sc, b.tp.Tp)
 	if err != nil {
+		if types.ErrInvalidTimeFormat.Equal(err) {
+			b.ctx.GetSessionVars().StmtCtx.AppendWarning(err)
+			return res, true, nil
+		}
 		return res, false, err
 	}
 	res, err = res.RoundFrac(sc, b.tp.Decimal)
@@ -1638,6 +1658,10 @@ func (b *builtinCastJSONAsTimeSig) evalTime(row chunk.Row) (res types.Time, isNu
 	sc := b.ctx.GetSessionVars().StmtCtx
 	res, err = types.ParseTime(sc, s, b.tp.Tp, b.tp.Decimal)
 	if err != nil {
+		if types.ErrInvalidTimeFormat.Equal(err) {
+			b.ctx.GetSessionVars().StmtCtx.AppendWarning(err)
+			return res, true, nil
+		}
 		return res, false, err
 	}
 	if b.tp.Tp == mysql.TypeDate {
