@@ -84,11 +84,7 @@ var (
 	columnPool sync.Pool
 )
 
-type ChkAllocator struct {
-	bufAllocator *BufAllocator
-}
-
-func (a *ChkAllocator) NewChunk(fields []*types.FieldType, cap, maxChunkSize int) *Chunk {
+func NewChunkWithAllocator(a *BufAllocator, fields []*types.FieldType, cap, maxChunkSize int) *Chunk {
 	chk := chunkPool.Get().(*Chunk)
 	chk.capacity = mathutil.Min(cap, maxChunkSize)
 	for _, f := range fields {
@@ -96,18 +92,18 @@ func (a *ChkAllocator) NewChunk(fields []*types.FieldType, cap, maxChunkSize int
 		if elemLen == varElemLen {
 			estimatedElemLen := 8
 			col := columnPool.Get().(*column)
-			offsets := a.bufAllocator.Alloc(8, (cap+1)*8)
+			offsets := a.Alloc(8, (cap+1)*8)
 			col.offsets = *(*[]int64)(unsafe.Pointer(&offsets))
 			col.elemBuf = nil
-			col.data = a.bufAllocator.Alloc(0, cap*estimatedElemLen)
-			col.nullBitmap = a.bufAllocator.Alloc(0, cap>>3)
+			col.data = a.Alloc(0, cap*estimatedElemLen)
+			col.nullBitmap = a.Alloc(0, cap>>3)
 			chk.columns = append(chk.columns, col)
 		} else {
 			col := columnPool.Get().(*column)
 			col.offsets = nil
-			col.elemBuf = a.bufAllocator.Alloc(elemLen, elemLen)
-			col.data = a.bufAllocator.Alloc(0, cap*elemLen)
-			col.nullBitmap = a.bufAllocator.Alloc(0, cap>>3)
+			col.elemBuf = a.Alloc(elemLen, elemLen)
+			col.data = a.Alloc(0, cap*elemLen)
+			col.nullBitmap = a.Alloc(0, cap>>3)
 		}
 	}
 	chk.numVirtualRows = 0
@@ -116,16 +112,19 @@ func (a *ChkAllocator) NewChunk(fields []*types.FieldType, cap, maxChunkSize int
 	return chk
 }
 
-func (a *ChkAllocator) Release(chk *Chunk) {
+func ReleaseChunk(chk *Chunk) {
+	if chk.a == nil {
+		return
+	}
 	for _, c := range chk.columns {
 		if c.offsets != nil { // varElemLen
 			buf := *(*[]byte)(unsafe.Pointer(&c.offsets))
-			a.bufAllocator.Free(buf)
+			chk.a.Free(buf)
 		} else {
-			a.bufAllocator.Free(c.elemBuf)
+			chk.a.Free(c.elemBuf)
 		}
-		a.bufAllocator.Free(c.data)
-		a.bufAllocator.Free(c.nullBitmap)
+		chk.a.Free(c.data)
+		chk.a.Free(c.nullBitmap)
 		columnPool.Put(c)
 	}
 	chunkPool.Put(chk)

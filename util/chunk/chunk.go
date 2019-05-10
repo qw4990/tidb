@@ -39,7 +39,7 @@ type Chunk struct {
 	// requiredRows indicates how many rows the parent executor want.
 	requiredRows int
 
-	a *ChkAllocator
+	a *BufAllocator
 }
 
 // Capacity constants.
@@ -559,9 +559,7 @@ func (c *Chunk) AppendDatum(colIdx int, d *types.Datum) {
 
 // Release .
 func (c *Chunk) Release() {
-	if c.a != nil {
-		c.a.Release(c)
-	}
+	ReleaseChunk(c)
 }
 
 func writeTime(buf []byte, t types.Time) {
