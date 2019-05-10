@@ -61,6 +61,8 @@ var (
 	executorCounterNestedLoopApplyExec = metrics.ExecutorCounter.WithLabelValues("NestedLoopApplyExec")
 	executorCounterIndexLookUpJoin     = metrics.ExecutorCounter.WithLabelValues("IndexLookUpJoin")
 	executorCounterIndexLookUpExecutor = metrics.ExecutorCounter.WithLabelValues("IndexLookUpExecutor")
+
+	globalAllocator = chunk.NewBufAllocator(15, 1<<10)
 )
 
 // executorBuilder builds an Executor from a Plan.

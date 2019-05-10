@@ -84,6 +84,7 @@ type baseExecutor struct {
 	children      []Executor
 	retFieldTypes []*types.FieldType
 	runtimeStats  *execdetails.RuntimeStats
+	allocator     *chunk.BufAllocator
 }
 
 // Open initializes children recursively and "childrenResults" according to children's schemas.
@@ -118,7 +119,7 @@ func (e *baseExecutor) Schema() *expression.Schema {
 
 // newFirstChunk creates a new chunk to buffer current executor's result.
 func (e *baseExecutor) newFirstChunk() *chunk.Chunk {
-	return chunk.New(e.retTypes(), e.initCap, e.maxChunkSize)
+	return chunk.NewChunkWithAllocator(e.allocator, e.retTypes(), e.initCap, e.maxChunkSize)
 }
 
 // retTypes returns all output column types.
@@ -139,6 +140,7 @@ func newBaseExecutor(ctx sessionctx.Context, schema *expression.Schema, id fmt.S
 		schema:       schema,
 		initCap:      ctx.GetSessionVars().InitChunkSize,
 		maxChunkSize: ctx.GetSessionVars().MaxChunkSize,
+		allocator:    globalAllocator,
 	}
 	if ctx.GetSessionVars().StmtCtx.RuntimeStatsColl != nil {
 		if e.id != nil {

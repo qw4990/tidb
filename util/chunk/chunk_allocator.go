@@ -80,8 +80,16 @@ func (b *BufAllocator) SetParent(pb *BufAllocator) error {
 }
 
 var (
-	chunkPool  sync.Pool
-	columnPool sync.Pool
+	chunkPool = sync.Pool{
+		New: func() interface{} {
+			return new(Chunk)
+		},
+	}
+	columnPool = sync.Pool{
+		New: func() interface{} {
+			return new(column)
+		},
+	}
 )
 
 func NewChunkWithAllocator(a *BufAllocator, fields []*types.FieldType, cap, maxChunkSize int) *Chunk {
