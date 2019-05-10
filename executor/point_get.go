@@ -15,6 +15,7 @@ package executor
 
 import (
 	"context"
+	"runtime/debug"
 
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/parser/model"
@@ -76,6 +77,7 @@ func (e *PointGetExecutor) Close() error {
 
 // Next implements the Executor interface.
 func (e *PointGetExecutor) Next(ctx context.Context, req *chunk.RecordBatch) error {
+	debug.PrintStack()
 	req.Reset()
 	if e.done {
 		return nil

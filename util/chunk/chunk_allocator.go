@@ -21,15 +21,15 @@ func NewBufAllocator(bitN, bufSize uint) *BufAllocator {
 	b := &BufAllocator{
 		maxCap:  1 << bitN,
 		bufList: make([]chan []byte, bitN+1),
-		index:   make([]int, 1<<bitN),
-		pad:     make([]byte, 1<<bitN),
+		index:   make([]int, 1<<bitN+1),
+		pad:     make([]byte, 1<<bitN+1),
 	}
 	for i := uint(1); i <= bitN; i++ {
 		b.bufList[i] = make(chan []byte, bufSize)
 		left := (1 << (i - 1)) + 1
 		right := 1 << i
 		for j := left; j <= right; j++ {
-			b.index[j] = right
+			b.index[j] = int(i)
 		}
 	}
 	return b
