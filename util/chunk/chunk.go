@@ -38,6 +38,8 @@ type Chunk struct {
 
 	// requiredRows indicates how many rows the parent executor want.
 	requiredRows int
+
+	a *ChkAllocator
 }
 
 // Capacity constants.
@@ -552,6 +554,13 @@ func (c *Chunk) AppendDatum(colIdx int, d *types.Datum) {
 		c.AppendTime(colIdx, d.GetMysqlTime())
 	case types.KindMysqlJSON:
 		c.AppendJSON(colIdx, d.GetMysqlJSON())
+	}
+}
+
+// Release .
+func (c *Chunk) Release() {
+	if c.a != nil {
+		c.a.Release(c)
 	}
 }
 
