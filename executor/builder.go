@@ -65,6 +65,10 @@ var (
 	globalAllocator = chunk.NewBufAllocator(15, 1<<10)
 )
 
+func GlobalAllocator() *chunk.BufAllocator {
+	return globalAllocator
+}
+
 // executorBuilder builds an Executor from a Plan.
 // The InfoSchema must not change during execution.
 type executorBuilder struct {
