@@ -91,6 +91,10 @@ var (
 )
 
 func NewChunkWithAllocator(a *BufAllocator, fields []*types.FieldType, cap, maxChunkSize int) *Chunk {
+	if a == nil {
+		return New(fields, cap, maxChunkSize)
+	}
+
 	chk := chunkPool.Get().(*Chunk)
 	chk.capacity = mathutil.Min(cap, maxChunkSize)
 	for _, f := range fields {
