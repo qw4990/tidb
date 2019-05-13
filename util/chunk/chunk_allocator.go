@@ -115,6 +115,7 @@ func NewChunkWithAllocator(a *BufAllocator, fields []*types.FieldType, cap, maxC
 			col.elemBuf = a.Alloc(elemLen, elemLen)
 			col.data = a.Alloc(0, cap*elemLen)
 			col.nullBitmap = a.Alloc(0, cap>>3)
+			chk.columns = append(chk.columns, col)
 		}
 	}
 	chk.numVirtualRows = 0
