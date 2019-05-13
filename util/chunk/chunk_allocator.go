@@ -4,8 +4,13 @@ import (
 	"fmt"
 	"github.com/cznic/mathutil"
 	"github.com/pingcap/tidb/types"
+	"runtime"
 	"sync"
 	"sync/atomic"
+)
+
+var (
+	GlobalAllocator = NewMultiBufAllocator(uint(runtime.NumCPU()), 15, 64)
 )
 
 type Allocator interface {

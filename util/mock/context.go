@@ -17,6 +17,7 @@ package mock
 import (
 	"context"
 	"fmt"
+	"github.com/pingcap/tidb/util/chunk"
 	"sync"
 	"time"
 
@@ -29,7 +30,7 @@ import (
 	"github.com/pingcap/tidb/util"
 	"github.com/pingcap/tidb/util/kvcache"
 	"github.com/pingcap/tidb/util/sqlexec"
-	binlog "github.com/pingcap/tipb/go-binlog"
+	"github.com/pingcap/tipb/go-binlog"
 )
 
 var _ sessionctx.Context = (*Context)(nil)
@@ -228,6 +229,7 @@ func NewContext() *Context {
 	sctx.sessionVars.MaxChunkSize = 32
 	sctx.sessionVars.StmtCtx.TimeZone = time.UTC
 	sctx.sessionVars.GlobalVarsAccessor = variable.NewMockGlobalAccessor()
+	sctx.sessionVars.MemoryAllocator = chunk.GlobalAllocator
 	return sctx
 }
 
