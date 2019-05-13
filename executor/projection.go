@@ -255,14 +255,35 @@ func (e *ProjectionExec) prepare(ctx context.Context) {
 // Close implements the Executor Close interface.
 func (e *ProjectionExec) Close() error {
 	if e.isUnparallelExec() {
+		e.childResult.Release()
 		e.childResult = nil
 	}
 	if e.outputCh != nil {
 		close(e.finishCh)
 		// Wait for "projectionInputFetcher" to finish and exit.
-		for range e.outputCh {
+		for p := range e.outputCh {
+			if p.chk != nil {
+				p.chk.Release()
+				p.chk = nil
+			}
 		}
 		e.outputCh = nil
+	}
+	if e.fetcher.inputCh != nil {
+		for p := range e.fetcher.inputCh {
+			if p.chk != nil {
+				p.chk.Release()
+				p.chk = nil
+			}
+		}
+	}
+	if e.fetcher.outputCh != nil {
+		for p := range e.fetcher.outputCh {
+			if p.chk != nil {
+				p.chk.Release()
+				p.chk = nil
+			}
+		}
 	}
 	return e.baseExecutor.Close()
 }
