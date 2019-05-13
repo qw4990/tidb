@@ -85,7 +85,10 @@ func (b *BufAllocator) Alloc(l, c int) []byte {
 }
 
 func (b *BufAllocator) Free(buf []byte) {
-	idx := b.index[len(buf)]
+	if cap(buf) > b.maxCap {
+		return
+	}
+	idx := b.index[cap(buf)]
 	select {
 	case b.bufList[idx] <- buf:
 	default:
