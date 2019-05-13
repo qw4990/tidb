@@ -17,7 +17,6 @@ package mock
 import (
 	"context"
 	"fmt"
-	"github.com/pingcap/tidb/util/chunk"
 	"sync"
 	"time"
 
@@ -229,7 +228,6 @@ func NewContext() *Context {
 	sctx.sessionVars.MaxChunkSize = 32
 	sctx.sessionVars.StmtCtx.TimeZone = time.UTC
 	sctx.sessionVars.GlobalVarsAccessor = variable.NewMockGlobalAccessor()
-	sctx.sessionVars.MemoryAllocator = chunk.GlobalAllocator
 	return sctx
 }
 
