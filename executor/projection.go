@@ -270,7 +270,8 @@ func (e *ProjectionExec) Close() error {
 		e.outputCh = nil
 	}
 	if e.fetcher.inputCh != nil {
-		for p := range e.fetcher.inputCh {
+		for len(e.fetcher.inputCh) > 0 {
+			p := <-e.fetcher.inputCh
 			if p.chk != nil {
 				p.chk.Release()
 				p.chk = nil
@@ -278,7 +279,8 @@ func (e *ProjectionExec) Close() error {
 		}
 	}
 	if e.fetcher.outputCh != nil {
-		for p := range e.fetcher.outputCh {
+		for len(e.fetcher.outputCh) > 0 {
+			p := <-e.fetcher.outputCh
 			if p.chk != nil {
 				p.chk.Release()
 				p.chk = nil
