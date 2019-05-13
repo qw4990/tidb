@@ -5,7 +5,36 @@ import (
 	"github.com/cznic/mathutil"
 	"github.com/pingcap/tidb/types"
 	"sync"
+	"sync/atomic"
 )
+
+type Allocator interface {
+	Alloc(l, c int) []byte
+	Free(buf []byte)
+}
+
+type MultiBufAllocator struct {
+	ai uint32
+	fi uint32
+	n  uint32
+	as []*BufAllocator
+}
+
+func NewMultiBufAllocator(n, bitN, bufSize uint) *MultiBufAllocator {
+	m := &MultiBufAllocator{0, 0, uint32(n), make([]*BufAllocator, 0, n)}
+	for i := 0; i < int(n); i++ {
+		m.as = append(m.as, NewBufAllocator(bitN, bufSize))
+	}
+	return m
+}
+
+func (b *MultiBufAllocator) Alloc(l, c int) []byte {
+	return b.as[atomic.AddUint32(&b.ai, 1)%b.n].Alloc(l, c)
+}
+
+func (b *MultiBufAllocator) Free(buf []byte) {
+	b.as[atomic.AddUint32(&b.fi, 1)%b.n].Free(buf)
+}
 
 type BufAllocator struct {
 	maxCap  int
@@ -90,7 +119,7 @@ var (
 	}
 )
 
-func NewChunkWithAllocator(a *BufAllocator, fields []*types.FieldType, cap, maxChunkSize int) *Chunk {
+func NewChunkWithAllocator(a Allocator, fields []*types.FieldType, cap, maxChunkSize int) *Chunk {
 	if a == nil {
 		return New(fields, cap, maxChunkSize)
 	}

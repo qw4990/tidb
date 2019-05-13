@@ -84,7 +84,7 @@ type baseExecutor struct {
 	children      []Executor
 	retFieldTypes []*types.FieldType
 	runtimeStats  *execdetails.RuntimeStats
-	allocator     *chunk.BufAllocator
+	allocator     chunk.Allocator
 }
 
 // Open initializes children recursively and "childrenResults" according to children's schemas.
@@ -910,7 +910,7 @@ func (e *SelectionExec) Open(ctx context.Context) error {
 
 // Close implements plannercore.Plan Close interface.
 func (e *SelectionExec) Close() error {
-	//e.childResult.Release()
+	e.childResult.Release()
 	e.childResult = nil
 	e.selected = nil
 	return e.baseExecutor.Close()
