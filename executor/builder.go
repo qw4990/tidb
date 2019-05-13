@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -62,7 +63,7 @@ var (
 	executorCounterIndexLookUpJoin     = metrics.ExecutorCounter.WithLabelValues("IndexLookUpJoin")
 	executorCounterIndexLookUpExecutor = metrics.ExecutorCounter.WithLabelValues("IndexLookUpExecutor")
 
-	globalAllocator chunk.Allocator = chunk.NewMultiBufAllocator(8, 15, 32)
+	globalAllocator chunk.Allocator = chunk.NewMultiBufAllocator(uint(runtime.NumCPU()), 15, 64)
 )
 
 // executorBuilder builds an Executor from a Plan.
