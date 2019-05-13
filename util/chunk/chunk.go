@@ -235,12 +235,12 @@ func (c *Chunk) SetNumVirtualRows(numVirtualRows int) {
 // Make sure all the data in the chunk is not used anymore before you reuse this chunk.
 func (c *Chunk) Reset() {
 	if c.columns == nil {
+		c.numVirtualRows = 0
 		return
 	}
 	for _, col := range c.columns {
 		col.reset()
 	}
-	c.numVirtualRows = 0
 }
 
 // CopyConstruct creates a new chunk and copies this chunk's data into it.
