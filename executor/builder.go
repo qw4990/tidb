@@ -62,7 +62,7 @@ var (
 	executorCounterIndexLookUpJoin     = metrics.ExecutorCounter.WithLabelValues("IndexLookUpJoin")
 	executorCounterIndexLookUpExecutor = metrics.ExecutorCounter.WithLabelValues("IndexLookUpExecutor")
 
-	globalAllocator = chunk.NewBufAllocator(15, 1<<10)
+	globalAllocator = chunk.NewBufAllocator(15, 64)
 )
 
 // executorBuilder builds an Executor from a Plan.
