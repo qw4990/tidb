@@ -1,6 +1,9 @@
 package chunk
 
 import (
+	"github.com/pingcap/parser/charset"
+	"github.com/pingcap/parser/mysql"
+	"github.com/pingcap/tidb/types"
 	"runtime"
 	"sync/atomic"
 	"testing"
@@ -63,5 +66,52 @@ func BenchmarkAllocGolangSliceSingle(b *testing.B) {
 		c := bufSize[int(atomic.AddUint32(&k, 1))%n]
 		buf := make([]byte, 0, c)
 		buf = append(buf, '0')
+	}
+}
+
+func BenchmarkNewChunkWithAllocator(b *testing.B) {
+	bufSize := []int{32, 64, 128, 256, 512, 1024, 4096}
+	n := len(bufSize)
+	colTypes := []*types.FieldType{
+		{
+			Tp:      mysql.TypeLonglong,
+			Flen:    mysql.MaxIntWidth,
+			Decimal: 0,
+			Flag:    mysql.BinaryFlag,
+			Charset: charset.CharsetBin,
+			Collate: charset.CollationBin,
+		},
+	}
+	m := NewMultiBufAllocator(8, 15, 32)
+	runtime.GC()
+	b.ResetTimer()
+	var k uint32
+	for i := 0; i < b.N; i++ {
+		c := bufSize[int(atomic.AddUint32(&k, 1))%n]
+		chk := NewChunkWithAllocator(m, colTypes, c, c)
+		chk.Release()
+	}
+}
+
+func BenchmarkNewChunk(b *testing.B) {
+	bufSize := []int{32, 64, 128, 256, 512, 1024, 4096}
+	n := len(bufSize)
+	colTypes := []*types.FieldType{
+		{
+			Tp:      mysql.TypeLonglong,
+			Flen:    mysql.MaxIntWidth,
+			Decimal: 0,
+			Flag:    mysql.BinaryFlag,
+			Charset: charset.CharsetBin,
+			Collate: charset.CollationBin,
+		},
+	}
+	runtime.GC()
+	b.ResetTimer()
+	var k uint32
+	for i := 0; i < b.N; i++ {
+		c := bufSize[int(atomic.AddUint32(&k, 1))%n]
+		chk := New(colTypes, c, c)
+		chk.Release()
 	}
 }
