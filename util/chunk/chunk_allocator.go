@@ -11,17 +11,20 @@ import (
 type Allocator interface {
 	Alloc(l, c int) []byte
 	Free(buf []byte)
+	SetParent(a Allocator) error
+	MaxCap() int
 }
 
 type MultiBufAllocator struct {
-	ai uint32
-	fi uint32
-	n  uint32
-	as []*BufAllocator
+	ai     uint32
+	fi     uint32
+	n      uint32
+	maxCap int
+	as     []Allocator
 }
 
-func NewMultiBufAllocator(n, bitN, bufSize uint) *MultiBufAllocator {
-	m := &MultiBufAllocator{0, 0, uint32(n), make([]*BufAllocator, 0, n)}
+func NewMultiBufAllocator(n, bitN, bufSize uint) Allocator {
+	m := &MultiBufAllocator{0, 0, uint32(n), 1 << bitN, make([]Allocator, 0, n)}
 	for i := 0; i < int(n); i++ {
 		m.as = append(m.as, NewBufAllocator(bitN, bufSize))
 	}
@@ -36,15 +39,28 @@ func (b *MultiBufAllocator) Free(buf []byte) {
 	b.as[atomic.AddUint32(&b.fi, 1)%b.n].Free(buf)
 }
 
+func (b *MultiBufAllocator) MaxCap() int {
+	return b.maxCap
+}
+
+func (b *MultiBufAllocator) SetParent(a Allocator) error {
+	for _, x := range b.as {
+		if err := x.SetParent(a); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 type BufAllocator struct {
 	maxCap  int
 	bufList []chan []byte
 	index   []int
 	pad     []byte
-	p       *BufAllocator
+	p       Allocator
 }
 
-func NewBufAllocator(bitN, bufSize uint) *BufAllocator {
+func NewBufAllocator(bitN, bufSize uint) Allocator {
 	b := &BufAllocator{
 		maxCap:  1 << bitN,
 		bufList: make([]chan []byte, bitN+1),
@@ -101,7 +117,7 @@ func (b *BufAllocator) MaxCap() int {
 	return b.maxCap
 }
 
-func (b *BufAllocator) SetParent(pb *BufAllocator) error {
+func (b *BufAllocator) SetParent(pb Allocator) error {
 	if pb.MaxCap() < b.MaxCap() {
 		return fmt.Errorf("pb.MaxCap() < b.MaxCap()")
 	}
