@@ -332,6 +332,10 @@ func (w *HashAggPartialWorker) run(ctx sessionctx.Context, waitGroup *sync.WaitG
 		if needShuffle {
 			w.shuffleIntermData(sc, finalConcurrency)
 		}
+		if w.chk != nil {
+			w.chk.Release()
+			w.chk = nil
+		}
 		waitGroup.Done()
 	}()
 	for {
@@ -543,6 +547,13 @@ func (e *HashAggExec) fetchChildData(ctx context.Context) {
 		}
 		for i := range e.partialInputChs {
 			close(e.partialInputChs[i])
+		}
+		for len(e.inputCh) > 0 {
+			p := <-e.inputCh
+			if p.chk != nil {
+				p.chk.Release()
+				p.chk = nil
+			}
 		}
 	}()
 	for {
@@ -788,6 +799,7 @@ func (e *StreamAggExec) Open(ctx context.Context) error {
 
 // Close implements the Executor Close interface.
 func (e *StreamAggExec) Close() error {
+	e.childResult.Release()
 	e.childResult = nil
 	return e.baseExecutor.Close()
 }
