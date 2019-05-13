@@ -105,13 +105,11 @@ func NewChunkWithAllocator(a *BufAllocator, fields []*types.FieldType, cap, maxC
 			//offsets := a.Alloc(8, (cap+1)*8)
 			//col.offsets = *(*[]int64)(unsafe.Pointer(&offsets))
 			col.offsets = make([]int64, 1, cap+1)
-			col.elemBuf = nil
 			col.data = a.Alloc(0, cap*estimatedElemLen)
 			col.nullBitmap = a.Alloc(0, cap>>3)
 			chk.columns = append(chk.columns, col)
 		} else {
 			col := columnPool.Get().(*column)
-			col.offsets = nil
 			col.elemBuf = a.Alloc(elemLen, elemLen)
 			col.data = a.Alloc(0, cap*elemLen)
 			col.nullBitmap = a.Alloc(0, cap>>3)
@@ -135,10 +133,14 @@ func ReleaseChunk(chk *Chunk) {
 			c.offsets = nil
 		} else {
 			chk.a.Free(c.elemBuf)
+			c.elemBuf = nil
 		}
 		chk.a.Free(c.data)
+		c.data = nil
 		chk.a.Free(c.nullBitmap)
+		c.nullBitmap = nil
 		columnPool.Put(c)
 	}
+	chk.columns = nil
 	chunkPool.Put(chk)
 }
