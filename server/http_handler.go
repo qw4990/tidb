@@ -642,10 +642,8 @@ type debugOOMAlloc struct {
 }
 
 func (h *debugOOMAlloc) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	params := mux.Vars(req)
-	siz, ok := params["size"]
-
-	if ok {
+	siz := req.FormValue("size")
+	if siz != "" {
 		s, err := strconv.ParseInt(siz, 10, 64)
 		if err == nil {
 			buf := make([]byte, s)
