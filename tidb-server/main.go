@@ -132,6 +132,8 @@ var (
 )
 
 func main() {
+	begin := time.Now()
+
 	flag.Parse()
 	if *version {
 		fmt.Println(printer.GetTiDBInfo())
@@ -161,7 +163,7 @@ func main() {
 	createStoreAndDomain()
 	createServer()
 	signal.SetupSignalHandler(serverShutdown)
-	runServer()
+	runServer(time.Now().Sub(begin))
 	cleanup()
 	exit()
 }
@@ -547,8 +549,8 @@ func setupTracing() {
 	opentracing.SetGlobalTracer(tracer)
 }
 
-func runServer() {
-	err := svr.Run()
+func runServer(startDur time.Duration) {
+	err := svr.Run(startDur)
 	terror.MustNil(err)
 	if cfg.XProtocol.XServer {
 		err := xsvr.Run()

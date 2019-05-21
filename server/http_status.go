@@ -39,11 +39,11 @@ import (
 
 const defaultStatusAddr = ":10080"
 
-func (s *Server) startStatusHTTP() {
-	go s.startHTTPServer()
+func (s *Server) startStatusHTTP(startDur time.Duration) {
+	go s.startHTTPServer(startDur)
 }
 
-func (s *Server) startHTTPServer() {
+func (s *Server) startHTTPServer(startDur time.Duration) {
 	router := mux.NewRouter()
 	router.HandleFunc("/status", s.handleStatus)
 	// HTTP path for prometheus.
@@ -54,6 +54,9 @@ func (s *Server) startHTTPServer() {
 
 	router.Handle("/settings", settingsHandler{})
 	router.Handle("/binlog/recover", binlogRecover{})
+
+	router.Handle("/oom_debug/alloc_memory", &debugOOMAlloc{})
+	router.Handle("/oom_debug/start_duration", &debugOOMStartDur{startDur})
 
 	tikvHandlerTool := s.newTikvHandlerTool()
 	router.Handle("/schema", schemaHandler{tikvHandlerTool})

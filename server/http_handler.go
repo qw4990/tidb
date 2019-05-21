@@ -629,6 +629,40 @@ func (h settingsHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	return
 }
 
+type debugOOMStartDur struct {
+	startDur time.Duration
+}
+
+func (h *debugOOMStartDur) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	writeData(w, fmt.Sprintf("%v", h.startDur.Seconds()))
+}
+
+type debugOOMAlloc struct {
+	chunks [][]byte
+}
+
+func (h *debugOOMAlloc) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	params := mux.Vars(req)
+	siz, ok := params["size"]
+
+	if ok {
+		s, err := strconv.ParseInt(siz, 10, 64)
+		if err == nil {
+			buf := make([]byte, s)
+			h.chunks = append(h.chunks, buf)
+		} else {
+			writeError(w, err)
+		}
+	}
+
+	sum := 0
+	for _, c := range h.chunks {
+		sum += len(c)
+	}
+	writeData(w, sum)
+	return
+}
+
 // ServeHTTP recovers binlog service.
 func (h binlogRecover) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	binloginfo.DisableSkipBinlogFlag()
