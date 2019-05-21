@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"math/rand"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -647,9 +648,12 @@ func (h *debugOOMAlloc) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		s, err := strconv.ParseInt(siz, 10, 64)
 		if err == nil {
 			buf := make([]byte, s)
-			for i := 1; i < len(buf); {
-				buf[i] = 'a'
-				i *= 2
+			for i := 0; i < 10; i++ {
+				p := rand.Intn(len(buf)/2+1) + 1
+				for p < len(buf) {
+					buf[p] = 'a'
+					p += p / 2
+				}
 			}
 			h.chunks = append(h.chunks, buf)
 		} else {
