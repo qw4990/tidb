@@ -647,6 +647,9 @@ func (h *debugOOMAlloc) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		s, err := strconv.ParseInt(siz, 10, 64)
 		if err == nil {
 			buf := make([]byte, s)
+			for i := range buf {
+				buf[i] = 'a'
+			}
 			h.chunks = append(h.chunks, buf)
 		} else {
 			writeError(w, err)
