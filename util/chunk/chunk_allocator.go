@@ -18,6 +18,7 @@ type Allocator interface {
 	Free(buf []byte)
 	SetParent(a Allocator) error
 	MaxCap() int
+	Close()
 }
 
 type MultiBufAllocator struct {
@@ -55,6 +56,12 @@ func (b *MultiBufAllocator) SetParent(a Allocator) error {
 		}
 	}
 	return nil
+}
+
+func (b *MultiBufAllocator) Close() {
+	for _, x := range b.as {
+		x.Close()
+	}
 }
 
 type BufAllocator struct {
@@ -129,6 +136,17 @@ func (b *BufAllocator) SetParent(pb Allocator) error {
 	}
 	b.p = pb
 	return nil
+}
+
+func (b *BufAllocator) Close() {
+	for _, ch := range b.bufList {
+		close(ch)
+		if b.p != nil {
+			for buf := range ch {
+				b.p.Free(buf)
+			}
+		}
+	}
 }
 
 var (
