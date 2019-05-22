@@ -93,6 +93,7 @@ func (b *BufAllocator) Alloc(l, c int) []byte {
 		if len(buf) > l {
 			buf = buf[:l]
 		} else if len(buf) < l {
+			// TODO: remove this copy or make it faster
 			buf = append(buf, b.pad[:l-len(buf)]...)
 		}
 		return buf
@@ -149,27 +150,30 @@ func NewChunkWithAllocator(a Allocator, fields []*types.FieldType, cap, maxChunk
 	}
 
 	chk := chunkPool.Get().(*Chunk)
-	chk.capacity = mathutil.Min(cap, maxChunkSize)
+	chk.columns = make([]*column, 0, len(fields))
 	for _, f := range fields {
 		elemLen := getFixedLen(f)
 		col := columnPool.Get().(*column)
-		col.length = 0
-		col.nullCount = 0
 		if elemLen == varElemLen {
 			estimatedElemLen := 8
+			// TODO: make a buffer pool for offsets
 			//offsets := a.Alloc(8, (cap+1)*8)
 			//col.offsets = *(*[]int64)(unsafe.Pointer(&offsets))
 			col.offsets = make([]int64, 1, cap+1)
 			col.data = a.Alloc(0, cap*estimatedElemLen)
 			col.nullBitmap = a.Alloc(0, cap>>3)
-			chk.columns = append(chk.columns, col)
+			col.elemBuf = nil
 		} else {
 			col.elemBuf = a.Alloc(elemLen, elemLen)
 			col.data = a.Alloc(0, cap*elemLen)
 			col.nullBitmap = a.Alloc(0, cap>>3)
-			chk.columns = append(chk.columns, col)
+			col.offsets = nil
 		}
+		col.length = 0
+		col.nullCount = 0
+		chk.columns = append(chk.columns, col)
 	}
+	chk.capacity = mathutil.Min(cap, maxChunkSize)
 	chk.numVirtualRows = 0
 	chk.requiredRows = maxChunkSize
 	chk.a = a
