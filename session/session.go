@@ -30,7 +30,6 @@ import (
 	"time"
 
 	"github.com/ngaut/pools"
-	"github.com/opentracing/opentracing-go"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/parser"
@@ -1290,6 +1289,7 @@ func (s *session) Close() {
 	s.RollbackTxn(ctx)
 	if s.sessionVars != nil {
 		s.sessionVars.WithdrawAllPreparedStmt()
+		s.sessionVars.MemoryAllocator.Close()
 	}
 }
 
