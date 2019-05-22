@@ -136,6 +136,9 @@ func (b *BufAllocator) Free(buf []byte) {
 		return
 	}
 	idx := b.index[cap(buf)]
+	if cap(buf) < int(1<<uint(idx)) {
+		idx--
+	}
 	select {
 	case b.bufList[idx] <- buf:
 	default:

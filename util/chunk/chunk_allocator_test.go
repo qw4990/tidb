@@ -115,3 +115,12 @@ func BenchmarkNewChunk(b *testing.B) {
 		chk.Release()
 	}
 }
+
+func TestCapIndex(t *testing.T) {
+	for i := 1; i < len(capIndex); i++ {
+		b := capIndex[i]
+		if 1<<uint(b) < i {
+			t.Fatal(">>>> ", i)
+		}
+	}
+}
