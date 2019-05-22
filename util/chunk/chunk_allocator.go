@@ -65,42 +65,49 @@ func (b *MultiBufAllocator) Close() {
 }
 
 var (
-	capIndexBit = 15
-	capIndex    = getCapIndex(uint(capIndexBit))
+	capIndexBit           = 15
+	allocIndex, freeIndex = getCapIndex(uint(capIndexBit))
 )
 
-func getCapIndex(bitN uint) []int {
-	index := make([]int, int(1<<bitN)+1)
+func getCapIndex(bitN uint) ([]int, []int) {
+	allocIndex := make([]int, int(1<<bitN)+1)
+	freeIndex := make([]int, int(1<<bitN)+1)
 	for i := uint(1); i <= bitN; i++ {
-		left := (1 << (i - 1)) + 1
+		left := 1 << (i - 1)
 		right := 1 << i
-		for j := left; j <= right; j++ {
-			index[j] = int(i)
+		for j := left + 1; j <= right; j++ {
+			allocIndex[j] = int(i)
+		}
+		for j := left; j < right; j++ {
+			freeIndex[j] = int(i - 1)
 		}
 	}
-	return index
+	allocIndex[1] = 0
+	freeIndex[1<<bitN] = int(bitN)
+	return allocIndex, freeIndex
 }
 
 type BufAllocator struct {
-	maxCap  int
-	bufList []chan []byte
-	index   []int
-	pad     []byte
-	p       Allocator
+	maxCap     int
+	bufList    []chan []byte
+	allocIndex []int
+	freeIndex  []int
+	pad        []byte
+	p          Allocator
 }
 
 func NewBufAllocator(bitN, bufSize uint) Allocator {
 	b := &BufAllocator{
 		maxCap:  1 << bitN,
 		bufList: make([]chan []byte, bitN+1),
-		index:   make([]int, 1<<bitN+1),
 		pad:     make([]byte, 1<<bitN+1),
 	}
 
 	if int(bitN) <= capIndexBit {
-		b.index = capIndex
+		b.allocIndex = allocIndex
+		b.freeIndex = freeIndex
 	} else {
-		b.index = getCapIndex(bitN)
+		b.allocIndex, b.freeIndex = getCapIndex(bitN)
 	}
 
 	for i := uint(1); i <= bitN; i++ {
@@ -113,7 +120,7 @@ func (b *BufAllocator) Alloc(l, c int) []byte {
 	if c > b.maxCap {
 		return make([]byte, l, c)
 	}
-	idx := b.index[c]
+	idx := b.allocIndex[c]
 	select {
 	case buf := <-b.bufList[idx]:
 		if len(buf) > l {
@@ -135,10 +142,7 @@ func (b *BufAllocator) Free(buf []byte) {
 	if cap(buf) > b.maxCap {
 		return
 	}
-	idx := b.index[cap(buf)]
-	if cap(buf) < int(1<<uint(idx)) {
-		idx--
-	}
+	idx := b.freeIndex[cap(buf)]
 	select {
 	case b.bufList[idx] <- buf:
 	default:

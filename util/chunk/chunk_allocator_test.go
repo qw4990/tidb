@@ -117,10 +117,17 @@ func BenchmarkNewChunk(b *testing.B) {
 }
 
 func TestCapIndex(t *testing.T) {
-	for i := 1; i < len(capIndex); i++ {
-		b := capIndex[i]
-		if 1<<uint(b) < i {
-			t.Fatal(">>>> ", i)
+	for i := 1; i < len(allocIndex); i++ {
+		b := allocIndex[i]
+		if !(i <= (1<<uint(b)) && i > (1<<uint(b-1))) {
+			t.Fatal("alloc", i)
+		}
+	}
+
+	for i := 1; i < len(freeIndex); i++ {
+		b := freeIndex[i]
+		if !(i >= (1<<uint(b)) && i < (1<<uint(b+1))) {
+			t.Fatal("free", i)
 		}
 	}
 }
