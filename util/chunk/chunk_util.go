@@ -85,7 +85,7 @@ func copyOuterRows(innerColOffset, outerColOffset int, src *Chunk, numRows int, 
 		srcCols = src.columns[:innerColOffset]
 	}
 	for i, srcCol := range srcCols {
-		dstCol := dst.columns[outerColOffset+i]
+		dstCol := dst.columns[outerColOffset+i].copyConstruct()
 		dstCol.appendMultiSameNullBitmap(!srcCol.isNull(row.idx), numRows)
 		dstCol.length += numRows
 		if srcCol.isFixed() {
