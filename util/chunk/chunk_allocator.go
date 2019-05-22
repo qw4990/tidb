@@ -152,9 +152,11 @@ func NewChunkWithAllocator(a Allocator, fields []*types.FieldType, cap, maxChunk
 	chk.capacity = mathutil.Min(cap, maxChunkSize)
 	for _, f := range fields {
 		elemLen := getFixedLen(f)
+		col := columnPool.Get().(*column)
+		col.length = 0
+		col.nullCount = 0
 		if elemLen == varElemLen {
 			estimatedElemLen := 8
-			col := columnPool.Get().(*column)
 			//offsets := a.Alloc(8, (cap+1)*8)
 			//col.offsets = *(*[]int64)(unsafe.Pointer(&offsets))
 			col.offsets = make([]int64, 1, cap+1)
@@ -162,7 +164,6 @@ func NewChunkWithAllocator(a Allocator, fields []*types.FieldType, cap, maxChunk
 			col.nullBitmap = a.Alloc(0, cap>>3)
 			chk.columns = append(chk.columns, col)
 		} else {
-			col := columnPool.Get().(*column)
 			col.elemBuf = a.Alloc(elemLen, elemLen)
 			col.data = a.Alloc(0, cap*elemLen)
 			col.nullBitmap = a.Alloc(0, cap>>3)
