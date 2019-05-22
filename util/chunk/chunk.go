@@ -234,8 +234,8 @@ func (c *Chunk) SetNumVirtualRows(numVirtualRows int) {
 // Reset resets the chunk, so the memory it allocated can be reused.
 // Make sure all the data in the chunk is not used anymore before you reuse this chunk.
 func (c *Chunk) Reset() {
+	c.numVirtualRows = 0
 	if c.columns == nil {
-		c.numVirtualRows = 0
 		return
 	}
 	for _, col := range c.columns {
