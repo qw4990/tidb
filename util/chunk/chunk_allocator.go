@@ -2,17 +2,20 @@ package chunk
 
 import (
 	"fmt"
-	"github.com/cznic/mathutil"
-	"github.com/pingcap/tidb/types"
 	"runtime"
 	"sync"
 	"sync/atomic"
+
+	"github.com/cznic/mathutil"
+	"github.com/pingcap/tidb/types"
 )
 
 var (
+	// GlobalAllocator is the root of all allocators.
 	GlobalAllocator = NewMultiBufAllocator(uint(runtime.NumCPU()), 15, 64)
 )
 
+// Allocator is used to manage byte slices.
 type Allocator interface {
 	Alloc(l, c int) []byte
 	Free(buf []byte)
@@ -21,7 +24,7 @@ type Allocator interface {
 	Close()
 }
 
-type MultiBufAllocator struct {
+type multiBufChan struct {
 	ai     uint32
 	fi     uint32
 	n      uint32
@@ -29,27 +32,32 @@ type MultiBufAllocator struct {
 	as     []Allocator
 }
 
+// NewMultiBufAllocator creates a multiBufChan.
 func NewMultiBufAllocator(n, bitN, bufSize uint) Allocator {
-	m := &MultiBufAllocator{0, 0, uint32(n), 1 << bitN, make([]Allocator, 0, n)}
+	m := &multiBufChan{0, 0, uint32(n), 1 << bitN, make([]Allocator, 0, n)}
 	for i := 0; i < int(n); i++ {
 		m.as = append(m.as, NewBufAllocator(bitN, bufSize))
 	}
 	return m
 }
 
-func (b *MultiBufAllocator) Alloc(l, c int) []byte {
+// Alloc alloc memory.
+func (b *multiBufChan) Alloc(l, c int) []byte {
 	return b.as[atomic.AddUint32(&b.ai, 1)%b.n].Alloc(l, c)
 }
 
-func (b *MultiBufAllocator) Free(buf []byte) {
+// Free releases memory.
+func (b *multiBufChan) Free(buf []byte) {
 	b.as[atomic.AddUint32(&b.fi, 1)%b.n].Free(buf)
 }
 
-func (b *MultiBufAllocator) MaxCap() int {
+// MaxCap returns the capacity.
+func (b *multiBufChan) MaxCap() int {
 	return b.maxCap
 }
 
-func (b *MultiBufAllocator) SetParent(a Allocator) error {
+// SetParent sets a parent for this allocator.
+func (b *multiBufChan) SetParent(a Allocator) error {
 	for _, x := range b.as {
 		if err := x.SetParent(a); err != nil {
 			return err
@@ -58,7 +66,8 @@ func (b *MultiBufAllocator) SetParent(a Allocator) error {
 	return nil
 }
 
-func (b *MultiBufAllocator) Close() {
+// Close closes this allocator.
+func (b *multiBufChan) Close() {
 	for _, x := range b.as {
 		x.Close()
 	}
@@ -87,7 +96,7 @@ func getCapIndex(bitN uint) ([]int, []int) {
 	return allocIndex, freeIndex
 }
 
-type BufAllocator struct {
+type bufChan struct {
 	maxCap     int
 	bufList    []chan []byte
 	allocIndex []int
@@ -96,8 +105,9 @@ type BufAllocator struct {
 	p          Allocator
 }
 
+// NewBufAllocator creates a bufChan.
 func NewBufAllocator(bitN, bufSize uint) Allocator {
-	b := &BufAllocator{
+	b := &bufChan{
 		maxCap:  1 << bitN,
 		bufList: make([]chan []byte, bitN+1),
 		pad:     make([]byte, 1<<bitN+1),
@@ -116,7 +126,8 @@ func NewBufAllocator(bitN, bufSize uint) Allocator {
 	return b
 }
 
-func (b *BufAllocator) Alloc(l, c int) []byte {
+// Alloc alloc memory.
+func (b *bufChan) Alloc(l, c int) []byte {
 	if c > b.maxCap {
 		return make([]byte, l, c)
 	}
@@ -138,7 +149,8 @@ func (b *BufAllocator) Alloc(l, c int) []byte {
 	}
 }
 
-func (b *BufAllocator) Free(buf []byte) {
+// Free releases memory.
+func (b *bufChan) Free(buf []byte) {
 	if cap(buf) > b.maxCap {
 		return
 	}
@@ -152,11 +164,13 @@ func (b *BufAllocator) Free(buf []byte) {
 	}
 }
 
-func (b *BufAllocator) MaxCap() int {
+// MaxCap returns the capacity.
+func (b *bufChan) MaxCap() int {
 	return b.maxCap
 }
 
-func (b *BufAllocator) SetParent(pb Allocator) error {
+// SetParent sets a parent for this allocator.
+func (b *bufChan) SetParent(pb Allocator) error {
 	if pb.MaxCap() < b.MaxCap() {
 		return fmt.Errorf("pb.MaxCap() < b.MaxCap()")
 	}
@@ -164,7 +178,8 @@ func (b *BufAllocator) SetParent(pb Allocator) error {
 	return nil
 }
 
-func (b *BufAllocator) Close() {
+// Close closes this allocator.
+func (b *bufChan) Close() {
 	for _, ch := range b.bufList {
 		if ch != nil {
 			close(ch)
@@ -190,6 +205,7 @@ var (
 	}
 )
 
+// NewChunkWithAllocator creates a chunk with a specific allocator.
 func NewChunkWithAllocator(a Allocator, fields []*types.FieldType, cap, maxChunkSize int) *Chunk {
 	if a == nil {
 		return New(fields, cap, maxChunkSize)
@@ -227,6 +243,7 @@ func NewChunkWithAllocator(a Allocator, fields []*types.FieldType, cap, maxChunk
 	return chk
 }
 
+// ReleaseChunk releases this chunk.
 func ReleaseChunk(chk *Chunk) {
 	if chk.a == nil {
 		return
