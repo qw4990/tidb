@@ -140,10 +140,12 @@ func (b *BufAllocator) SetParent(pb Allocator) error {
 
 func (b *BufAllocator) Close() {
 	for _, ch := range b.bufList {
-		close(ch)
-		if b.p != nil {
-			for buf := range ch {
-				b.p.Free(buf)
+		if ch != nil {
+			close(ch)
+			if b.p != nil {
+				for buf := range ch {
+					b.p.Free(buf)
+				}
 			}
 		}
 	}
