@@ -149,6 +149,7 @@ func NewChunkWithAllocator(a Allocator, fields []*types.FieldType, cap, maxChunk
 		return New(fields, cap, maxChunkSize)
 	}
 
+	cap = mathutil.Min(cap, maxChunkSize)
 	chk := chunkPool.Get().(*Chunk)
 	chk.columns = make([]*column, 0, len(fields))
 	for _, f := range fields {
@@ -173,7 +174,7 @@ func NewChunkWithAllocator(a Allocator, fields []*types.FieldType, cap, maxChunk
 		col.nullCount = 0
 		chk.columns = append(chk.columns, col)
 	}
-	chk.capacity = mathutil.Min(cap, maxChunkSize)
+	chk.capacity = cap
 	chk.numVirtualRows = 0
 	chk.requiredRows = maxChunkSize
 	chk.a = a
