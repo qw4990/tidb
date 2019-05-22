@@ -64,6 +64,23 @@ func (b *MultiBufAllocator) Close() {
 	}
 }
 
+var (
+	capIndexBit = 15
+	capIndex    = getCapIndex(uint(capIndexBit))
+)
+
+func getCapIndex(bitN uint) []int {
+	index := make([]int, int(1<<bitN)+1)
+	for i := uint(1); i <= bitN; i++ {
+		left := (1 << (i - 1)) + 1
+		right := 1 << i
+		for j := left; j <= right; j++ {
+			index[j] = int(i)
+		}
+	}
+	return index
+}
+
 type BufAllocator struct {
 	maxCap  int
 	bufList []chan []byte
@@ -79,13 +96,15 @@ func NewBufAllocator(bitN, bufSize uint) Allocator {
 		index:   make([]int, 1<<bitN+1),
 		pad:     make([]byte, 1<<bitN+1),
 	}
+
+	if int(bitN) <= capIndexBit {
+		b.index = capIndex
+	} else {
+		b.index = getCapIndex(bitN)
+	}
+
 	for i := uint(1); i <= bitN; i++ {
 		b.bufList[i] = make(chan []byte, bufSize)
-		left := (1 << (i - 1)) + 1
-		right := 1 << i
-		for j := left; j <= right; j++ {
-			b.index[j] = int(i)
-		}
 	}
 	return b
 }
