@@ -271,15 +271,13 @@ func (e *ProjectionExec) Close() error {
 	}
 	// release all chunks
 	for len(e.fetcher.inputCh) > 0 {
-		p := <-e.fetcher.inputCh
-		if p.chk != nil {
+		if p := <-e.fetcher.inputCh; p.chk != nil {
 			p.chk.Release()
 			p.chk = nil
 		}
 	}
 	for len(e.fetcher.outputCh) > 0 {
-		p := <-e.fetcher.outputCh
-		if p.chk != nil {
+		if p := <-e.fetcher.outputCh; p.chk != nil {
 			p.chk.Release()
 			p.chk = nil
 		}
