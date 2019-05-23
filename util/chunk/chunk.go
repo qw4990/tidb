@@ -136,7 +136,7 @@ func newVarLenColumn(cap int, old *column) *column {
 	estimatedElemLen := 8
 	// For varLenColumn (e.g. varchar), the accurate length of an element is unknown.
 	// Therefore, in the first executor.Next we use an experience value -- 8 (so it may make runtime.growslice)
-	// but in the following Next call we estimate the length as AVG x 1.125 elemLen of the previous call.
+	// but in the following Next call we estimate the length allocators AVG x 1.125 elemLen of the previous call.
 	if old != nil && old.length != 0 {
 		estimatedElemLen = (len(old.data) + len(old.data)/8) / old.length
 	}
@@ -169,13 +169,13 @@ func (c *Chunk) IsFull() bool {
 // MakeRef makes column in "dstColIdx" reference to column in "srcColIdx".
 func (c *Chunk) MakeRef(srcColIdx, dstColIdx int) {
 	c.columns[dstColIdx] = c.columns[srcColIdx]
-	c.columns[srcColIdx].cantFree = true
+	c.columns[dstColIdx].cantReuse = true
 }
 
 // MakeRefTo copies columns `src.columns[srcColIdx]` to `c.columns[dstColIdx]`.
 func (c *Chunk) MakeRefTo(dstColIdx int, src *Chunk, srcColIdx int) {
 	c.columns[dstColIdx] = src.columns[srcColIdx]
-	src.columns[srcColIdx].cantFree = true
+	src.columns[dstColIdx].cantReuse = true
 }
 
 // SwapColumn swaps column "c.columns[colIdx]" with column
@@ -559,7 +559,7 @@ func (c *Chunk) AppendDatum(colIdx int, d *types.Datum) {
 	}
 }
 
-// Release .
+// Release releases this chunk.
 func (c *Chunk) Release() {
 	ReleaseChunk(c)
 }

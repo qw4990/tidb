@@ -11,7 +11,7 @@ import (
 )
 
 var (
-	// GlobalAllocator is the root of all allocators.
+	// GlobalAllocator is the root allocator of all allocators.
 	GlobalAllocator = NewMultiBufAllocator(uint(runtime.NumCPU()), 15, 64)
 )
 
@@ -25,30 +25,30 @@ type Allocator interface {
 }
 
 type multiBufChan struct {
-	ai     uint32
-	fi     uint32
-	n      uint32
-	maxCap int
-	as     []Allocator
+	allocIndex    uint32
+	freeIndex     uint32
+	numAllocators uint32
+	maxCap        int
+	allocators    []Allocator
 }
 
 // NewMultiBufAllocator creates a multiBufChan.
-func NewMultiBufAllocator(n, bitN, bufSize uint) Allocator {
-	m := &multiBufChan{0, 0, uint32(n), 1 << bitN, make([]Allocator, 0, n)}
-	for i := 0; i < int(n); i++ {
-		m.as = append(m.as, NewBufAllocator(bitN, bufSize))
+func NewMultiBufAllocator(numAllocators, bitN, bufSize uint) Allocator {
+	m := &multiBufChan{0, 0, uint32(numAllocators), 1 << bitN, make([]Allocator, 0, numAllocators)}
+	for i := 0; i < int(numAllocators); i++ {
+		m.allocators = append(m.allocators, NewBufAllocator(bitN, bufSize))
 	}
 	return m
 }
 
 // Alloc alloc memory.
 func (b *multiBufChan) Alloc(l, c int) []byte {
-	return b.as[atomic.AddUint32(&b.ai, 1)%b.n].Alloc(l, c)
+	return b.allocators[atomic.AddUint32(&b.allocIndex, 1)%b.numAllocators].Alloc(l, c)
 }
 
 // Free releases memory.
 func (b *multiBufChan) Free(buf []byte) {
-	b.as[atomic.AddUint32(&b.fi, 1)%b.n].Free(buf)
+	b.allocators[atomic.AddUint32(&b.freeIndex, 1)%b.numAllocators].Free(buf)
 }
 
 // MaxCap returns the capacity.
@@ -58,7 +58,7 @@ func (b *multiBufChan) MaxCap() int {
 
 // SetParent sets a parent for this allocator.
 func (b *multiBufChan) SetParent(a Allocator) error {
-	for _, x := range b.as {
+	for _, x := range b.allocators {
 		if err := x.SetParent(a); err != nil {
 			return err
 		}
@@ -68,7 +68,7 @@ func (b *multiBufChan) SetParent(a Allocator) error {
 
 // Close closes this allocator.
 func (b *multiBufChan) Close() {
-	for _, x := range b.as {
+	for _, x := range b.allocators {
 		x.Close()
 	}
 }
@@ -76,6 +76,7 @@ func (b *multiBufChan) Close() {
 var (
 	capIndexBit           = 15
 	allocIndex, freeIndex = getCapIndex(uint(capIndexBit))
+	pad                   = make([]byte, (1<<uint(capIndexBit))+1)
 )
 
 func getCapIndex(bitN uint) ([]int, []int) {
@@ -102,7 +103,7 @@ type bufChan struct {
 	allocIndex []int
 	freeIndex  []int
 	pad        []byte
-	p          Allocator
+	parent     Allocator
 }
 
 // NewBufAllocator creates a bufChan.
@@ -110,14 +111,15 @@ func NewBufAllocator(bitN, bufSize uint) Allocator {
 	b := &bufChan{
 		maxCap:  1 << bitN,
 		bufList: make([]chan []byte, bitN+1),
-		pad:     make([]byte, 1<<bitN+1),
 	}
 
 	if int(bitN) <= capIndexBit {
 		b.allocIndex = allocIndex
 		b.freeIndex = freeIndex
+		b.pad = pad
 	} else {
 		b.allocIndex, b.freeIndex = getCapIndex(bitN)
+		b.pad = make([]byte, (1<<bitN)+1)
 	}
 
 	for i := uint(1); i <= bitN; i++ {
@@ -142,8 +144,8 @@ func (b *bufChan) Alloc(l, c int) []byte {
 		}
 		return buf
 	default:
-		if b.p != nil {
-			return b.p.Alloc(l, c)
+		if b.parent != nil {
+			return b.parent.Alloc(l, c)
 		}
 		return make([]byte, l, c)
 	}
@@ -158,8 +160,8 @@ func (b *bufChan) Free(buf []byte) {
 	select {
 	case b.bufList[idx] <- buf:
 	default:
-		if b.p != nil {
-			b.p.Free(buf)
+		if b.parent != nil {
+			b.parent.Free(buf)
 		}
 	}
 }
@@ -172,9 +174,9 @@ func (b *bufChan) MaxCap() int {
 // SetParent sets a parent for this allocator.
 func (b *bufChan) SetParent(pb Allocator) error {
 	if pb.MaxCap() < b.MaxCap() {
-		return fmt.Errorf("pb.MaxCap() < b.MaxCap()")
+		return fmt.Errorf("parent.MaxCap() < b.MaxCap()")
 	}
-	b.p = pb
+	b.parent = pb
 	return nil
 }
 
@@ -183,9 +185,9 @@ func (b *bufChan) Close() {
 	for _, ch := range b.bufList {
 		if ch != nil {
 			close(ch)
-			if b.p != nil {
+			if b.parent != nil {
 				for buf := range ch {
-					b.p.Free(buf)
+					b.parent.Free(buf)
 				}
 			}
 		}
@@ -249,7 +251,7 @@ func ReleaseChunk(chk *Chunk) {
 		return
 	}
 	for _, c := range chk.columns {
-		if c.cantFree {
+		if c.cantReuse {
 			continue
 		}
 		if c.offsets != nil { // varElemLen
