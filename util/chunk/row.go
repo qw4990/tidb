@@ -71,7 +71,6 @@ func (r Row) GetFloat64(colIdx int) float64 {
 // GetString returns the string value with the colIdx.
 func (r Row) GetString(colIdx int) string {
 	col := r.c.columns[colIdx]
-	col.cantReuse = true
 	start, end := col.offsets[r.idx], col.offsets[r.idx+1]
 	str := string(hack.String(col.data[start:end]))
 	return str
@@ -80,7 +79,6 @@ func (r Row) GetString(colIdx int) string {
 // GetBytes returns the bytes value with the colIdx.
 func (r Row) GetBytes(colIdx int) []byte {
 	col := r.c.columns[colIdx]
-	col.cantReuse = true
 	start, end := col.offsets[r.idx], col.offsets[r.idx+1]
 	return col.data[start:end]
 }
@@ -105,7 +103,6 @@ func (r Row) getNameValue(colIdx int) (string, uint64) {
 	if start == end {
 		return "", 0
 	}
-	col.cantReuse = true
 	val := *(*uint64)(unsafe.Pointer(&col.data[start]))
 	name := string(hack.String(col.data[start+8 : end]))
 	return name, val
@@ -133,7 +130,6 @@ func (r Row) GetMyDecimal(colIdx int) *types.MyDecimal {
 func (r Row) GetJSON(colIdx int) json.BinaryJSON {
 	col := r.c.columns[colIdx]
 	start, end := col.offsets[r.idx], col.offsets[r.idx+1]
-	col.cantReuse = true
 	return json.BinaryJSON{TypeCode: col.data[start], Value: col.data[start+1 : end]}
 }
 
