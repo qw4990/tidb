@@ -270,22 +270,18 @@ func (e *ProjectionExec) Close() error {
 		e.outputCh = nil
 	}
 	// release all chunks
-	if e.fetcher.inputCh != nil {
-		for len(e.fetcher.inputCh) > 0 {
-			p := <-e.fetcher.inputCh
-			if p.chk != nil {
-				p.chk.Release()
-				p.chk = nil
-			}
+	for len(e.fetcher.inputCh) > 0 {
+		p := <-e.fetcher.inputCh
+		if p.chk != nil {
+			p.chk.Release()
+			p.chk = nil
 		}
 	}
-	if e.fetcher.outputCh != nil {
-		for len(e.fetcher.outputCh) > 0 {
-			p := <-e.fetcher.outputCh
-			if p.chk != nil {
-				p.chk.Release()
-				p.chk = nil
-			}
+	for len(e.fetcher.outputCh) > 0 {
+		p := <-e.fetcher.outputCh
+		if p.chk != nil {
+			p.chk.Release()
+			p.chk = nil
 		}
 	}
 	return e.baseExecutor.Close()
