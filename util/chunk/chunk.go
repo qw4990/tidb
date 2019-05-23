@@ -136,7 +136,7 @@ func newVarLenColumn(cap int, old *column) *column {
 	estimatedElemLen := 8
 	// For varLenColumn (e.g. varchar), the accurate length of an element is unknown.
 	// Therefore, in the first executor.Next we use an experience value -- 8 (so it may make runtime.growslice)
-	// but in the following Next call we estimate the length allocators AVG x 1.125 elemLen of the previous call.
+	// but in the following Next call we estimate the length as AVG x 1.125 elemLen of the previous call.
 	if old != nil && old.length != 0 {
 		estimatedElemLen = (len(old.data) + len(old.data)/8) / old.length
 	}

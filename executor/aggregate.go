@@ -332,10 +332,6 @@ func (w *HashAggPartialWorker) run(ctx sessionctx.Context, waitGroup *sync.WaitG
 		if needShuffle {
 			w.shuffleIntermData(sc, finalConcurrency)
 		}
-		if w.chk != nil {
-			w.chk.Release()
-			w.chk = nil
-		}
 		waitGroup.Done()
 	}()
 	for {
