@@ -545,8 +545,7 @@ func (e *HashAggExec) fetchChildData(ctx context.Context) {
 			close(e.partialInputChs[i])
 		}
 		for len(e.inputCh) > 0 {
-			p := <-e.inputCh
-			if p.chk != nil {
+			if p := <-e.inputCh; p.chk != nil {
 				p.chk.Release()
 				p.chk = nil
 			}
