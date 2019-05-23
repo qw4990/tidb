@@ -245,7 +245,7 @@ func NewChunkWithAllocator(a Allocator, fields []*types.FieldType, cap, maxChunk
 
 // ReleaseChunk releases this chunk.
 func ReleaseChunk(chk *Chunk) {
-	if chk.a == nil {
+	if chk.a == nil || chk.cantFree {
 		return
 	}
 	for _, c := range chk.columns {
