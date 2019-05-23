@@ -44,6 +44,7 @@ func (c *column) appendJSON(j json.BinaryJSON) {
 }
 
 type column struct {
+	cantFree   bool
 	length     int
 	nullCount  int
 	nullBitmap []byte

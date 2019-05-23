@@ -39,7 +39,6 @@ type Chunk struct {
 	// requiredRows indicates how many rows the parent executor want.
 	requiredRows int
 
-	cantFree bool
 	a        Allocator
 }
 
@@ -169,15 +168,14 @@ func (c *Chunk) IsFull() bool {
 
 // MakeRef makes column in "dstColIdx" reference to column in "srcColIdx".
 func (c *Chunk) MakeRef(srcColIdx, dstColIdx int) {
-	c.cantFree = true
 	c.columns[dstColIdx] = c.columns[srcColIdx]
+	c.columns[srcColIdx].cantFree = true
 }
 
 // MakeRefTo copies columns `src.columns[srcColIdx]` to `c.columns[dstColIdx]`.
 func (c *Chunk) MakeRefTo(dstColIdx int, src *Chunk, srcColIdx int) {
-	c.cantFree = true
-	src.cantFree = true
 	c.columns[dstColIdx] = src.columns[srcColIdx]
+	src.columns[srcColIdx].cantFree = true
 }
 
 // SwapColumn swaps column "c.columns[colIdx]" with column

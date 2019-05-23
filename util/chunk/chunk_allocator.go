@@ -245,10 +245,13 @@ func NewChunkWithAllocator(a Allocator, fields []*types.FieldType, cap, maxChunk
 
 // ReleaseChunk releases this chunk.
 func ReleaseChunk(chk *Chunk) {
-	if chk.a == nil || chk.cantFree {
+	if chk.a == nil {
 		return
 	}
 	for _, c := range chk.columns {
+		if c.cantFree {
+			continue
+		}
 		if c.offsets != nil { // varElemLen
 			//buf := *(*[]byte)(unsafe.Pointer(&c.offsets))
 			//chk.a.Free(buf)
