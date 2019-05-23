@@ -1,7 +1,6 @@
 package chunk
 
 import (
-	"fmt"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -19,8 +18,7 @@ var (
 type Allocator interface {
 	Alloc(l, c int) []byte
 	Free(buf []byte)
-	SetParent(a Allocator) error
-	MaxCap() int
+	SetParent(a Allocator)
 	Close()
 }
 
@@ -51,19 +49,11 @@ func (b *multiBufChan) Free(buf []byte) {
 	b.allocators[atomic.AddUint32(&b.freeIndex, 1)%b.numAllocators].Free(buf)
 }
 
-// MaxCap returns the capacity.
-func (b *multiBufChan) MaxCap() int {
-	return b.maxCap
-}
-
 // SetParent sets a parent for this allocator.
-func (b *multiBufChan) SetParent(a Allocator) error {
+func (b *multiBufChan) SetParent(a Allocator) {
 	for _, x := range b.allocators {
-		if err := x.SetParent(a); err != nil {
-			return err
-		}
+		x.SetParent(a)
 	}
-	return nil
 }
 
 // Close closes this allocator.
@@ -166,30 +156,17 @@ func (b *bufChan) Free(buf []byte) {
 	}
 }
 
-// MaxCap returns the capacity.
-func (b *bufChan) MaxCap() int {
-	return b.maxCap
-}
-
 // SetParent sets a parent for this allocator.
-func (b *bufChan) SetParent(pb Allocator) error {
-	if pb.MaxCap() < b.MaxCap() {
-		return fmt.Errorf("parent.MaxCap() < b.MaxCap()")
-	}
+func (b *bufChan) SetParent(pb Allocator) {
 	b.parent = pb
-	return nil
 }
 
 // Close closes this allocator.
 func (b *bufChan) Close() {
 	for _, ch := range b.bufList {
-		if ch != nil {
-			close(ch)
-			if b.parent != nil {
-				for buf := range ch {
-					b.parent.Free(buf)
-				}
-			}
+		for len(ch) > 0 {
+			buf := <-ch
+			b.parent.Free(buf)
 		}
 	}
 }

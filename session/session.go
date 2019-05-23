@@ -1540,10 +1540,7 @@ func createSession(store kv.Storage) (*session, error) {
 	s.sessionVars.GlobalVarsAccessor = s
 	s.sessionVars.BinlogClient = binloginfo.GetPumpsClient()
 	s.sessionVars.MemoryAllocator = chunk.NewBufAllocator(15, 32)
-	if err := s.sessionVars.MemoryAllocator.SetParent(chunk.GlobalAllocator); err != nil {
-		logutil.Logger(context.Background()).Fatal("prepare memory allocator err",
-			zap.Error(err))
-	}
+	s.sessionVars.MemoryAllocator.SetParent(chunk.GlobalAllocator)
 	s.txn.init()
 	return s, nil
 }
