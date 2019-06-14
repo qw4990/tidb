@@ -400,8 +400,8 @@ type copIteratorTaskSender struct {
 }
 
 type copResponse struct {
-	pbResp *coprocessor.Response
-	execdetails.ExecDetails
+	pbResp   *coprocessor.Response
+	detail   *execdetails.ExecDetails
 	startKey kv.Key
 	err      error
 	respSize int64
@@ -423,7 +423,7 @@ func (rs *copResponse) GetStartKey() kv.Key {
 }
 
 func (rs *copResponse) GetExecDetails() *execdetails.ExecDetails {
-	return &rs.ExecDetails
+	return rs.detail
 }
 
 // MemSize returns how many bytes of memory this response use
@@ -435,7 +435,7 @@ func (rs *copResponse) MemSize() int64 {
 	// ignore rs.err
 	rs.respSize += int64(cap(rs.startKey))
 	rs.respSize += int64(sizeofExecDetails)
-	if rs.CommitDetail != nil {
+	if rs.detail.CommitDetail != nil {
 		rs.respSize += int64(sizeofCommitDetails)
 	}
 	if rs.pbResp != nil {
@@ -665,7 +665,7 @@ func (worker *copIteratorWorker) handleTaskOnce(bo *Backoffer, task *copTask, ch
 	}
 
 	// Handles the response for non-streaming copTask.
-	return worker.handleCopResponse(bo, &copResponse{pbResp: resp.Cop}, task, ch, nil)
+	return worker.handleCopResponse(bo, &copResponse{pbResp: resp.Cop, detail: new(execdetails.ExecDetails)}, task, ch, nil)
 }
 
 const (
@@ -726,7 +726,7 @@ func (worker *copIteratorWorker) handleCopStreamResult(bo *Backoffer, stream *ti
 		return nil, nil
 	}
 	for {
-		remainedTasks, err := worker.handleCopResponse(bo, &copResponse{pbResp: resp}, task, ch, lastRange)
+		remainedTasks, err := worker.handleCopResponse(bo, &copResponse{pbResp: resp, detail: new(execdetails.ExecDetails)}, task, ch, lastRange)
 		if err != nil || len(remainedTasks) != 0 {
 			return remainedTasks, errors.Trace(err)
 		}
@@ -789,16 +789,16 @@ func (worker *copIteratorWorker) handleCopResponse(bo *Backoffer, resp *copRespo
 	} else {
 		resp.startKey = task.ranges.at(0).StartKey
 	}
-	resp.BackoffTime = time.Duration(bo.totalSleep) * time.Millisecond
+	resp.detail.BackoffTime = time.Duration(bo.totalSleep) * time.Millisecond
 	if pbDetails := resp.pbResp.ExecDetails; pbDetails != nil {
 		if handleTime := pbDetails.HandleTime; handleTime != nil {
-			resp.WaitTime = time.Duration(handleTime.WaitMs) * time.Millisecond
-			resp.ProcessTime = time.Duration(handleTime.ProcessMs) * time.Millisecond
+			resp.detail.WaitTime = time.Duration(handleTime.WaitMs) * time.Millisecond
+			resp.detail.ProcessTime = time.Duration(handleTime.ProcessMs) * time.Millisecond
 		}
 		if scanDetail := pbDetails.ScanDetail; scanDetail != nil {
 			if scanDetail.Write != nil {
-				resp.TotalKeys += scanDetail.Write.Total
-				resp.ProcessedKeys += scanDetail.Write.Processed
+				resp.detail.TotalKeys += scanDetail.Write.Total
+				resp.detail.ProcessedKeys += scanDetail.Write.Processed
 			}
 		}
 	}
