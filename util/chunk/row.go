@@ -96,8 +96,7 @@ func (r Row) getNameValue(colIdx int) (string, uint64) {
 
 // GetEnum returns the Enum value with the colIdx.
 func (r Row) GetEnum(colIdx int) types.Enum {
-	name, val := r.getNameValue(colIdx)
-	return types.Enum{Name: name, Value: val}
+	return r.c.Vector(colIdx).Enum()[r.idx]
 }
 
 // GetSet returns the Set value with the colIdx.

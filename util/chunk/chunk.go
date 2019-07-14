@@ -79,7 +79,8 @@ func New(fields []*types.FieldType, cap, maxChunkSize int) *Chunk {
 //  chk: old chunk(often used in previous call).
 //  maxChunkSize: the limit for the max number of rows.
 func Renew(chk *Chunk, maxChunkSize int) *Chunk {
-	panic("TODO")
+	return chk
+	// TODO
 	//newChk := new(Chunk)
 	//if chk.columns == nil {
 	//	return newChk
@@ -249,7 +250,9 @@ func (c *Chunk) CopyConstruct() *Chunk {
 // The doubled capacity should not be larger than maxChunkSize.
 // TODO: this method will be used in following PR.
 func (c *Chunk) GrowAndReset(maxChunkSize int) {
-	panic("TODO")
+	c.Reset()
+	return
+	// TODO
 	//if c.columns == nil {
 	//	return
 	//}
