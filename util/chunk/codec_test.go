@@ -78,80 +78,80 @@ func (s *testCodecSuite) TestCodec(c *check.C) {
 }
 
 func BenchmarkEncodeChunk(b *testing.B) {
-	numCols := 4
-	numRows := 1024
-
-	chk := &Chunk{columns: make([]*column, numCols)}
-	for i := 0; i < numCols; i++ {
-		chk.columns[i] = &column{
-			length:     numRows,
-			nullCount:  14,
-			nullBitmap: make([]byte, numRows/8+1),
-			data:       make([]byte, numRows*8),
-		}
-	}
-
-	codec := &Codec{}
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		codec.Encode(chk)
-	}
+	//numCols := 4
+	//numRows := 1024
+	//
+	//chk := &Chunk{columns: make([]*column, numCols)}
+	//for i := 0; i < numCols; i++ {
+	//	chk.columns[i] = &column{
+	//		length:     numRows,
+	//		nullCount:  14,
+	//		nullBitmap: make([]byte, numRows/8+1),
+	//		data:       make([]byte, numRows*8),
+	//	}
+	//}
+	//
+	//codec := &Codec{}
+	//
+	//b.ResetTimer()
+	//for i := 0; i < b.N; i++ {
+	//	codec.Encode(chk)
+	//}
 }
 
 func BenchmarkDecode(b *testing.B) {
-	numCols := 4
-	numRows := 1024
-
-	colTypes := make([]*types.FieldType, numCols)
-	chk := &Chunk{columns: make([]*column, numCols)}
-	for i := 0; i < numCols; i++ {
-		chk.columns[i] = &column{
-			length:     numRows,
-			nullCount:  14,
-			nullBitmap: make([]byte, numRows/8+1),
-			data:       make([]byte, numRows*8),
-		}
-		colTypes[i] = &types.FieldType{
-			Tp: mysql.TypeLonglong,
-		}
-	}
-	codec := &Codec{colTypes}
-	buffer := codec.Encode(chk)
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		codec.Decode(buffer)
-	}
+	//numCols := 4
+	//numRows := 1024
+	//
+	//colTypes := make([]*types.FieldType, numCols)
+	//chk := &Chunk{columns: make([]*column, numCols)}
+	//for i := 0; i < numCols; i++ {
+	//	chk.columns[i] = &column{
+	//		length:     numRows,
+	//		nullCount:  14,
+	//		nullBitmap: make([]byte, numRows/8+1),
+	//		data:       make([]byte, numRows*8),
+	//	}
+	//	colTypes[i] = &types.FieldType{
+	//		Tp: mysql.TypeLonglong,
+	//	}
+	//}
+	//codec := &Codec{colTypes}
+	//buffer := codec.Encode(chk)
+	//
+	//b.ResetTimer()
+	//for i := 0; i < b.N; i++ {
+	//	codec.Decode(buffer)
+	//}
 }
 
 func BenchmarkDecodeToChunk(b *testing.B) {
-	numCols := 4
-	numRows := 1024
-
-	colTypes := make([]*types.FieldType, numCols)
-	chk := &Chunk{
-		columns: make([]*column, numCols),
-	}
-	for i := 0; i < numCols; i++ {
-		chk.columns[i] = &column{
-			length:     numRows,
-			nullCount:  14,
-			nullBitmap: make([]byte, numRows/8+1),
-			data:       make([]byte, numRows*8),
-			elemBuf:    make([]byte, 8),
-		}
-		colTypes[i] = &types.FieldType{
-			Tp: mysql.TypeLonglong,
-		}
-	}
-	codec := &Codec{colTypes}
-	buffer := codec.Encode(chk)
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		codec.DecodeToChunk(buffer, chk)
-	}
+	//numCols := 4
+	//numRows := 1024
+	//
+	//colTypes := make([]*types.FieldType, numCols)
+	//chk := &Chunk{
+	//	columns: make([]*column, numCols),
+	//}
+	//for i := 0; i < numCols; i++ {
+	//	chk.columns[i] = &column{
+	//		length:     numRows,
+	//		nullCount:  14,
+	//		nullBitmap: make([]byte, numRows/8+1),
+	//		data:       make([]byte, numRows*8),
+	//		elemBuf:    make([]byte, 8),
+	//	}
+	//	colTypes[i] = &types.FieldType{
+	//		Tp: mysql.TypeLonglong,
+	//	}
+	//}
+	//codec := &Codec{colTypes}
+	//buffer := codec.Encode(chk)
+	//
+	//b.ResetTimer()
+	//for i := 0; i < b.N; i++ {
+	//	codec.DecodeToChunk(buffer, chk)
+	//}
 }
 
 func BenchmarkDecodeToChunkWithVariableType(b *testing.B) {

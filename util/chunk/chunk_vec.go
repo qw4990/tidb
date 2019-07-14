@@ -139,6 +139,7 @@ const (
 	VecTypeEnum
 	VecTypeTime
 	VecTypeSet
+	VecTypeFloat32
 )
 
 type Vec interface {
@@ -200,6 +201,9 @@ func newMemVec(tp *types.FieldType, cap VecSize) *memVec {
 	case mysql.TypeVarchar, mysql.TypeString, mysql.TypeBlob, mysql.TypeLongBlob:
 		t = VecTypeBytes
 		data = make([][]byte, 0, cap)
+	case mysql.TypeFloat:
+		t = VecTypeFloat32
+		data = make([]float32, 0, cap)
 	case mysql.TypeTimestamp:
 		t = VecTypeTime
 		data = make([]types.Time, 0, cap)
