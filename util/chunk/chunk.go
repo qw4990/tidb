@@ -408,25 +408,9 @@ func (c *Chunk) Insert(rowIdx int, row Row) {
 
 // Append appends rows in [begin, end) in another Chunk to a Chunk.
 func (c *Chunk) Append(other *Chunk, begin, end int) {
-	panic("TODO")
-	//for colID, src := range other.columns {
-	//	dst := c.columns[colID]
-	//	if src.isFixed() {
-	//		elemLen := len(src.elemBuf)
-	//		dst.data = append(dst.data, src.data[begin*elemLen:end*elemLen]...)
-	//	} else {
-	//		beginOffset, endOffset := src.offsets[begin], src.offsets[end]
-	//		dst.data = append(dst.data, src.data[beginOffset:endOffset]...)
-	//		for i := begin; i < end; i++ {
-	//			dst.offsets = append(dst.offsets, dst.offsets[len(dst.offsets)-1]+src.offsets[i+1]-src.offsets[i])
-	//		}
-	//	}
-	//	for i := begin; i < end; i++ {
-	//		dst.appendNullBitmap(!src.isNull(i))
-	//		dst.length++
-	//	}
-	//}
-	//c.numVirtualRows += end - begin
+	for id, src := range other.columns {
+		c.columns[id].Append(src, VecSize(begin), VecSize(end))
+	}
 }
 
 // TruncateTo truncates rows from tail to head in a Chunk to "numRows" rows.

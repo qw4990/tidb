@@ -43,8 +43,25 @@ type Nulls interface {
 	HasNull() bool
 
 	// TODO: test which is faster
-	Nulls() []bool
+	NullVec() []bool
 	IsNull(i VecSize) bool
+}
+
+var (
+	bitsCounter []VecSize
+)
+
+func init() {
+	bitsCounter = make([]VecSize, 1<<8)
+	for i := 0; i < (1 << 8); i++ {
+		bitCnt := 0
+		for b := 0; b < 8; b ++ {
+			if i&(1<<uint(b)) > 0 {
+				bitCnt ++
+			}
+		}
+		bitsCounter[i] = VecSize(bitCnt)
+	}
 }
 
 type nulls struct {
@@ -72,20 +89,29 @@ func (b *nulls) appendNull(isNull bool) {
 	if b.bitmap == nil {
 		b.bitmap = make([]byte, b.cap>>3)
 	}
-	if b.idx == b.cap {
-		b.cap *= 2
-		bs := make([]byte, b.cap>>3)
-		copy(bs, b.bitmap)
-		b.bitmap = bs
-	}
-
+	b.grow(1)
 	if isNull {
 		b.nullCount++
 	}
 
 	b.bitmap[b.idx>>3] |= byte(1 << (b.idx & 7))
 	b.idx ++
-	// assert (b.idx <= b.cap)
+}
+
+func (b *nulls) appendNulls(other *nulls, begin, end VecSize) {
+	// TODO: optimize it
+	for i := begin; i < end; i++ {
+		b.appendNull(other.IsNull(i))
+	}
+}
+
+func (b *nulls) grow(inc VecSize) {
+	for b.idx+inc >= b.cap {
+		b.cap *= 2
+		bs := make([]byte, b.cap>>3)
+		copy(bs, b.bitmap)
+		b.bitmap = bs
+	}
 }
 
 func (b *nulls) reset() {
@@ -98,7 +124,7 @@ func (b *nulls) IsNull(idx VecSize) bool {
 	return b.bitmap[idx/8]&(1<<(idx&7)) == 0
 }
 
-func (b *nulls) Nulls() []bool {
+func (b *nulls) NullVec() []bool {
 	panic("TODO")
 }
 
@@ -144,6 +170,8 @@ type Vec interface {
 	AppendSet(types.Set)
 	AppendMyDecimal(types.MyDecimal)
 	AppendJSON(json.BinaryJSON)
+
+	Append(v Vec, begin, end VecSize)
 
 	Reset()
 	MemoryUsage() int64
@@ -295,6 +323,34 @@ func (mv *memVec) AppendMyDecimal(d types.MyDecimal) {
 func (mv *memVec) AppendJSON(j json.BinaryJSON) {
 	mv.data = append(mv.data.([]json.BinaryJSON), j)
 	mv.nulls.appendNull(false)
+}
+
+func (mv *memVec) Append(v Vec, begin, end VecSize) {
+	// assert (v.Type() == mv.Type())
+	switch mv.tp {
+	case VecTypeInt64:
+		mv.data = append(mv.data.([]int64), v.Int64()[begin:end]...)
+	case VecTypeUint64:
+		mv.data = append(mv.data.([]uint64), v.Uint64()[begin:end]...)
+	case VecTypeString:
+		mv.data = append(mv.data.([]string), v.String()[begin:end]...)
+	case VecTypeBytes:
+		mv.data = append(mv.data.([][]byte), v.Bytes()[begin:end]...)
+	case VecTypeEnum:
+		mv.data = append(mv.data.([]types.Enum), v.Enum()[begin:end]...)
+	case VecTypeTime:
+		mv.data = append(mv.data.([]types.Time), v.Time()[begin:end]...)
+	case VecTypeSet:
+		mv.data = append(mv.data.([]types.Set), v.Set()[begin:end]...)
+	default:
+		panic("TODO")
+	}
+
+	if mv2, ok := v.(*memVec); ok {
+		mv.appendNulls(mv2.nulls, begin, end)
+	} else {
+		panic("not implement")
+	}
 }
 
 func (mv *memVec) MemoryUsage() int64 {
