@@ -1,6 +1,7 @@
 package chunk
 
 import (
+	"github.com/pingcap/parser/mysql"
 	"github.com/pingcap/tidb/types"
 	"github.com/pingcap/tidb/types/json"
 )
@@ -8,6 +9,7 @@ import (
 type Sel interface {
 	Sel() []VecSize
 	Len() VecSize
+	SetLen(size VecSize)
 }
 
 type selector struct {
@@ -23,31 +25,12 @@ func (s *selector) Len() VecSize {
 	return s.l
 }
 
-func (s *selector) Filter(xs []bool) {
-	if s.sel == nil {
-		// assert (s.l == 0)
-		s.sel = make([]VecSize, len(xs))
-		for i, b := range xs {
-			if b {
-				s.sel[s.l] = VecSize(i)
-				s.l++
-			}
-		}
-	} else {
-		// assert (s.l == len(xs))
-		s.l = 0
-		for i, b := range xs {
-			if b {
-				s.sel[s.l] = s.sel[i]
-				s.l++
-			}
-		}
-	}
+func (s *selector) SetLen(size VecSize) {
+	s.l = size
 }
 
 type Nulls interface {
 	HasNull() bool
-	AppendNull(isNull bool)
 
 	// TODO: test which is faster
 	Nulls() []bool
@@ -57,30 +40,52 @@ type Nulls interface {
 type nulls struct {
 	// 1: NULL
 	// 0: NOT NULL
-	bitmap []byte
-	n      VecSize
+	bitmap    []byte
+	idx       VecSize
+	cap       VecSize // used to make bitmap lazily
+	nullCount VecSize
+}
+
+func newNulls(cap VecSize) *nulls {
+	return &nulls{
+		cap: cap,
+	}
 }
 
 func (b *nulls) HasNull() bool {
-	return b.bitmap != nil
+	return b.nullCount > 0
 }
 
 // SetNull sets the NULL flag for the i-th value.
-func (b *nulls) AppendNull(isNull bool) {
-	// TODO
+func (b *nulls) appendNull(isNull bool) {
+	if b.bitmap == nil {
+		b.bitmap = make([]byte, (b.cap+1)>>3)
+	}
+
+	if isNull {
+		b.nullCount++
+	}
+	b.bitmap[b.idx>>3] |= byte(1 << (b.idx & 7))
+	b.idx ++
+	// assert (b.idx <= b.cap)
 }
 
 // IsNull returns whether the i-th value is NULL.
-func (b *nulls) IsNull(i VecSize) bool {
-	return b.bitmap[i/8]&(1<<(i&7)) == 0
+func (b *nulls) IsNull(idx VecSize) bool {
+	return b.bitmap[idx/8]&(1<<(idx&7)) == 0
 }
 
 func (b *nulls) Nulls() []bool {
-	// TODO
-	return nil
+	panic("TODO")
 }
 
 type VecSize uint16
+type VecType uint16
+
+const (
+	VecTypeInt64 = iota
+	VecTypeUint64
+)
 
 type Vec interface {
 	Nulls
@@ -98,6 +103,7 @@ type Vec interface {
 	MyDecimal() []types.MyDecimal
 	JSON() []json.BinaryJSON
 
+	AppendNull()
 	AppendInt64(int64)
 	AppendUint64(uint64)
 	AppendFloat32(float32)
@@ -114,8 +120,30 @@ type Vec interface {
 
 type memVec struct {
 	*nulls
-	tp   types.FieldType
+	tp   VecType
 	data interface{}
+}
+
+func newMemVec(tp *types.FieldType, cap VecSize) *memVec {
+	var t VecType
+	var data interface{}
+	switch tp.Tp {
+	case mysql.TypeLong:
+		if mysql.HasUnsignedFlag(tp.Flag) {
+			t = VecTypeUint64
+			data = make([]uint64, 0, cap)
+		} else {
+			t = VecTypeInt64
+			data = make([]int64, 0, cap)
+		}
+	default:
+		panic("TODO")
+	}
+	return &memVec{
+		nulls: newNulls(cap),
+		tp:    t,
+		data:  data,
+	}
 }
 
 func (mv *memVec) Int64() []int64               { return mv.data.([]int64) }
@@ -131,9 +159,22 @@ func (mv *memVec) Set() []types.Set             { return nil }
 func (mv *memVec) MyDecimal() []types.MyDecimal { return nil }
 func (mv *memVec) JSON() []json.BinaryJSON      { return nil }
 
+// SetNull sets the NULL flag for the i-th value.
+func (mv *memVec) AppendNull() {
+	mv.nulls.appendNull(true)
+	switch mv.tp {
+	case VecTypeInt64:
+		mv.AppendInt64(0)
+	case VecTypeUint64:
+		mv.AppendUint64(0)
+	default:
+		panic("TODO")
+	}
+}
+
 func (mv *memVec) AppendInt64(i int64) {
 	mv.data = append(mv.data.([]int64), i)
-
+	mv.nulls.appendNull(false)
 }
 func (mv *memVec) AppendUint64(uint64)             {}
 func (mv *memVec) AppendFloat32(float32)           {}
