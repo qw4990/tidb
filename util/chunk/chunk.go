@@ -62,6 +62,7 @@ func New(fields []*types.FieldType, cap, maxChunkSize int) *Chunk {
 		chk.columns = append(chk.columns, newMemVec(f, VecSize(chk.capacity)))
 	}
 	chk.numVirtualRows = 0
+	chk.sel = newSel()
 
 	// set the default value of requiredRows to maxChunkSize to let chk.IsFull() behave
 	// like how we judge whether a chunk is full now, then the statement
@@ -229,14 +230,11 @@ func (c *Chunk) SetNumVirtualRows(numVirtualRows int) {
 // Reset resets the chunk, so the memory it allocated can be reused.
 // Make sure all the data in the chunk is not used anymore before you reuse this chunk.
 func (c *Chunk) Reset() {
-	panic("TODO")
-	//if c.columns == nil {
-	//	return
-	//}
-	//for _, col := range c.columns {
-	//	col.reset()
-	//}
-	//c.numVirtualRows = 0
+	c.sel.SetLen(0)
+	for _, v := range c.columns {
+		v.Reset()
+	}
+	c.numVirtualRows = 0
 }
 
 // CopyConstruct creates a new chunk and copies this chunk's data into it.
