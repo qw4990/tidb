@@ -5,55 +5,14 @@ import (
 	"github.com/pingcap/tidb/types/json"
 )
 
-type Nulls interface {
-	HasNull() bool
-	IsNull(i VecSize) bool
-	SetNull(i VecSize)
-}
-
-type nulls struct {
-	// 1: NULL
-	// 0: NOT NULL
-	bitmap []byte
-	n      VecSize
-}
-
-func NewNulls(n VecSize) Nulls {
-	return &nulls{nil, n}
-}
-
-func (b *nulls) HasNull() bool {
-	return b.bitmap != nil
-}
-
-// IsNull returns whether the i-th value is NULL.
-func (b *nulls) IsNull(i VecSize) bool {
-	return b.bitmap[i/8]&(1<<(i&7)) == 0
-}
-
-// SetNull sets the NULL flag for the i-th value.
-func (b *nulls) SetNull(i VecSize) {
-	if b.bitmap == nil {
-		b.bitmap = make([]byte, b.n/8)
-	}
-	b.bitmap[i/8] |= 1 << (uint(i) & 7)
-}
-
-type VecSize uint16
-
 type Sel interface {
 	Sel() []VecSize
 	Len() VecSize
-	Filter([]bool)
 }
 
 type selector struct {
 	sel []VecSize
 	l   VecSize
-}
-
-func NewSel(l VecSize) Sel {
-	return &selector{nil, l}
 }
 
 func (s *selector) Sel() []VecSize {
@@ -86,28 +45,77 @@ func (s *selector) Filter(xs []bool) {
 	}
 }
 
+type Nulls interface {
+	HasNull() bool
+	AppendNull(isNull bool)
+
+	// TODO: test which is faster
+	Nulls() []bool
+	IsNull(i VecSize) bool
+}
+
+type nulls struct {
+	// 1: NULL
+	// 0: NOT NULL
+	bitmap []byte
+	n      VecSize
+}
+
+func (b *nulls) HasNull() bool {
+	return b.bitmap != nil
+}
+
+// SetNull sets the NULL flag for the i-th value.
+func (b *nulls) AppendNull(isNull bool) {
+	// TODO
+}
+
+// IsNull returns whether the i-th value is NULL.
+func (b *nulls) IsNull(i VecSize) bool {
+	return b.bitmap[i/8]&(1<<(i&7)) == 0
+}
+
+func (b *nulls) Nulls() []bool {
+	// TODO
+	return nil
+}
+
+type VecSize uint16
+
 type Vec interface {
 	Nulls
-	Sel
 
 	Int64() []int64
 	Uint64() []uint64
 	Float32() []float32
 	Float64() []float64
 	String() []string
-	Byte() []byte
+	Bytes() [][]byte
 	Time() []types.Time
 	Duration() []types.Duration
 	Enum() []types.Enum
 	Set() []types.Set
 	MyDecimal() []types.MyDecimal
 	JSON() []json.BinaryJSON
+
+	AppendInt64(int64)
+	AppendUint64(uint64)
+	AppendFloat32(float32)
+	AppendFloat64(float64)
+	AppendString(string)
+	AppendBytes([]byte)
+	AppendTime(types.Time)
+	AppendDuration(types.Duration)
+	AppendEnum(types.Enum)
+	AppendSet(types.Set)
+	AppendMyDecimal(types.MyDecimal)
+	AppendJSON(json.BinaryJSON)
 }
 
 type memVec struct {
-	nulls    Nulls
-	selector Sel
-	data     interface{}
+	*nulls
+	tp   types.FieldType
+	data interface{}
 }
 
 func (mv *memVec) Int64() []int64               { return mv.data.([]int64) }
@@ -115,10 +123,26 @@ func (mv *memVec) Uint64() []uint64             { return mv.data.([]uint64) }
 func (mv *memVec) Float32() []float32           { return mv.data.([]float32) }
 func (mv *memVec) Float64() []float64           { return mv.data.([]float64) }
 func (mv *memVec) String() []string             { return nil }
-func (mv *memVec) Byte() []byte                 { return nil }
+func (mv *memVec) Bytes() [][]byte              { return nil }
 func (mv *memVec) Time() []types.Time           { return nil }
 func (mv *memVec) Duration() []types.Duration   { return nil }
 func (mv *memVec) Enum() []types.Enum           { return nil }
 func (mv *memVec) Set() []types.Set             { return nil }
 func (mv *memVec) MyDecimal() []types.MyDecimal { return nil }
 func (mv *memVec) JSON() []json.BinaryJSON      { return nil }
+
+func (mv *memVec) AppendInt64(i int64) {
+	mv.data = append(mv.data.([]int64), i)
+
+}
+func (mv *memVec) AppendUint64(uint64)             {}
+func (mv *memVec) AppendFloat32(float32)           {}
+func (mv *memVec) AppendFloat64(float64)           {}
+func (mv *memVec) AppendString(string)             {}
+func (mv *memVec) AppendBytes([]byte)              {}
+func (mv *memVec) AppendTime(types.Time)           {}
+func (mv *memVec) AppendDuration(types.Duration)   {}
+func (mv *memVec) AppendEnum(types.Enum)           {}
+func (mv *memVec) AppendSet(types.Set)             {}
+func (mv *memVec) AppendMyDecimal(types.MyDecimal) {}
+func (mv *memVec) AppendJSON(json.BinaryJSON)      {}

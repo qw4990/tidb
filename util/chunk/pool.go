@@ -45,41 +45,42 @@ func NewPool(initCap int) *Pool {
 
 // GetChunk gets a Chunk from the Pool.
 func (p *Pool) GetChunk(fields []*types.FieldType) *Chunk {
-	chk := new(Chunk)
-	chk.capacity = p.initCap
-	chk.columns = make([]*column, len(fields))
-	for i, f := range fields {
-		switch elemLen := getFixedLen(f); elemLen {
-		case varElemLen:
-			chk.columns[i] = p.varLenColPool.Get().(*column)
-		case 4:
-			chk.columns[i] = p.fixLenColPool4.Get().(*column)
-		case 8:
-			chk.columns[i] = p.fixLenColPool8.Get().(*column)
-		case 16:
-			chk.columns[i] = p.fixLenColPool16.Get().(*column)
-		case 40:
-			chk.columns[i] = p.fixLenColPool40.Get().(*column)
-		}
-	}
-	return chk
+	panic("TODO")
+	//chk := new(Chunk)
+	//chk.capacity = p.initCap
+	//chk.columns = make([]*column, len(fields))
+	//for i, f := range fields {
+	//	switch elemLen := getFixedLen(f); elemLen {
+	//	case varElemLen:
+	//		chk.columns[i] = p.varLenColPool.Get().(*column)
+	//	case 4:
+	//		chk.columns[i] = p.fixLenColPool4.Get().(*column)
+	//	case 8:
+	//		chk.columns[i] = p.fixLenColPool8.Get().(*column)
+	//	case 16:
+	//		chk.columns[i] = p.fixLenColPool16.Get().(*column)
+	//	case 40:
+	//		chk.columns[i] = p.fixLenColPool40.Get().(*column)
+	//	}
+	//}
+	//return chk
 }
 
 // PutChunk puts a Chunk back to the Pool.
 func (p *Pool) PutChunk(fields []*types.FieldType, chk *Chunk) {
-	for i, f := range fields {
-		switch elemLen := getFixedLen(f); elemLen {
-		case varElemLen:
-			p.varLenColPool.Put(chk.columns[i])
-		case 4:
-			p.fixLenColPool4.Put(chk.columns[i])
-		case 8:
-			p.fixLenColPool8.Put(chk.columns[i])
-		case 16:
-			p.fixLenColPool16.Put(chk.columns[i])
-		case 40:
-			p.fixLenColPool40.Put(chk.columns[i])
-		}
-	}
-	chk.columns = nil // release the column references.
+	//for i, f := range fields {
+	//	switch elemLen := getFixedLen(f); elemLen {
+	//	case varElemLen:
+	//		p.varLenColPool.Put(chk.columns[i])
+	//	case 4:
+	//		p.fixLenColPool4.Put(chk.columns[i])
+	//	case 8:
+	//		p.fixLenColPool8.Put(chk.columns[i])
+	//	case 16:
+	//		p.fixLenColPool16.Put(chk.columns[i])
+	//	case 40:
+	//		p.fixLenColPool40.Put(chk.columns[i])
+	//	}
+	//}
+	//chk.columns = nil // release the column references.
 }
