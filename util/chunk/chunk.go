@@ -55,8 +55,7 @@ func NewChunkWithCapacity(fields []*types.FieldType, cap int) *Chunk {
 //  cap: the limit for the max number of rows.
 //  maxChunkSize: the max limit for the number of rows.
 func New(fields []*types.FieldType, cap, maxChunkSize int) *Chunk {
-	// TODO
-	return nil
+	panic("TODO")
 	//chk := new(Chunk)
 	//chk.columns = make([]*column, 0, len(fields))
 	//chk.capacity = mathutil.Min(cap, maxChunkSize)
@@ -85,8 +84,7 @@ func New(fields []*types.FieldType, cap, maxChunkSize int) *Chunk {
 //  chk: old chunk(often used in previous call).
 //  maxChunkSize: the limit for the max number of rows.
 func Renew(chk *Chunk, maxChunkSize int) *Chunk {
-	// TODO
-	return nil
+	panic("TODO")
 	//newChk := new(Chunk)
 	//if chk.columns == nil {
 	//	return newChk
@@ -117,8 +115,7 @@ func renewColumns(oldCol []*column, cap int) []*column {
 // We ignore the size of column.length and column.nullCount
 // since they have little effect of the total memory usage.
 func (c *Chunk) MemoryUsage() (sum int64) {
-	return 0
-	// TODO
+	panic("TODO")
 	//for _, col := range c.columns {
 	//	curColMemUsage := int64(unsafe.Sizeof(*col)) + int64(cap(col.nullBitmap)) + int64(cap(col.offsets)*4) + int64(cap(col.data)) + int64(cap(col.elemBuf))
 	//	sum += curColMemUsage
@@ -238,7 +235,7 @@ func (c *Chunk) SetNumVirtualRows(numVirtualRows int) {
 // Reset resets the chunk, so the memory it allocated can be reused.
 // Make sure all the data in the chunk is not used anymore before you reuse this chunk.
 func (c *Chunk) Reset() {
-	// TODO
+	panic("TODO")
 	//if c.columns == nil {
 	//	return
 	//}
@@ -250,8 +247,7 @@ func (c *Chunk) Reset() {
 
 // CopyConstruct creates a new chunk and copies this chunk's data into it.
 func (c *Chunk) CopyConstruct() *Chunk {
-	return nil
-	// TODO
+	panic("TODO")
 	//newChk := &Chunk{numVirtualRows: c.numVirtualRows, capacity: c.capacity, columns: make([]*column, len(c.columns))}
 	//for i := range c.columns {
 	//	newChk.columns[i] = c.columns[i].copyConstruct()
@@ -263,8 +259,7 @@ func (c *Chunk) CopyConstruct() *Chunk {
 // The doubled capacity should not be larger than maxChunkSize.
 // TODO: this method will be used in following PR.
 func (c *Chunk) GrowAndReset(maxChunkSize int) {
-	return
-	// TODO
+	panic("TODO")
 	//if c.columns == nil {
 	//	return
 	//}
@@ -316,9 +311,7 @@ func (c *Chunk) AppendRow(row Row) {
 
 // AppendPartialRow appends a row to the chunk.
 func (c *Chunk) AppendPartialRow(colIdx int, row Row) {
-	return
-	// TODO
-	//
+	panic("TODO")
 	//for i, rowCol := range row.c.columns {
 	//	chkCol := c.columns[colIdx+i]
 	//	chkCol.appendNullBitmap(!rowCol.isNull(row.idx))
@@ -346,8 +339,7 @@ func (c *Chunk) AppendPartialRow(colIdx int, row Row) {
 //    can not be avoided although the manipulated bits are different inside a
 //    byte.
 func (c *Chunk) PreAlloc(row Row) (rowIdx uint32) {
-	// TODO
-	return 0
+	panic("TODO")
 	//rowIdx = uint32(c.NumRows())
 	//for i, srcCol := range row.c.columns {
 	//	dstCol := c.columns[i]
@@ -401,7 +393,7 @@ func (c *Chunk) PreAlloc(row Row) (rowIdx uint32) {
 // Note: Insert will cover the origin data, it should be called after
 // PreAlloc.
 func (c *Chunk) Insert(rowIdx int, row Row) {
-	return
+	panic("TODO")
 	//for i, srcCol := range row.c.columns {
 	//	if row.IsNull(i) {
 	//		continue
@@ -422,8 +414,7 @@ func (c *Chunk) Insert(rowIdx int, row Row) {
 
 // Append appends rows in [begin, end) in another Chunk to a Chunk.
 func (c *Chunk) Append(other *Chunk, begin, end int) {
-	return
-	// TODO
+	panic("TODO")
 	//for colID, src := range other.columns {
 	//	dst := c.columns[colID]
 	//	if src.isFixed() {
@@ -446,9 +437,7 @@ func (c *Chunk) Append(other *Chunk, begin, end int) {
 
 // TruncateTo truncates rows from tail to head in a Chunk to "numRows" rows.
 func (c *Chunk) TruncateTo(numRows int) {
-	// TODO
-	return
-	//
+	panic("TODO")
 	//for _, col := range c.columns {
 	//	if col.isFixed() {
 	//		elemLen := len(col.elemBuf)
