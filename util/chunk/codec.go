@@ -40,11 +40,12 @@ func NewCodec(colTypes []*types.FieldType) *Codec {
 
 // Encode encodes a Chunk to a byte slice.
 func (c *Codec) Encode(chk *Chunk) []byte {
-	buffer := make([]byte, 0, chk.MemoryUsage())
-	for _, col := range chk.columns {
-		buffer = c.encodeColumn(buffer, col)
-	}
-	return buffer
+	panic("TODO")
+	//buffer := make([]byte, 0, chk.MemoryUsage())
+	//for _, col := range chk.columns {
+	//buffer = c.encodeColumn(buffer, col)
+	//}
+	//return buffer
 }
 
 func (c *Codec) encodeColumn(buffer []byte, col *column) []byte {
@@ -88,21 +89,23 @@ func (c *Codec) i64SliceToBytes(i64s []int64) (b []byte) {
 
 // Decode decodes a Chunk from a byte slice, return the remained unused bytes.
 func (c *Codec) Decode(buffer []byte) (*Chunk, []byte) {
-	chk := &Chunk{}
-	for ordinal := 0; len(buffer) > 0; ordinal++ {
-		col := &column{}
-		buffer = c.decodeColumn(buffer, col, ordinal)
-		chk.columns = append(chk.columns, col)
-	}
-	return chk, buffer
+	panic("TODO")
+	//chk := &Chunk{}
+	//for ordinal := 0; len(buffer) > 0; ordinal++ {
+	//	col := &column{}
+	//	buffer = c.decodeColumn(buffer, col, ordinal)
+	//	chk.columns = append(chk.columns, col)
+	//}
+	//return chk, buffer
 }
 
 // DecodeToChunk decodes a Chunk from a byte slice, return the remained unused bytes.
 func (c *Codec) DecodeToChunk(buffer []byte, chk *Chunk) (remained []byte) {
-	for i := 0; i < len(chk.columns); i++ {
-		buffer = c.decodeColumn(buffer, chk.columns[i], i)
-	}
-	return buffer
+	panic("TODO")
+	//for i := 0; i < len(chk.columns); i++ {
+	//	buffer = c.decodeColumn(buffer, chk.columns[i], i)
+	//}
+	//return buffer
 }
 
 func (c *Codec) decodeColumn(buffer []byte, col *column, ordinal int) (remained []byte) {
