@@ -110,12 +110,10 @@ func renewColumns(oldCol []*column, cap int) []*column {
 // We ignore the size of column.length and column.nullCount
 // since they have little effect of the total memory usage.
 func (c *Chunk) MemoryUsage() (sum int64) {
-	panic("TODO")
-	//for _, col := range c.columns {
-	//	curColMemUsage := int64(unsafe.Sizeof(*col)) + int64(cap(col.nullBitmap)) + int64(cap(col.offsets)*4) + int64(cap(col.data)) + int64(cap(col.elemBuf))
-	//	sum += curColMemUsage
-	//}
-	//return
+	for _, c := range c.columns {
+		sum += c.MemoryUsage()
+	}
+	return sum
 }
 
 // newFixedLenColumn creates a fixed length column with elemLen and initial data capacity.
@@ -303,21 +301,22 @@ func (c *Chunk) AppendRow(row Row) {
 
 // AppendPartialRow appends a row to the chunk.
 func (c *Chunk) AppendPartialRow(colIdx int, row Row) {
-	panic("TODO")
-	//for i, rowCol := range row.c.columns {
-	//	chkCol := c.columns[colIdx+i]
-	//	chkCol.appendNullBitmap(!rowCol.isNull(row.idx))
-	//	if rowCol.isFixed() {
-	//		elemLen := len(rowCol.elemBuf)
-	//		offset := row.idx * elemLen
-	//		chkCol.data = append(chkCol.data, rowCol.data[offset:offset+elemLen]...)
-	//	} else {
-	//		start, end := rowCol.offsets[row.idx], rowCol.offsets[row.idx+1]
-	//		chkCol.data = append(chkCol.data, rowCol.data[start:end]...)
-	//		chkCol.offsets = append(chkCol.offsets, int64(len(chkCol.data)))
-	//	}
-	//	chkCol.length++
-	//}
+	colLen := len(row.c.columns)
+	for i := 0; i < colLen; i++ {
+		v := c.Vector(i)
+		switch v.Type() {
+		case VecTypeString:
+			v.AppendString(row.GetString(i))
+		case VecTypeInt64:
+			v.AppendInt64(row.GetInt64(i))
+		case VecTypeUint64:
+			v.AppendUint64(row.GetUint64(i))
+		case VecTypeBytes:
+			v.AppendBytes(row.GetBytes(i))
+		default:
+			panic("TODO")
+		}
+	}
 }
 
 // PreAlloc pre-allocates the memory space in a Chunk to store the Row.

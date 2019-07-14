@@ -57,6 +57,7 @@ type nulls struct {
 }
 
 func newNulls(cap VecSize) *nulls {
+	cap = ((cap + 7) >> 3) << 3
 	return &nulls{
 		cap: cap,
 	}
@@ -69,12 +70,19 @@ func (b *nulls) HasNull() bool {
 // SetNull sets the NULL flag for the i-th value.
 func (b *nulls) appendNull(isNull bool) {
 	if b.bitmap == nil {
-		b.bitmap = make([]byte, (b.cap+1)>>3)
+		b.bitmap = make([]byte, b.cap>>3)
+	}
+	if b.idx == b.cap {
+		b.cap *= 2
+		bs := make([]byte, b.cap>>3)
+		copy(bs, b.bitmap)
+		b.bitmap = bs
 	}
 
 	if isNull {
 		b.nullCount++
 	}
+
 	b.bitmap[b.idx>>3] |= byte(1 << (b.idx & 7))
 	b.idx ++
 	// assert (b.idx <= b.cap)
@@ -96,6 +104,7 @@ const (
 	VecTypeInt64 = iota
 	VecTypeUint64
 	VecTypeString
+	VecTypeBytes
 )
 
 type Vec interface {
@@ -129,12 +138,14 @@ type Vec interface {
 	AppendJSON(json.BinaryJSON)
 
 	Reset()
-	MemoryUsage() uint64
+	MemoryUsage() int64
+	Type() VecType
 }
 
 type memVec struct {
 	*nulls
 	tp   VecType
+	ft   types.FieldType // for debug
 	data interface{}
 }
 
@@ -151,14 +162,20 @@ func newMemVec(tp *types.FieldType, cap VecSize) *memVec {
 			data = make([]int64, 0, cap)
 		}
 	case mysql.TypeVarchar:
+		t = VecTypeBytes
+		data = make([][]byte, 0, cap)
+	case mysql.TypeString:
 		t = VecTypeString
 		data = make([]string, 0, cap)
+	case mysql.TypeEnum:
+		panic("TODO ENUM")
 	default:
 		panic(fmt.Sprintf("TODO %v", tp.Tp))
 	}
 	return &memVec{
 		nulls: newNulls(cap),
 		tp:    t,
+		ft:    *tp,
 		data:  data,
 	}
 }
@@ -168,10 +185,14 @@ func (mv *memVec) Uint64() []uint64   { return mv.data.([]uint64) }
 func (mv *memVec) Float32() []float32 { return mv.data.([]float32) }
 func (mv *memVec) Float64() []float64 { return mv.data.([]float64) }
 func (mv *memVec) String() []string {
-	panic("TODO")
+	strs := make([]string, 0, len(mv.data.([][]byte)))
+	for _, b := range mv.data.([][]byte) {
+		strs = append(strs, string(b))
+	}
+	return strs
 }
 func (mv *memVec) Bytes() [][]byte {
-	panic("TODO")
+	return mv.data.([][]byte)
 }
 func (mv *memVec) Time() []types.Time {
 	panic("TODO")
@@ -211,6 +232,8 @@ func (mv *memVec) Reset() {
 		mv.data = mv.data.([]int64)[:0]
 	case VecTypeUint64:
 		mv.data = mv.data.([]uint64)[:0]
+	case VecTypeBytes:
+		mv.data = mv.data.([][]byte)[:0]
 	case VecTypeString:
 		mv.data = mv.data.([]string)[:0]
 	default:
@@ -231,11 +254,15 @@ func (mv *memVec) AppendFloat32(float32) {
 func (mv *memVec) AppendFloat64(float64) {
 	panic("TODO")
 }
-func (mv *memVec) AppendString(string) {
-	panic("TODO")
+func (mv *memVec) AppendString(str string) {
+	bs := make([]byte, 0, len(str))
+	bs = append(bs, str...)
+	mv.data = append(mv.data.([][]byte), bs)
+	mv.nulls.appendNull(false)
 }
-func (mv *memVec) AppendBytes([]byte) {
-	panic("TODO")
+func (mv *memVec) AppendBytes(bs []byte) {
+	mv.data = append(mv.data.([][]byte), bs)
+	mv.nulls.appendNull(false)
 }
 func (mv *memVec) AppendTime(types.Time) {
 	panic("TODO")
@@ -256,7 +283,11 @@ func (mv *memVec) AppendJSON(json.BinaryJSON) {
 	panic("TODO")
 }
 
-func (mv *memVec) MemoryUsage() uint64 {
+func (mv *memVec) MemoryUsage() int64 {
 	// TODO
 	return 0
+}
+
+func (mv *memVec) Type() VecType {
+	return mv.tp
 }
