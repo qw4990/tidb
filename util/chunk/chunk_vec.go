@@ -10,8 +10,6 @@ import (
 type Sel interface {
 	Sel() []VecSize
 	SetSel(sel []VecSize)
-	Len() VecSize
-	SetLen(size VecSize)
 }
 
 type selector struct {
@@ -124,7 +122,7 @@ func (b *nulls) IsNull(idx VecSize) bool {
 	return b.bitmap[idx/8]&(1<<(idx&7)) == 0
 }
 
-func (b *nulls) NullVec() []bool {
+func (b *nulls) Nulls() []bool {
 	panic("TODO")
 }
 
@@ -143,11 +141,20 @@ const (
 )
 
 type Vec interface {
-	Nulls
-
 	Int64() []int64
 	Uint64() []uint64
 	Float32() []float32
+
+	AppendNull()
+	AppendInt64(int64)
+	AppendUint64(uint64)
+	AppendFloat32(float32)
+
+	HasNull() bool
+	Nulls() []bool
+	IsNull(i VecSize) bool
+	//Nulls
+
 	Float64() []float64
 	String() []string
 	Bytes() [][]byte
@@ -158,10 +165,6 @@ type Vec interface {
 	MyDecimal() []types.MyDecimal
 	JSON() []json.BinaryJSON
 
-	AppendNull()
-	AppendInt64(int64)
-	AppendUint64(uint64)
-	AppendFloat32(float32)
 	AppendFloat64(float64)
 	AppendString(string)
 	AppendBytes([]byte)
@@ -184,6 +187,14 @@ type memVec struct {
 	tp   VecType
 	ft   types.FieldType // for debug
 	data interface{}
+}
+
+func ConstructVec(data interface{}, nullBits []bool, tp VecType) Vec {
+	return &memVec{
+		nulls: nil,
+		tp:    tp,
+		data:  data,
+	}
 }
 
 func newMemVec(tp *types.FieldType, cap VecSize) *memVec {

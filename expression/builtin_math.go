@@ -205,6 +205,77 @@ func (b *builtinAbsIntSig) evalInt(row chunk.Row) (int64, bool, error) {
 	return -val, false, nil
 }
 
+func (b *builtinAbsIntSig) vecEvalInt(ctx sessionctx.Context, chk *chunk.Chunk) (chunk.Vec, error) {
+	vs := chk.Vector(0)
+	vsData := vs.Int64()
+	if vs.HasNull() {
+		vsNulls := vs.Nulls()
+		if sel := chk.Selection(); sel != nil {
+			selected := sel.Sel()
+			if len(selected) == 0 {
+				return chunk.ConstructVec(make([]int64, 0), nil, chunk.VecTypeInt64), nil
+			}
+
+			data := make([]int64, selected[len(selected)+1])
+			nulls := make([]bool, selected[len(selected)+1])
+			for _, i := range selected {
+				if vsNulls[i] {
+					nulls[i] = true
+				} else {
+					if vsData[i] >= 0 {
+						data[i] = vsData[i]
+					} else {
+						data[i] = -vsData[i]
+					}
+				}
+			}
+			return chunk.ConstructVec(data, nulls, chunk.VecTypeInt64), nil
+		} else {
+			data := make([]int64, len(vsData))
+			nulls := make([]bool, len(vsData))
+			for _, i := range vsData {
+				if vsNulls[i] {
+					nulls[i] = true
+				} else {
+					if vsData[i] >= 0 {
+						data[i] = vsData[i]
+					} else {
+						data[i] = -vsData[i]
+					}
+				}
+			}
+			return chunk.ConstructVec(data, nulls, chunk.VecTypeInt64), nil
+		}
+	} else {
+		if sel := chk.Selection(); sel != nil {
+			selected := sel.Sel()
+			if len(selected) == 0 {
+				return chunk.ConstructVec(make([]int64, 0), nil, chunk.VecTypeInt64), nil
+			}
+
+			data := make([]int64, selected[len(selected)+1])
+			for _, i := range selected {
+				if vsData[i] >= 0 {
+					data[i] = vsData[i]
+				} else {
+					data[i] = -vsData[i]
+				}
+			}
+			return chunk.ConstructVec(data, nil, chunk.VecTypeInt64), nil
+		} else {
+			data := make([]int64, len(vsData))
+			for _, i := range vsData {
+				if vsData[i] >= 0 {
+					data[i] = vsData[i]
+				} else {
+					data[i] = -vsData[i]
+				}
+			}
+			return chunk.ConstructVec(data, nil, chunk.VecTypeInt64), nil
+		}
+	}
+}
+
 type builtinAbsUIntSig struct {
 	baseBuiltinFunc
 }
