@@ -88,6 +88,21 @@ func BenchmarkAbsIntVec(b *testing.B) {
 	}
 }
 
+func BenchmarkAbsIntVecWithNull(b *testing.B) {
+	chunk.Vectorized = true
+	exprs, chk := genAbsCol(10)
+	ctx := mock.NewContext()
+	f, err := NewFunction(ctx, ast.Abs, exprs[0].GetType(), exprs...)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		f.VecEvalInt(ctx, chk)
+	}
+}
+
 func TestAbsIntVec(t *testing.T) {
 	chunk.Vectorized = false
 	exprs, chk := genAbsCol(0)
@@ -145,8 +160,9 @@ func BenchmarkPlusReal(b *testing.B) {
 	}
 }
 
-func BenchmarkPlusRealVec(b *testing.B) {
+func BenchmarkPlusRealVecWithoutLoopOpt(b *testing.B) {
 	chunk.Vectorized = true
+	nullLoopOptimize = false
 	exprs, chk := genPlusCols()
 	ctx := mock.NewContext()
 	f, err := NewFunction(ctx, ast.Plus, exprs[0].GetType(), exprs...)
@@ -160,9 +176,9 @@ func BenchmarkPlusRealVec(b *testing.B) {
 	}
 }
 
-func BenchmarkPlusRealVecWithoutLoopOpt(b *testing.B) {
+func BenchmarkPlusRealVec(b *testing.B) {
 	chunk.Vectorized = true
-	nullLoopOptimize = false
+	nullLoopOptimize = true
 	exprs, chk := genPlusCols()
 	ctx := mock.NewContext()
 	f, err := NewFunction(ctx, ast.Plus, exprs[0].GetType(), exprs...)
