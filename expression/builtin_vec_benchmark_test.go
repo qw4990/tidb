@@ -85,6 +85,46 @@ func BenchmarkAbsIntVec(b *testing.B) {
 	}
 }
 
+func TestAbsIntVec(t *testing.T) {
+	chunk.Vectorized = false
+	exprs, chk := genAbsCol(0)
+	ctx := mock.NewContext()
+	f, err := NewFunction(ctx, ast.Abs, exprs[0].GetType(), exprs...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	results := make([]int64, 0, 1024)
+	nulls := make([]bool, 0, 1024)
+	it := chunk.NewIterator4Chunk(chk)
+	for r := it.Begin(); r != it.End(); r = it.Next() {
+		v, isNull, err := f.EvalInt(ctx, r)
+		if err != nil {
+			t.Fatal(err)
+		}
+		results = append(results, v)
+		nulls = append(nulls, isNull)
+	}
+
+
+	chunk.Vectorized = true
+	exprs, chk = genAbsCol(0)
+	f, err = NewFunction(ctx, ast.Abs, exprs[0].GetType(), exprs...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	v, err := f.VecEvalInt(ctx, chk)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	vResults := v.Int64()
+	for i := range results {
+		if vResults[i] != results[i] {
+			t.Fatal(i)
+		}
+	}
+}
+
 func BenchmarkPlusReal(b *testing.B) {
 	chunk.Vectorized = false
 	exprs, chk := genPlusCols()
