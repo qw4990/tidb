@@ -869,15 +869,6 @@ func (c *Chunk) Selection() []VecSize {
 	return c.sel
 }
 
-func (c *Chunk) CopySel() []VecSize {
-	if c.sel == nil {
-		return nil
-	}
-	sel := make([]VecSize, len(c.sel))
-	copy(sel, c.sel)
-	return sel
-}
-
 func (c *Chunk) FilterSel(selected []int64) {
 	if c.sel == nil {
 		c.sel = make([]VecSize, len(selected))
@@ -889,6 +880,15 @@ func (c *Chunk) FilterSel(selected []int64) {
 			c.sel = append(c.sel, VecSize(i))
 		}
 	}
+}
+
+func (c *Chunk) CopySel() []VecSize {
+	if c.sel == nil {
+		return nil
+	}
+	sel := make([]VecSize, len(c.sel))
+	copy(sel, c.sel)
+	return sel
 }
 
 func (c *Chunk) Vector(i int) *Vec {
