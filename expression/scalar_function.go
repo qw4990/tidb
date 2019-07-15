@@ -196,6 +196,10 @@ func (sf *ScalarFunction) VecEvalInt(ctx sessionctx.Context, chk *chunk.Chunk) (
 	return sf.Function.vecEvalInt(chk)
 }
 
+func (sf *ScalarFunction) VecEvalReal(ctx sessionctx.Context, chk *chunk.Chunk) (vec *chunk.Vec, err error) {
+	return sf.Function.vecEvalReal(chk)
+}
+
 // Eval implements Expression interface.
 func (sf *ScalarFunction) Eval(row chunk.Row) (d types.Datum, err error) {
 	var (

@@ -78,6 +78,7 @@ const (
 	VecTypeTime
 	VecTypeSet
 	VecTypeFloat32
+	VecTypeFloat64
 )
 
 type Vec struct {
@@ -113,6 +114,9 @@ func NewMemVec(tp *types.FieldType, cap VecSize) *Vec {
 	case mysql.TypeFloat:
 		t = VecTypeFloat32
 		data = make([]float32, 0, cap)
+	case mysql.TypeDouble:
+		t = VecTypeFloat64
+		data = make([]float64, 0, cap)
 	case mysql.TypeTimestamp:
 		t = VecTypeTime
 		data = make([]types.Time, 0, cap)
@@ -181,6 +185,8 @@ func (mv *Vec) Reset() {
 		mv.data = mv.data.([]types.Time)[:0]
 	case VecTypeSet:
 		mv.data = mv.data.([]types.Set)[:0]
+	case VecTypeFloat64:
+		mv.data = mv.data.([]float64)[:0]
 	default:
 		panic(fmt.Sprintf("TODO %v", mv.tp))
 	}

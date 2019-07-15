@@ -93,6 +93,11 @@ func (c *Constant) VecEvalInt(ctx sessionctx.Context, chk *chunk.Chunk) (vec *ch
 	return nil, nil
 }
 
+func (c *Constant) VecEvalReal(ctx sessionctx.Context, chk *chunk.Chunk) (vec *chunk.Vec, err error) {
+	panic("TODO")
+	return nil, nil
+}
+
 // Eval implements Expression interface.
 func (c *Constant) Eval(_ chunk.Row) (types.Datum, error) {
 	if c.DeferredExpr != nil {

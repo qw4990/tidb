@@ -869,6 +869,13 @@ func (c *Chunk) Vector(i int) *Vec {
 	return c.vecs[i]
 }
 
+func (c *Chunk) MaxIdx() VecSize {
+	if c.sel == nil {
+		return c.n
+	}
+	return c.sel[c.n-1]
+}
+
 func writeTime(buf []byte, t types.Time) {
 	binary.BigEndian.PutUint16(buf, uint16(t.Time.Year()))
 	buf[2] = uint8(t.Time.Month())

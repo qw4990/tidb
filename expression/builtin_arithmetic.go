@@ -281,6 +281,46 @@ func (s *builtinArithmeticPlusRealSig) evalReal(row chunk.Row) (float64, bool, e
 	return a + b, false, nil
 }
 
+func (s *builtinArithmeticPlusRealSig) vecEvalReal(chk *chunk.Chunk) (*chunk.Vec, error) {
+	v1, err := s.args[0].VecEvalReal(s.ctx, chk)
+	if err != nil {
+		return nil, err
+	}
+	v2, err := s.args[1].VecEvalReal(s.ctx, chk)
+	if err != nil {
+		return nil, err
+	}
+
+	data := make([]float64, chk.MaxIdx())
+	var nulls []bool
+	if v1.MayHasNull() || v2.MayHasNull() {
+		nulls = make([]bool, chk.MaxIdx())
+	}
+
+	if nulls == nil {
+		if sel := chk.Selection(); sel != nil {
+			panic("TODO")
+		} else {
+			vs := v1.Float64()
+			for i := range vs {
+				data[i] += vs[i]
+			}
+			vs = v2.Float64()
+			for i := range vs {
+				data[i] += vs[i]
+			}
+		}
+	} else {
+		panic("TODO")
+	}
+
+	return chunk.ConstructVec(data, nulls, chunk.VecTypeFloat64), nil
+}
+
+func (s *builtinArithmeticPlusRealSig) accumulate() {
+
+}
+
 type arithmeticMinusFunctionClass struct {
 	baseFunctionClass
 }

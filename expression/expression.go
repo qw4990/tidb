@@ -45,6 +45,8 @@ type Expression interface {
 
 	VecEvalInt(ctx sessionctx.Context, chk *chunk.Chunk) (vec *chunk.Vec, err error)
 
+	VecEvalReal(ctx sessionctx.Context, chk *chunk.Chunk) (vec *chunk.Vec, err error)
+
 	// Eval evaluates an expression through a row.
 	Eval(row chunk.Row) (types.Datum, error)
 

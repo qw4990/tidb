@@ -207,6 +207,10 @@ func (col *Column) VecEvalInt(ctx sessionctx.Context, chk *chunk.Chunk) (vec *ch
 	return chk.Vector(col.Index), nil
 }
 
+func (col *Column) VecEvalReal(ctx sessionctx.Context, chk *chunk.Chunk) (vec *chunk.Vec, err error) {
+	return chk.Vector(col.Index), nil
+}
+
 // Eval implements Expression interface.
 func (col *Column) Eval(row chunk.Row) (types.Datum, error) {
 	return row.GetDatum(col.Index, col.RetType), nil

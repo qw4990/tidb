@@ -211,6 +211,7 @@ func (b *builtinAbsIntSig) vecEvalInt(chk *chunk.Chunk) (*chunk.Vec, error) {
 		return nil, err
 	}
 	vsData := vs.Int64()
+	n := chk.MaxIdx()
 	if vs.MayHasNull() {
 		vsNulls := vs.Nulls()
 		if sel := chk.Selection(); sel != nil {
@@ -218,8 +219,8 @@ func (b *builtinAbsIntSig) vecEvalInt(chk *chunk.Chunk) (*chunk.Vec, error) {
 				return chunk.ConstructVec(make([]int64, 0), nil, chunk.VecTypeInt64), nil
 			}
 
-			data := make([]int64, sel[len(sel)-1])
-			nulls := make([]bool, sel[len(sel)-1])
+			data := make([]int64, n)
+			nulls := make([]bool, n)
 			for _, i := range sel {
 				if vsNulls[i] {
 					nulls[i] = true
@@ -235,7 +236,7 @@ func (b *builtinAbsIntSig) vecEvalInt(chk *chunk.Chunk) (*chunk.Vec, error) {
 		} else {
 			data := make([]int64, len(vsData))
 			nulls := make([]bool, len(vsData))
-			for _, i := range vsData {
+			for i := range vsData {
 				if vsNulls[i] {
 					nulls[i] = true
 				} else {
@@ -254,7 +255,7 @@ func (b *builtinAbsIntSig) vecEvalInt(chk *chunk.Chunk) (*chunk.Vec, error) {
 				return chunk.ConstructVec(make([]int64, 0), nil, chunk.VecTypeInt64), nil
 			}
 
-			data := make([]int64, sel[len(sel)+1])
+			data := make([]int64, n)
 			for _, i := range sel {
 				if vsData[i] >= 0 {
 					data[i] = vsData[i]
