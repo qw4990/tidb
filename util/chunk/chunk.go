@@ -856,6 +856,19 @@ func (c *Chunk) AppendDatum(colIdx int, d *types.Datum) {
 	}
 }
 
+func (c *Chunk) SetSelection(sel []VecSize) {
+	c.n = VecSize(len(sel))
+	c.sel = sel
+}
+
+func (c *Chunk) Selection() []VecSize {
+	return c.sel
+}
+
+func (c *Chunk) Vector(i int) *Vec {
+	return c.vecs[i]
+}
+
 func writeTime(buf []byte, t types.Time) {
 	binary.BigEndian.PutUint16(buf, uint16(t.Time.Year()))
 	buf[2] = uint8(t.Time.Month())

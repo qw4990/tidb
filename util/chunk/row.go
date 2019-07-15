@@ -46,30 +46,45 @@ func (r Row) Len() int {
 
 // GetInt64 returns the int64 value with the colIdx.
 func (r Row) GetInt64(colIdx int) int64 {
+	if Vectorized {
+		return r.c.vecs[colIdx].Int64()[r.idx]
+	}
 	col := r.c.columns[colIdx]
 	return *(*int64)(unsafe.Pointer(&col.data[r.idx*8]))
 }
 
 // GetUint64 returns the uint64 value with the colIdx.
 func (r Row) GetUint64(colIdx int) uint64 {
+	if Vectorized {
+		return r.c.vecs[colIdx].Uint64()[r.idx]
+	}
 	col := r.c.columns[colIdx]
 	return *(*uint64)(unsafe.Pointer(&col.data[r.idx*8]))
 }
 
 // GetFloat32 returns the float32 value with the colIdx.
 func (r Row) GetFloat32(colIdx int) float32 {
+	if Vectorized {
+		return r.c.vecs[colIdx].Float32()[r.idx]
+	}
 	col := r.c.columns[colIdx]
 	return *(*float32)(unsafe.Pointer(&col.data[r.idx*4]))
 }
 
 // GetFloat64 returns the float64 value with the colIdx.
 func (r Row) GetFloat64(colIdx int) float64 {
+	if Vectorized {
+		return r.c.vecs[colIdx].Float64()[r.idx]
+	}
 	col := r.c.columns[colIdx]
 	return *(*float64)(unsafe.Pointer(&col.data[r.idx*8]))
 }
 
 // GetString returns the string value with the colIdx.
 func (r Row) GetString(colIdx int) string {
+	if Vectorized {
+		return r.c.vecs[colIdx].String()[r.idx]
+	}
 	col := r.c.columns[colIdx]
 	start, end := col.offsets[r.idx], col.offsets[r.idx+1]
 	str := string(hack.String(col.data[start:end]))
@@ -78,6 +93,9 @@ func (r Row) GetString(colIdx int) string {
 
 // GetBytes returns the bytes value with the colIdx.
 func (r Row) GetBytes(colIdx int) []byte {
+	if Vectorized {
+		return r.c.vecs[colIdx].Bytes()[r.idx]
+	}
 	col := r.c.columns[colIdx]
 	start, end := col.offsets[r.idx], col.offsets[r.idx+1]
 	return col.data[start:end]
@@ -86,12 +104,18 @@ func (r Row) GetBytes(colIdx int) []byte {
 // GetTime returns the Time value with the colIdx.
 // TODO: use Time structure directly.
 func (r Row) GetTime(colIdx int) types.Time {
+	if Vectorized {
+		return r.c.vecs[colIdx].Time()[r.idx]
+	}
 	col := r.c.columns[colIdx]
 	return readTime(col.data[r.idx*16:])
 }
 
 // GetDuration returns the Duration value with the colIdx.
 func (r Row) GetDuration(colIdx int, fillFsp int) types.Duration {
+	if Vectorized {
+		return r.c.vecs[colIdx].Duration()[r.idx]
+	}
 	col := r.c.columns[colIdx]
 	dur := *(*int64)(unsafe.Pointer(&col.data[r.idx*8]))
 	return types.Duration{Duration: time.Duration(dur), Fsp: fillFsp}
@@ -110,24 +134,36 @@ func (r Row) getNameValue(colIdx int) (string, uint64) {
 
 // GetEnum returns the Enum value with the colIdx.
 func (r Row) GetEnum(colIdx int) types.Enum {
+	if Vectorized {
+		return r.c.vecs[colIdx].Enum()[r.idx]
+	}
 	name, val := r.getNameValue(colIdx)
 	return types.Enum{Name: name, Value: val}
 }
 
 // GetSet returns the Set value with the colIdx.
 func (r Row) GetSet(colIdx int) types.Set {
+	if Vectorized {
+		return r.c.vecs[colIdx].Set()[r.idx]
+	}
 	name, val := r.getNameValue(colIdx)
 	return types.Set{Name: name, Value: val}
 }
 
 // GetMyDecimal returns the MyDecimal value with the colIdx.
 func (r Row) GetMyDecimal(colIdx int) *types.MyDecimal {
+	if Vectorized {
+		return &r.c.vecs[colIdx].MyDecimal()[r.idx]
+	}
 	col := r.c.columns[colIdx]
 	return (*types.MyDecimal)(unsafe.Pointer(&col.data[r.idx*types.MyDecimalStructSize]))
 }
 
 // GetJSON returns the JSON value with the colIdx.
 func (r Row) GetJSON(colIdx int) json.BinaryJSON {
+	if Vectorized {
+		return r.c.vecs[colIdx].JSON()[r.idx]
+	}
 	col := r.c.columns[colIdx]
 	start, end := col.offsets[r.idx], col.offsets[r.idx+1]
 	return json.BinaryJSON{TypeCode: col.data[start], Value: col.data[start+1 : end]}
@@ -137,6 +173,10 @@ func (r Row) GetJSON(colIdx int) json.BinaryJSON {
 // Keep in mind that GetDatumRow has a reference to r.c, which is a chunk,
 // this function works only if the underlying chunk is valid or unchanged.
 func (r Row) GetDatumRow(fields []*types.FieldType) []types.Datum {
+	if Vectorized {
+		panic("TODO")
+	}
+
 	datumRow := make([]types.Datum, 0, r.c.NumCols())
 	for colIdx := 0; colIdx < r.c.NumCols(); colIdx++ {
 		datum := r.GetDatum(colIdx, fields[colIdx])
@@ -147,6 +187,9 @@ func (r Row) GetDatumRow(fields []*types.FieldType) []types.Datum {
 
 // GetDatum implements the chunk.Row interface.
 func (r Row) GetDatum(colIdx int, tp *types.FieldType) types.Datum {
+	if Vectorized {
+		panic("TODO")
+	}
 	var d types.Datum
 	switch tp.Tp {
 	case mysql.TypeTiny, mysql.TypeShort, mysql.TypeInt24, mysql.TypeLong, mysql.TypeLonglong:
@@ -220,5 +263,8 @@ func (r Row) GetDatum(colIdx int, tp *types.FieldType) types.Datum {
 
 // IsNull returns if the datum in the chunk.Row is null.
 func (r Row) IsNull(colIdx int) bool {
+	if Vectorized {
+		return r.c.vecs[colIdx].nulls.nulls[r.idx]
+	}
 	return r.c.columns[colIdx].isNull(r.idx)
 }
