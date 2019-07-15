@@ -65,7 +65,7 @@ func NewChunkWithCapacity(fields []*types.FieldType, cap int) *Chunk {
 //  maxChunkSize: the max limit for the number of rows.
 func New(fields []*types.FieldType, cap, maxChunkSize int) *Chunk {
 	if Vectorized {
-		return NewVecChunk(fields, cap, maxChunkSize)
+		return vecNew(fields, cap, maxChunkSize)
 	}
 
 	chk := &Chunk{
@@ -90,7 +90,7 @@ func New(fields []*types.FieldType, cap, maxChunkSize int) *Chunk {
 	return chk
 }
 
-func NewVecChunk(fields []*types.FieldType, cap, maxChunkSize int) *Chunk {
+func vecNew(fields []*types.FieldType, cap, maxChunkSize int) *Chunk {
 	chk := new(Chunk)
 	chk.vecs = make([]*Vec, 0, len(fields))
 	chk.capacity = mathutil.Min(cap, maxChunkSize)
@@ -114,6 +114,9 @@ func NewVecChunk(fields []*types.FieldType, cap, maxChunkSize int) *Chunk {
 //  chk: old chunk(often used in previous call).
 //  maxChunkSize: the limit for the max number of rows.
 func Renew(chk *Chunk, maxChunkSize int) *Chunk {
+	if Vectorized {
+		return vecRenew(chk, maxChunkSize)
+	}
 	newChk := new(Chunk)
 	if chk.columns == nil {
 		return newChk
@@ -124,6 +127,11 @@ func Renew(chk *Chunk, maxChunkSize int) *Chunk {
 	newChk.capacity = newCap
 	newChk.requiredRows = maxChunkSize
 	return newChk
+}
+
+func vecRenew(chk *Chunk, macChunkSize int) *Chunk {
+	// TODO
+	return chk
 }
 
 // renewColumns creates the columns of a Chunk. The capacity of the newly
@@ -144,11 +152,20 @@ func renewColumns(oldCol []*column, cap int) []*column {
 // We ignore the size of column.length and column.nullCount
 // since they have little effect of the total memory usage.
 func (c *Chunk) MemoryUsage() (sum int64) {
+	if Vectorized {
+		return c.vecMemoryUsage()
+	}
+
 	for _, col := range c.columns {
 		curColMemUsage := int64(unsafe.Sizeof(*col)) + int64(cap(col.nullBitmap)) + int64(cap(col.offsets)*4) + int64(cap(col.data)) + int64(cap(col.elemBuf))
 		sum += curColMemUsage
 	}
 	return
+}
+
+func (c *Chunk) vecMemoryUsage() (sum int64) {
+	// TODO
+	return 0
 }
 
 // newFixedLenColumn creates a fixed length column with elemLen and initial data capacity.
@@ -197,18 +214,40 @@ func (c *Chunk) IsFull() bool {
 
 // MakeRef makes column in "dstColIdx" reference to column in "srcColIdx".
 func (c *Chunk) MakeRef(srcColIdx, dstColIdx int) {
+	if Vectorized {
+		c.vecMakeRef(srcColIdx, dstColIdx)
+		return
+	}
 	c.columns[dstColIdx] = c.columns[srcColIdx]
+}
+
+func (c *Chunk) vecMakeRef(c1, c2 int) {
+	c.vecs[c2] = c.vecs[c1]
 }
 
 // MakeRefTo copies columns `src.columns[srcColIdx]` to `c.columns[dstColIdx]`.
 func (c *Chunk) MakeRefTo(dstColIdx int, src *Chunk, srcColIdx int) {
+	if Vectorized {
+		c.vecMakeRefTo(dstColIdx, src, srcColIdx)
+		return
+	}
 	c.columns[dstColIdx] = src.columns[srcColIdx]
+}
+
+func (c *Chunk) vecMakeRefTo(dstColIdx int, src *Chunk, srcColIdx int) {
+	// TODO: selection?
+	c.vecs[dstColIdx] = src.vecs[srcColIdx]
 }
 
 // SwapColumn swaps column "c.columns[colIdx]" with column
 // "other.columns[otherIdx]". If there exists columns refer to the column to be
 // swapped, we need to re-build the reference.
 func (c *Chunk) SwapColumn(colIdx int, other *Chunk, otherIdx int) {
+	if Vectorized {
+		c.vecSwapColumn(colIdx, other, otherIdx)
+		return
+	}
+
 	// Find the leftmost column of the reference which is the actual column to
 	// be swapped.
 	for i := 0; i < colIdx; i++ {
@@ -248,9 +287,59 @@ func (c *Chunk) SwapColumn(colIdx int, other *Chunk, otherIdx int) {
 	}
 }
 
+func (c *Chunk) vecSwapColumn(colIdx int, other *Chunk, otherIdx int) {
+	for i := 0; i < colIdx; i++ {
+		if c.vecs[i] == c.vecs[colIdx] {
+			colIdx = i
+		}
+	}
+	for i := 0; i < otherIdx; i++ {
+		if other.vecs[i] == other.vecs[otherIdx] {
+			otherIdx = i
+		}
+	}
+
+	// Find the columns which refer to the actual column to be swapped.
+	refColsIdx := make([]int, 0, len(c.vecs)-colIdx)
+	for i := colIdx; i < len(c.vecs); i++ {
+		if c.vecs[i] == c.vecs[colIdx] {
+			refColsIdx = append(refColsIdx, i)
+		}
+	}
+	refColsIdx4Other := make([]int, 0, len(other.vecs)-otherIdx)
+	for i := otherIdx; i < len(other.vecs); i++ {
+		if other.vecs[i] == other.vecs[otherIdx] {
+			refColsIdx4Other = append(refColsIdx4Other, i)
+		}
+	}
+
+	// Swap columns from two chunks.
+	c.vecs[colIdx], other.vecs[otherIdx] = other.vecs[otherIdx], c.vecs[colIdx]
+
+	// Rebuild the reference.
+	for _, i := range refColsIdx {
+		c.MakeRef(colIdx, i)
+	}
+	for _, i := range refColsIdx4Other {
+		other.MakeRef(otherIdx, i)
+	}
+}
+
 // SwapColumns swaps columns with another Chunk.
 func (c *Chunk) SwapColumns(other *Chunk) {
+	if Vectorized {
+		c.vecSwapColumns(other)
+		return
+	}
 	c.columns, other.columns = other.columns, c.columns
+	c.numVirtualRows, other.numVirtualRows = other.numVirtualRows, c.numVirtualRows
+}
+
+func (c *Chunk) vecSwapColumns(other *Chunk) {
+	c.vecs, other.vecs = other.vecs, c.vecs
+	c.n, other.n = other.n, c.n
+	// TODO: Selection?
+	c.sel, other.sel = other.sel, c.sel
 	c.numVirtualRows, other.numVirtualRows = other.numVirtualRows, c.numVirtualRows
 }
 
@@ -263,6 +352,10 @@ func (c *Chunk) SetNumVirtualRows(numVirtualRows int) {
 // Reset resets the chunk, so the memory it allocated can be reused.
 // Make sure all the data in the chunk is not used anymore before you reuse this chunk.
 func (c *Chunk) Reset() {
+	if Vectorized {
+		c.vecReset()
+		return
+	}
 	if c.columns == nil {
 		return
 	}
@@ -272,8 +365,22 @@ func (c *Chunk) Reset() {
 	c.numVirtualRows = 0
 }
 
+func (c *Chunk) vecReset() {
+	if c.sel != nil {
+		c.sel = c.sel[:0]
+	}
+	c.n = 0
+	for _, v := range c.vecs {
+		v.Reset()
+	}
+	c.numVirtualRows = 0
+}
+
 // CopyConstruct creates a new chunk and copies this chunk's data into it.
 func (c *Chunk) CopyConstruct() *Chunk {
+	if Vectorized {
+		return c.vecCopyConstrut()
+	}
 	newChk := &Chunk{numVirtualRows: c.numVirtualRows, capacity: c.capacity, columns: make([]*column, len(c.columns))}
 	for i := range c.columns {
 		newChk.columns[i] = c.columns[i].copyConstruct()
@@ -281,10 +388,19 @@ func (c *Chunk) CopyConstruct() *Chunk {
 	return newChk
 }
 
+func (c *Chunk) vecCopyConstrut() *Chunk {
+	// panic("TODO")
+	return nil
+}
+
 // GrowAndReset resets the Chunk and doubles the capacity of the Chunk.
 // The doubled capacity should not be larger than maxChunkSize.
 // TODO: this method will be used in following PR.
 func (c *Chunk) GrowAndReset(maxChunkSize int) {
+	if Vectorized {
+		c.vecGrowAndReset(maxChunkSize)
+		return
+	}
 	if c.columns == nil {
 		return
 	}
@@ -297,6 +413,11 @@ func (c *Chunk) GrowAndReset(maxChunkSize int) {
 	c.columns = renewColumns(c.columns, newCap)
 	c.numVirtualRows = 0
 	c.requiredRows = maxChunkSize
+}
+
+func (c *Chunk) vecGrowAndReset(maxChunkSize int) {
+	// TODO
+	return
 }
 
 // reCalcCapacity calculates the capacity for another Chunk based on the current
@@ -315,15 +436,26 @@ func (c *Chunk) Capacity() int {
 
 // NumCols returns the number of columns in the chunk.
 func (c *Chunk) NumCols() int {
+	if Vectorized {
+		return len(c.vecs)
+	}
 	return len(c.columns)
 }
 
 // NumRows returns the number of rows in the chunk.
 func (c *Chunk) NumRows() int {
+	if Vectorized {
+		return c.vecNumRows()
+	}
+
 	if c.NumCols() == 0 {
 		return c.numVirtualRows
 	}
 	return c.columns[0].length
+}
+
+func (c *Chunk) vecNumRows() int {
+	return int(c.n)
 }
 
 // GetRow gets the Row in the chunk with the row index.
@@ -339,6 +471,11 @@ func (c *Chunk) AppendRow(row Row) {
 
 // AppendPartialRow appends a row to the chunk.
 func (c *Chunk) AppendPartialRow(colIdx int, row Row) {
+	if Vectorized {
+		c.vecAppendPartialRow(colIdx, row)
+		return
+	}
+
 	for i, rowCol := range row.c.columns {
 		chkCol := c.columns[colIdx+i]
 		chkCol.appendNullBitmap(!rowCol.isNull(row.idx))
@@ -355,6 +492,25 @@ func (c *Chunk) AppendPartialRow(colIdx int, row Row) {
 	}
 }
 
+func (c *Chunk) vecAppendPartialRow(colIdx int, row Row) {
+	colLen := len(row.c.columns)
+	for i := 0; i < colLen; i++ {
+		v := c.vecs[i]
+		switch v.Type() {
+		case VecTypeString:
+			v.AppendString(row.GetString(i))
+		case VecTypeInt64:
+			v.AppendInt64(row.GetInt64(i))
+		case VecTypeUint64:
+			v.AppendUint64(row.GetUint64(i))
+		case VecTypeBytes:
+			v.AppendBytes(row.GetBytes(i))
+		default:
+			panic("TODO")
+		}
+	}
+}
+
 // PreAlloc pre-allocates the memory space in a Chunk to store the Row.
 // NOTE:
 // 1. The Chunk must be empty or holds no useful data.
@@ -366,6 +522,9 @@ func (c *Chunk) AppendPartialRow(colIdx int, row Row) {
 //    can not be avoided although the manipulated bits are different inside a
 //    byte.
 func (c *Chunk) PreAlloc(row Row) (rowIdx uint32) {
+	if Vectorized {
+		panic("TODO")
+	}
 	rowIdx = uint32(c.NumRows())
 	for i, srcCol := range row.c.columns {
 		dstCol := c.columns[i]
@@ -419,6 +578,9 @@ func (c *Chunk) PreAlloc(row Row) (rowIdx uint32) {
 // Note: Insert will cover the origin data, it should be called after
 // PreAlloc.
 func (c *Chunk) Insert(rowIdx int, row Row) {
+	if Vectorized {
+		panic("TODO")
+	}
 	for i, srcCol := range row.c.columns {
 		if row.IsNull(i) {
 			continue
@@ -439,6 +601,10 @@ func (c *Chunk) Insert(rowIdx int, row Row) {
 
 // Append appends rows in [begin, end) in another Chunk to a Chunk.
 func (c *Chunk) Append(other *Chunk, begin, end int) {
+	if Vectorized {
+		c.vecAppend(other, begin, end)
+		return
+	}
 	for colID, src := range other.columns {
 		dst := c.columns[colID]
 		if src.isFixed() {
@@ -459,8 +625,17 @@ func (c *Chunk) Append(other *Chunk, begin, end int) {
 	c.numVirtualRows += end - begin
 }
 
+func (c *Chunk) vecAppend(other *Chunk, begin, end int) {
+	for id, src := range other.vecs {
+		c.vecs[id].Append(src, VecSize(begin), VecSize(end))
+	}
+}
+
 // TruncateTo truncates rows from tail to head in a Chunk to "numRows" rows.
 func (c *Chunk) TruncateTo(numRows int) {
+	if Vectorized {
+		panic("TODO")
+	}
 	for _, col := range c.columns {
 		if col.isFixed() {
 			elemLen := len(col.elemBuf)
@@ -492,72 +667,167 @@ func (c *Chunk) TruncateTo(numRows int) {
 
 // AppendNull appends a null value to the chunk.
 func (c *Chunk) AppendNull(colIdx int) {
+	if Vectorized {
+		if colIdx == 0 {
+			c.n++
+		}
+		c.vecs[colIdx].AppendNull()
+		return
+	}
 	c.columns[colIdx].appendNull()
 }
 
 // AppendInt64 appends a int64 value to the chunk.
 func (c *Chunk) AppendInt64(colIdx int, i int64) {
+	if Vectorized {
+		if colIdx == 0 {
+			c.n++
+		}
+		c.vecs[colIdx].AppendInt64(i)
+		return
+	}
 	c.columns[colIdx].appendInt64(i)
 }
 
 // AppendUint64 appends a uint64 value to the chunk.
 func (c *Chunk) AppendUint64(colIdx int, u uint64) {
+	if Vectorized {
+		if colIdx == 0 {
+			c.n++
+		}
+		c.vecs[colIdx].AppendUint64(u)
+		return
+	}
 	c.columns[colIdx].appendUint64(u)
 }
 
 // AppendFloat32 appends a float32 value to the chunk.
 func (c *Chunk) AppendFloat32(colIdx int, f float32) {
+	if Vectorized {
+		if colIdx == 0 {
+			c.n++
+		}
+		c.vecs[colIdx].AppendFloat32(f)
+		return
+	}
 	c.columns[colIdx].appendFloat32(f)
 }
 
 // AppendFloat64 appends a float64 value to the chunk.
 func (c *Chunk) AppendFloat64(colIdx int, f float64) {
+	if Vectorized {
+		if colIdx == 0 {
+			c.n++
+		}
+		c.vecs[colIdx].AppendFloat64(f)
+		return
+	}
 	c.columns[colIdx].appendFloat64(f)
 }
 
 // AppendString appends a string value to the chunk.
 func (c *Chunk) AppendString(colIdx int, str string) {
+	if Vectorized {
+		if colIdx == 0 {
+			c.n++
+		}
+		c.vecs[colIdx].AppendString(str)
+		return
+	}
 	c.columns[colIdx].appendString(str)
 }
 
 // AppendBytes appends a bytes value to the chunk.
 func (c *Chunk) AppendBytes(colIdx int, b []byte) {
+	if Vectorized {
+		if colIdx == 0 {
+			c.n++
+		}
+		c.vecs[colIdx].AppendBytes(b)
+		return
+	}
 	c.columns[colIdx].appendBytes(b)
 }
 
 // AppendTime appends a Time value to the chunk.
 // TODO: change the time structure so it can be directly written to memory.
 func (c *Chunk) AppendTime(colIdx int, t types.Time) {
+	if Vectorized {
+		if colIdx == 0 {
+			c.n++
+		}
+		c.vecs[colIdx].AppendTime(t)
+		return
+	}
 	c.columns[colIdx].appendTime(t)
 }
 
 // AppendDuration appends a Duration value to the chunk.
 func (c *Chunk) AppendDuration(colIdx int, dur types.Duration) {
+	if Vectorized {
+		if colIdx == 0 {
+			c.n++
+		}
+		c.vecs[colIdx].AppendDuration(dur)
+		return
+	}
 	c.columns[colIdx].appendDuration(dur)
 }
 
 // AppendMyDecimal appends a MyDecimal value to the chunk.
 func (c *Chunk) AppendMyDecimal(colIdx int, dec *types.MyDecimal) {
+	if Vectorized {
+		if colIdx == 0 {
+			c.n++
+		}
+		c.vecs[colIdx].AppendMyDecimal(*dec)
+		return
+	}
 	c.columns[colIdx].appendMyDecimal(dec)
 }
 
 // AppendEnum appends an Enum value to the chunk.
 func (c *Chunk) AppendEnum(colIdx int, enum types.Enum) {
+	if Vectorized {
+		if colIdx == 0 {
+			c.n++
+		}
+		c.vecs[colIdx].AppendEnum(enum)
+		return
+	}
 	c.columns[colIdx].appendNameValue(enum.Name, enum.Value)
 }
 
 // AppendSet appends a Set value to the chunk.
 func (c *Chunk) AppendSet(colIdx int, set types.Set) {
+	if Vectorized {
+		if colIdx == 0 {
+			c.n++
+		}
+		c.vecs[colIdx].AppendSet(set)
+		return
+	}
 	c.columns[colIdx].appendNameValue(set.Name, set.Value)
 }
 
 // AppendJSON appends a JSON value to the chunk.
 func (c *Chunk) AppendJSON(colIdx int, j json.BinaryJSON) {
+	if Vectorized {
+		if colIdx == 0 {
+			c.n++
+		}
+		c.vecs[colIdx].AppendJSON(j)
+		return
+	}
 	c.columns[colIdx].appendJSON(j)
 }
 
 // AppendDatum appends a datum into the chunk.
 func (c *Chunk) AppendDatum(colIdx int, d *types.Datum) {
+	if Vectorized {
+		panic("TODO")
+	}
+
 	switch d.Kind() {
 	case types.KindNull:
 		c.AppendNull(colIdx)
