@@ -336,3 +336,27 @@ func TestVectorizedFilter(t *testing.T) {
 		}
 	}
 }
+
+func BenchmarkChunkIter(b *testing.B) {
+	chunk.Vectorized = false
+	_, chk := genGTCols()
+	for i := 0; i < b.N; i++ {
+		it := chunk.NewIterator4Chunk(chk)
+		var sum int64
+		for r := it.Begin(); r != it.End(); r = it.Next() {
+			sum += r.GetInt64(0)
+		}
+	}
+}
+
+func BenchmarkChunkIterRowOnVec(b *testing.B) {
+	chunk.Vectorized = true
+	_, chk := genGTCols()
+	for i := 0; i < b.N; i++ {
+		it := chunk.NewIterator4Chunk(chk)
+		var sum int64
+		for r := it.Begin(); r != it.End(); r = it.Next() {
+			sum += r.GetInt64(0)
+		}
+	}
+}

@@ -47,7 +47,7 @@ func (r Row) Len() int {
 // GetInt64 returns the int64 value with the colIdx.
 func (r Row) GetInt64(colIdx int) int64 {
 	if Vectorized {
-		return r.c.vecs[colIdx].Int64()[r.idx]
+		return r.c.vecs[colIdx].data.([]int64)[r.idx]
 	}
 	col := r.c.columns[colIdx]
 	return *(*int64)(unsafe.Pointer(&col.data[r.idx*8]))
@@ -56,7 +56,7 @@ func (r Row) GetInt64(colIdx int) int64 {
 // GetUint64 returns the uint64 value with the colIdx.
 func (r Row) GetUint64(colIdx int) uint64 {
 	if Vectorized {
-		return r.c.vecs[colIdx].Uint64()[r.idx]
+		return r.c.vecs[colIdx].data.([]uint64)[r.idx]
 	}
 	col := r.c.columns[colIdx]
 	return *(*uint64)(unsafe.Pointer(&col.data[r.idx*8]))
