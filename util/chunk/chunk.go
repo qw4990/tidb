@@ -26,8 +26,9 @@ import (
 // Values are appended in compact format and can be directly accessed without decoding.
 // When the chunk is done processing, we can reuse the allocated memory by resetting it.
 type Chunk struct {
-	sel     *selector
-	columns []*memVec
+	n       VecSize
+	sel     []VecSize
+	columns []*Vec
 
 	// numVirtualRows indicates the number of virtual rows, which have zero column.
 	// It is used only when this Chunk doesn't hold any data, i.e. "len(columns)==0".
@@ -56,13 +57,12 @@ func NewChunkWithCapacity(fields []*types.FieldType, cap int) *Chunk {
 //  maxChunkSize: the max limit for the number of rows.
 func New(fields []*types.FieldType, cap, maxChunkSize int) *Chunk {
 	chk := new(Chunk)
-	chk.columns = make([]*memVec, 0, len(fields))
+	chk.columns = make([]*Vec, 0, len(fields))
 	chk.capacity = mathutil.Min(cap, maxChunkSize)
 	for _, f := range fields {
-		chk.columns = append(chk.columns, newMemVec(f, VecSize(chk.capacity)))
+		chk.columns = append(chk.columns, NewMemVec(f, VecSize(chk.capacity)))
 	}
 	chk.numVirtualRows = 0
-	chk.sel = newSel()
 
 	// set the default value of requiredRows to maxChunkSize to let chk.IsFull() behave
 	// like how we judge whether a chunk is full now, then the statement
@@ -229,7 +229,9 @@ func (c *Chunk) SetNumVirtualRows(numVirtualRows int) {
 // Reset resets the chunk, so the memory it allocated can be reused.
 // Make sure all the data in the chunk is not used anymore before you reuse this chunk.
 func (c *Chunk) Reset() {
-	c.sel.SetLen(0)
+	if c.sel != nil {
+		c.sel = c.sel[:0]
+	}
 	for _, v := range c.columns {
 		v.Reset()
 	}
@@ -288,7 +290,7 @@ func (c *Chunk) NumCols() int {
 
 // NumRows returns the number of rows in the chunk.
 func (c *Chunk) NumRows() int {
-	return int(c.sel.Len())
+	return int(c.n)
 }
 
 // GetRow gets the Row in the chunk with the row index.
@@ -448,7 +450,7 @@ func (c *Chunk) TruncateTo(numRows int) {
 // AppendNull appends a null value to the chunk.
 func (c *Chunk) AppendNull(colIdx int) {
 	if colIdx == 0 {
-		c.sel.l++
+		c.n++
 	}
 	c.columns[colIdx].AppendNull()
 }
@@ -456,7 +458,7 @@ func (c *Chunk) AppendNull(colIdx int) {
 // AppendInt64 appends a int64 value to the chunk.
 func (c *Chunk) AppendInt64(colIdx int, i int64) {
 	if colIdx == 0 {
-		c.sel.l++
+		c.n++
 	}
 	c.columns[colIdx].AppendInt64(i)
 }
@@ -464,7 +466,7 @@ func (c *Chunk) AppendInt64(colIdx int, i int64) {
 // AppendUint64 appends a uint64 value to the chunk.
 func (c *Chunk) AppendUint64(colIdx int, u uint64) {
 	if colIdx == 0 {
-		c.sel.l++
+		c.n++
 	}
 	c.columns[colIdx].AppendUint64(u)
 }
@@ -472,7 +474,7 @@ func (c *Chunk) AppendUint64(colIdx int, u uint64) {
 // AppendFloat32 appends a float32 value to the chunk.
 func (c *Chunk) AppendFloat32(colIdx int, f float32) {
 	if colIdx == 0 {
-		c.sel.l++
+		c.n++
 	}
 	c.columns[colIdx].AppendFloat32(f)
 }
@@ -480,7 +482,7 @@ func (c *Chunk) AppendFloat32(colIdx int, f float32) {
 // AppendFloat64 appends a float64 value to the chunk.
 func (c *Chunk) AppendFloat64(colIdx int, f float64) {
 	if colIdx == 0 {
-		c.sel.l++
+		c.n++
 	}
 	c.columns[colIdx].AppendFloat64(f)
 }
@@ -488,7 +490,7 @@ func (c *Chunk) AppendFloat64(colIdx int, f float64) {
 // AppendString appends a string value to the chunk.
 func (c *Chunk) AppendString(colIdx int, str string) {
 	if colIdx == 0 {
-		c.sel.l++
+		c.n++
 	}
 	c.columns[colIdx].AppendString(str)
 }
@@ -496,7 +498,7 @@ func (c *Chunk) AppendString(colIdx int, str string) {
 // AppendBytes appends a bytes value to the chunk.
 func (c *Chunk) AppendBytes(colIdx int, b []byte) {
 	if colIdx == 0 {
-		c.sel.l++
+		c.n++
 	}
 	c.columns[colIdx].AppendBytes(b)
 }
@@ -505,7 +507,7 @@ func (c *Chunk) AppendBytes(colIdx int, b []byte) {
 // TODO: change the time structure so it can be directly written to memory.
 func (c *Chunk) AppendTime(colIdx int, t types.Time) {
 	if colIdx == 0 {
-		c.sel.l++
+		c.n++
 	}
 	c.columns[colIdx].AppendTime(t)
 }
@@ -513,7 +515,7 @@ func (c *Chunk) AppendTime(colIdx int, t types.Time) {
 // AppendDuration appends a Duration value to the chunk.
 func (c *Chunk) AppendDuration(colIdx int, dur types.Duration) {
 	if colIdx == 0 {
-		c.sel.l++
+		c.n++
 	}
 	c.columns[colIdx].AppendDuration(dur)
 }
@@ -521,7 +523,7 @@ func (c *Chunk) AppendDuration(colIdx int, dur types.Duration) {
 // AppendMyDecimal appends a MyDecimal value to the chunk.
 func (c *Chunk) AppendMyDecimal(colIdx int, dec *types.MyDecimal) {
 	if colIdx == 0 {
-		c.sel.l++
+		c.n++
 	}
 	c.columns[colIdx].AppendMyDecimal(*dec)
 }
@@ -529,7 +531,7 @@ func (c *Chunk) AppendMyDecimal(colIdx int, dec *types.MyDecimal) {
 // AppendEnum appends an Enum value to the chunk.
 func (c *Chunk) AppendEnum(colIdx int, enum types.Enum) {
 	if colIdx == 0 {
-		c.sel.l++
+		c.n++
 	}
 	c.columns[colIdx].AppendEnum(enum)
 }
@@ -537,7 +539,7 @@ func (c *Chunk) AppendEnum(colIdx int, enum types.Enum) {
 // AppendSet appends a Set value to the chunk.
 func (c *Chunk) AppendSet(colIdx int, set types.Set) {
 	if colIdx == 0 {
-		c.sel.l++
+		c.n++
 	}
 	c.columns[colIdx].AppendSet(set)
 }
@@ -545,7 +547,7 @@ func (c *Chunk) AppendSet(colIdx int, set types.Set) {
 // AppendJSON appends a JSON value to the chunk.
 func (c *Chunk) AppendJSON(colIdx int, j json.BinaryJSON) {
 	if colIdx == 0 {
-		c.sel.l++
+		c.n++
 	}
 	c.columns[colIdx].AppendJSON(j)
 }
@@ -580,14 +582,18 @@ func (c *Chunk) AppendDatum(colIdx int, d *types.Datum) {
 	}
 }
 
-func (c *Chunk) Selection() Sel {
+func (c *Chunk) SetSelection(sel []VecSize) {
+	c.n = VecSize(len(sel))
+	c.sel = sel
+}
+
+func (c *Chunk) Selection() []VecSize {
 	return c.sel
 }
 
-func (c *Chunk) Vector(i int) Vec {
+func (c *Chunk) Vector(i int) *Vec {
 	return c.columns[i]
 }
-
 
 func writeTime(buf []byte, t types.Time) {
 	binary.BigEndian.PutUint16(buf, uint16(t.Time.Year()))

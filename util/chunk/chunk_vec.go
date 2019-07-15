@@ -2,48 +2,11 @@ package chunk
 
 import (
 	"fmt"
+
 	"github.com/pingcap/parser/mysql"
 	"github.com/pingcap/tidb/types"
 	"github.com/pingcap/tidb/types/json"
 )
-
-type Sel interface {
-	Sel() []VecSize
-	SetSel(sel []VecSize)
-}
-
-type selector struct {
-	sel []VecSize
-	l   VecSize
-}
-
-func newSel() *selector {
-	return new(selector)
-}
-
-func (s *selector) Sel() []VecSize {
-	return s.sel
-}
-
-func (s *selector) SetSel(sel []VecSize) {
-	s.sel = sel
-}
-
-func (s *selector) Len() VecSize {
-	return s.l
-}
-
-func (s *selector) SetLen(size VecSize) {
-	s.l = size
-}
-
-type Nulls interface {
-	HasNull() bool
-
-	// TODO: test which is faster
-	NullVec() []bool
-	IsNull(i VecSize) bool
-}
 
 var (
 	bitsCounter []VecSize
@@ -65,65 +28,42 @@ func init() {
 type nulls struct {
 	// 1: NULL
 	// 0: NOT NULL
-	bitmap    []byte
-	idx       VecSize
-	cap       VecSize // used to make bitmap lazily
+	nulls     []bool
 	nullCount VecSize
 }
 
-func newNulls(cap VecSize) *nulls {
-	cap = ((cap + 7) >> 3) << 3
-	return &nulls{
-		cap: cap,
+func constructNullsFrom(ns []bool) nulls {
+	if len(ns) == 0 {
+		return nulls{}
 	}
+
+	var nullCnt VecSize
+	for _, n := range ns {
+		if n {
+			nullCnt++
+		}
+	}
+	return nulls{ns, nullCnt}
 }
 
-func (b *nulls) HasNull() bool {
+func (b *nulls) MayHasNull() bool {
 	return b.nullCount > 0
 }
 
-// SetNull sets the NULL flag for the i-th value.
+func (b *nulls) Nulls() []bool {
+	return b.nulls
+}
+
 func (b *nulls) appendNull(isNull bool) {
-	if b.bitmap == nil {
-		b.bitmap = make([]byte, b.cap>>3)
-	}
-	b.grow(1)
 	if isNull {
 		b.nullCount++
 	}
-
-	b.bitmap[b.idx>>3] |= byte(1 << (b.idx & 7))
-	b.idx ++
-}
-
-func (b *nulls) appendNulls(other *nulls, begin, end VecSize) {
-	// TODO: optimize it
-	for i := begin; i < end; i++ {
-		b.appendNull(other.IsNull(i))
-	}
-}
-
-func (b *nulls) grow(inc VecSize) {
-	for b.idx+inc >= b.cap {
-		b.cap *= 2
-		bs := make([]byte, b.cap>>3)
-		copy(bs, b.bitmap)
-		b.bitmap = bs
-	}
+	b.nulls = append(b.nulls, isNull)
 }
 
 func (b *nulls) reset() {
-	b.idx = 0
+	b.nulls = b.nulls[:0]
 	b.nullCount = 0
-}
-
-// IsNull returns whether the i-th value is NULL.
-func (b *nulls) IsNull(idx VecSize) bool {
-	return b.bitmap[idx/8]&(1<<(idx&7)) == 0
-}
-
-func (b *nulls) Nulls() []bool {
-	panic("TODO")
 }
 
 type VecSize uint16
@@ -140,64 +80,22 @@ const (
 	VecTypeFloat32
 )
 
-type Vec interface {
-	Int64() []int64
-	Uint64() []uint64
-	Float32() []float32
-
-	AppendNull()
-	AppendInt64(int64)
-	AppendUint64(uint64)
-	AppendFloat32(float32)
-
-	HasNull() bool
-	Nulls() []bool
-	IsNull(i VecSize) bool
-	//Nulls
-
-	Float64() []float64
-	String() []string
-	Bytes() [][]byte
-	Time() []types.Time
-	Duration() []types.Duration
-	Enum() []types.Enum
-	Set() []types.Set
-	MyDecimal() []types.MyDecimal
-	JSON() []json.BinaryJSON
-
-	AppendFloat64(float64)
-	AppendString(string)
-	AppendBytes([]byte)
-	AppendTime(types.Time)
-	AppendDuration(types.Duration)
-	AppendEnum(types.Enum)
-	AppendSet(types.Set)
-	AppendMyDecimal(types.MyDecimal)
-	AppendJSON(json.BinaryJSON)
-
-	Append(v Vec, begin, end VecSize)
-
-	Reset()
-	MemoryUsage() int64
-	Type() VecType
-}
-
-type memVec struct {
-	*nulls
+type Vec struct {
+	nulls
 	tp   VecType
 	ft   types.FieldType // for debug
 	data interface{}
 }
 
-func ConstructVec(data interface{}, nullBits []bool, tp VecType) Vec {
-	return &memVec{
-		nulls: nil,
-		tp:    tp,
-		data:  data,
+func ConstructVec(data interface{}, nullBits []bool, tp VecType) *Vec {
+	// TODO
+	return &Vec{
+		tp:   tp,
+		data: data,
 	}
 }
 
-func newMemVec(tp *types.FieldType, cap VecSize) *memVec {
+func NewMemVec(tp *types.FieldType, cap VecSize) *Vec {
 	var t VecType
 	var data interface{}
 	switch tp.Tp {
@@ -227,26 +125,26 @@ func newMemVec(tp *types.FieldType, cap VecSize) *memVec {
 	default:
 		panic(fmt.Sprintf("TODO %v", tp.Tp))
 	}
-	return &memVec{
-		nulls: newNulls(cap),
+	return &Vec{
+		nulls: constructNullsFrom(nil),
 		tp:    t,
 		ft:    *tp,
 		data:  data,
 	}
 }
 
-func (mv *memVec) Int64() []int64               { return mv.data.([]int64) }
-func (mv *memVec) Uint64() []uint64             { return mv.data.([]uint64) }
-func (mv *memVec) Float32() []float32           { return mv.data.([]float32) }
-func (mv *memVec) Float64() []float64           { return mv.data.([]float64) }
-func (mv *memVec) Bytes() [][]byte              { return mv.data.([][]byte) }
-func (mv *memVec) Time() []types.Time           { return mv.data.([]types.Time) }
-func (mv *memVec) Duration() []types.Duration   { return mv.data.([]types.Duration) }
-func (mv *memVec) Enum() []types.Enum           { return mv.data.([]types.Enum) }
-func (mv *memVec) Set() []types.Set             { return mv.data.([]types.Set) }
-func (mv *memVec) MyDecimal() []types.MyDecimal { return mv.data.([]types.MyDecimal) }
-func (mv *memVec) JSON() []json.BinaryJSON      { return mv.data.([]json.BinaryJSON) }
-func (mv *memVec) String() []string {
+func (mv *Vec) Int64() []int64               { return mv.data.([]int64) }
+func (mv *Vec) Uint64() []uint64             { return mv.data.([]uint64) }
+func (mv *Vec) Float32() []float32           { return mv.data.([]float32) }
+func (mv *Vec) Float64() []float64           { return mv.data.([]float64) }
+func (mv *Vec) Bytes() [][]byte              { return mv.data.([][]byte) }
+func (mv *Vec) Time() []types.Time           { return mv.data.([]types.Time) }
+func (mv *Vec) Duration() []types.Duration   { return mv.data.([]types.Duration) }
+func (mv *Vec) Enum() []types.Enum           { return mv.data.([]types.Enum) }
+func (mv *Vec) Set() []types.Set             { return mv.data.([]types.Set) }
+func (mv *Vec) MyDecimal() []types.MyDecimal { return mv.data.([]types.MyDecimal) }
+func (mv *Vec) JSON() []json.BinaryJSON      { return mv.data.([]json.BinaryJSON) }
+func (mv *Vec) String() []string {
 	strs := make([]string, 0, len(mv.data.([][]byte)))
 	for _, b := range mv.data.([][]byte) {
 		strs = append(strs, string(b))
@@ -255,8 +153,8 @@ func (mv *memVec) String() []string {
 }
 
 // SetNull sets the NULL flag for the i-th value.
-func (mv *memVec) AppendNull() {
-	mv.nulls.appendNull(true)
+func (mv *Vec) AppendNull() {
+	mv.appendNull(true)
 	switch mv.tp {
 	case VecTypeInt64:
 		mv.AppendInt64(0)
@@ -267,7 +165,7 @@ func (mv *memVec) AppendNull() {
 	}
 }
 
-func (mv *memVec) Reset() {
+func (mv *Vec) Reset() {
 	switch mv.tp {
 	case VecTypeInt64:
 		mv.data = mv.data.([]int64)[:0]
@@ -289,58 +187,58 @@ func (mv *memVec) Reset() {
 	mv.reset()
 }
 
-func (mv *memVec) AppendInt64(i int64) {
+func (mv *Vec) AppendInt64(i int64) {
 	mv.data = append(mv.data.([]int64), i)
-	mv.nulls.appendNull(false)
+	mv.appendNull(false)
 }
-func (mv *memVec) AppendUint64(u uint64) {
+func (mv *Vec) AppendUint64(u uint64) {
 	mv.data = append(mv.data.([]uint64), u)
-	mv.nulls.appendNull(false)
+	mv.appendNull(false)
 }
-func (mv *memVec) AppendFloat32(f float32) {
+func (mv *Vec) AppendFloat32(f float32) {
 	mv.data = append(mv.data.([]float32), f)
-	mv.nulls.appendNull(false)
+	mv.appendNull(false)
 }
-func (mv *memVec) AppendFloat64(f float64) {
+func (mv *Vec) AppendFloat64(f float64) {
 	mv.data = append(mv.data.([]float64), f)
-	mv.nulls.appendNull(false)
+	mv.appendNull(false)
 }
-func (mv *memVec) AppendString(str string) {
+func (mv *Vec) AppendString(str string) {
 	bs := make([]byte, 0, len(str))
 	bs = append(bs, str...)
 	mv.data = append(mv.data.([][]byte), bs)
-	mv.nulls.appendNull(false)
+	mv.appendNull(false)
 }
-func (mv *memVec) AppendBytes(bs []byte) {
+func (mv *Vec) AppendBytes(bs []byte) {
 	mv.data = append(mv.data.([][]byte), bs)
-	mv.nulls.appendNull(false)
+	mv.appendNull(false)
 }
-func (mv *memVec) AppendTime(t types.Time) {
+func (mv *Vec) AppendTime(t types.Time) {
 	mv.data = append(mv.data.([]types.Time), t)
-	mv.nulls.appendNull(false)
+	mv.appendNull(false)
 }
-func (mv *memVec) AppendDuration(t types.Duration) {
+func (mv *Vec) AppendDuration(t types.Duration) {
 	mv.data = append(mv.data.([]types.Duration), t)
-	mv.nulls.appendNull(false)
+	mv.appendNull(false)
 }
-func (mv *memVec) AppendEnum(e types.Enum) {
+func (mv *Vec) AppendEnum(e types.Enum) {
 	mv.data = append(mv.data.([]types.Enum), e)
-	mv.nulls.appendNull(false)
+	mv.appendNull(false)
 }
-func (mv *memVec) AppendSet(s types.Set) {
+func (mv *Vec) AppendSet(s types.Set) {
 	mv.data = append(mv.data.([]types.Set), s)
-	mv.nulls.appendNull(false)
+	mv.appendNull(false)
 }
-func (mv *memVec) AppendMyDecimal(d types.MyDecimal) {
+func (mv *Vec) AppendMyDecimal(d types.MyDecimal) {
 	mv.data = append(mv.data.([]types.MyDecimal), d)
-	mv.nulls.appendNull(false)
+	mv.appendNull(false)
 }
-func (mv *memVec) AppendJSON(j json.BinaryJSON) {
+func (mv *Vec) AppendJSON(j json.BinaryJSON) {
 	mv.data = append(mv.data.([]json.BinaryJSON), j)
-	mv.nulls.appendNull(false)
+	mv.appendNull(false)
 }
 
-func (mv *memVec) Append(v Vec, begin, end VecSize) {
+func (mv *Vec) Append(v *Vec, begin, end VecSize) {
 	// assert (v.Type() == mv.Type())
 	switch mv.tp {
 	case VecTypeInt64:
@@ -361,18 +259,17 @@ func (mv *memVec) Append(v Vec, begin, end VecSize) {
 		panic("TODO")
 	}
 
-	if mv2, ok := v.(*memVec); ok {
-		mv.appendNulls(mv2.nulls, begin, end)
-	} else {
-		panic("not implement")
+	// TODO: optimize this loop
+	for _, null := range v.nulls.nulls[begin:end] {
+		mv.appendNull(null)
 	}
 }
 
-func (mv *memVec) MemoryUsage() int64 {
+func (mv *Vec) MemoryUsage() int64 {
 	// TODO
 	return 0
 }
 
-func (mv *memVec) Type() VecType {
+func (mv *Vec) Type() VecType {
 	return mv.tp
 }
