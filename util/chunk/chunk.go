@@ -23,11 +23,20 @@ import (
 	"github.com/pingcap/tidb/types/json"
 )
 
+var (
+	Vectorized = false
+)
+
 // Chunk stores multiple rows of data in Apache Arrow format.
 // See https://arrow.apache.org/docs/memory_layout.html
 // Values are appended in compact format and can be directly accessed without decoding.
 // When the chunk is done processing, we can reuse the allocated memory by resetting it.
 type Chunk struct {
+	// fields for vectorwise
+	n    VecSize
+	sel  []VecSize
+	vecs []*Vec
+
 	columns []*column
 	// numVirtualRows indicates the number of virtual rows, which have zero column.
 	// It is used only when this Chunk doesn't hold any data, i.e. "len(columns)==0".
@@ -55,6 +64,10 @@ func NewChunkWithCapacity(fields []*types.FieldType, cap int) *Chunk {
 //  cap: the limit for the max number of rows.
 //  maxChunkSize: the max limit for the number of rows.
 func New(fields []*types.FieldType, cap, maxChunkSize int) *Chunk {
+	if Vectorized {
+		return NewVecChunk(fields, cap, maxChunkSize)
+	}
+
 	chk := &Chunk{
 		columns:  make([]*column, 0, len(fields)),
 		capacity: mathutil.Min(cap, maxChunkSize),
@@ -74,6 +87,24 @@ func New(fields []*types.FieldType, cap, maxChunkSize int) *Chunk {
 		}
 	}
 
+	return chk
+}
+
+func NewVecChunk(fields []*types.FieldType, cap, maxChunkSize int) *Chunk {
+	chk := new(Chunk)
+	chk.vecs = make([]*Vec, 0, len(fields))
+	chk.capacity = mathutil.Min(cap, maxChunkSize)
+	for _, f := range fields {
+		chk.vecs = append(chk.vecs, NewMemVec(f, VecSize(chk.capacity)))
+	}
+	chk.numVirtualRows = 0
+
+	// set the default value of requiredRows to maxChunkSize to let chk.IsFull() behave
+	// like how we judge whether a chunk is full now, then the statement
+	// "chk.NumRows() < maxChunkSize"
+	// is equal to
+	// "!chk.IsFull()".
+	chk.requiredRows = maxChunkSize
 	return chk
 }
 
