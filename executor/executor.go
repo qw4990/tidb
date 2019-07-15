@@ -891,6 +891,9 @@ func (e *SelectionExec) Open(ctx context.Context) error {
 		return err
 	}
 	e.childResult = newFirstChunk(e.children[0])
+	if chunk.Vectorized {
+		return nil
+	}
 	e.batched = expression.Vectorizable(e.filters)
 	if e.batched {
 		e.selected = make([]bool, 0, chunk.InitialCapacity)
@@ -907,8 +910,29 @@ func (e *SelectionExec) Close() error {
 	return e.baseExecutor.Close()
 }
 
+func (e *SelectionExec) vecNext(ctx context.Context, req *chunk.Chunk) error {
+	req.Reset()
+	if err := Next(ctx, e.children[0], e.childResult); err != nil {
+		return err
+	}
+
+	if e.childResult.NumRows() == 0 {
+		return nil
+	}
+
+	req.SwapColumns(e.childResult)
+	if err := expression.VectorizedFilter3(e.ctx, e.filters, req); err != nil {
+		return err
+	}
+	return nil
+}
+
 // Next implements the Executor Next interface.
 func (e *SelectionExec) Next(ctx context.Context, req *chunk.Chunk) error {
+	if chunk.Vectorized {
+		return e.vecNext(ctx, req)
+	}
+
 	req.GrowAndReset(e.maxChunkSize)
 
 	if !e.batched {

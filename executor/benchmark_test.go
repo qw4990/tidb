@@ -375,7 +375,7 @@ func genSelectionDataSource(sctx sessionctx.Context) ([]expression.Expression, *
 		schema: expression.NewSchema(cols...),
 		ndvs:   []int{0, 0, 0, 0},
 		orders: []bool{false, false, false, false},
-		rows:   1000000,
+		rows:   1024 * 100,
 		ctx:    sctx,
 	})
 	return filters, dataSource
