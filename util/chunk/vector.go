@@ -279,3 +279,28 @@ func (mv *Vec) MemoryUsage() int64 {
 func (mv *Vec) Type() VecType {
 	return mv.tp
 }
+
+func (mv *Vec) Copy() *Vec {
+	var data interface{}
+	switch mv.tp {
+	case VecTypeInt64:
+		is := mv.data.([]int64)
+		data = make([]int64, len(is))
+		copy(data.([]int64), is)
+	default:
+		panic("TODO")
+	}
+
+	ns := make([]bool, len(mv.nulls.nulls))
+	copy(ns, mv.nulls.nulls)
+
+	return &Vec{
+		nulls: nulls{
+			nulls:     ns,
+			nullCount: mv.nullCount,
+		},
+		tp:   mv.tp,
+		ft:   mv.ft,
+		data: data,
+	}
+}

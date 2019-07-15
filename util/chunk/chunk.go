@@ -391,8 +391,18 @@ func (c *Chunk) CopyConstruct() *Chunk {
 }
 
 func (c *Chunk) vecCopyConstrut() *Chunk {
-	// panic("TODO")
-	return nil
+	chk := &Chunk{
+		nTot:           c.nTot,
+		sel:            c.CopySel(),
+		numVirtualRows: c.numVirtualRows,
+		capacity:       c.capacity,
+		requiredRows:   c.requiredRows,
+	}
+
+	for i := range c.vecs {
+		chk.vecs = append(chk.vecs, c.vecs[i].Copy())
+	}
+	return chk
 }
 
 // GrowAndReset resets the Chunk and doubles the capacity of the Chunk.

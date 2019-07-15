@@ -16,6 +16,7 @@ package executor
 import (
 	"context"
 	"fmt"
+	"math"
 	"math/rand"
 	"sort"
 	"testing"
@@ -348,5 +349,98 @@ func BenchmarkAggDistinct(b *testing.B) {
 				})
 			}
 		}
+	}
+}
+
+func genSelectionDataSource(sctx sessionctx.Context) ([]expression.Expression, *mockDataSource) {
+	tll := types.NewFieldType(mysql.TypeLonglong)
+	nCols := 4
+	cols := make([]*expression.Column, 0, nCols)
+	for i := 0; i < nCols; i++ {
+		cols = append(cols, &expression.Column{Index: i, RetType: tll})
+	}
+	filters := make([]expression.Expression, 0, 4)
+	for i := 0; i < 4; i++ {
+		f, err := expression.NewFunction(sctx, ast.GT, tll, cols[i], &expression.Constant{
+			Value:   types.NewIntDatum(math.MaxInt64 / 2),
+			RetType: tll,
+		})
+		if err != nil {
+			panic(err)
+		}
+		filters = append(filters, f)
+	}
+
+	dataSource := buildMockDataSource(mockDataSourceParameters{
+		schema: expression.NewSchema(cols...),
+		ndvs:   []int{0, 0, 0, 0},
+		orders: []bool{false, false, false, false},
+		rows:   1000000,
+		ctx:    sctx,
+	})
+	return filters, dataSource
+}
+
+func BenchmarkSelection(b *testing.B) {
+	chunk.Vectorized = false
+	sctx := defaultCtx()
+	filters, dataSource := genSelectionDataSource(sctx)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		b.StopTimer()
+		sel := buildSelectionExec(sctx, filters, dataSource)
+		tmpCtx := context.Background()
+		chk := newFirstChunk(sel)
+		dataSource.prepareChunks()
+
+		b.StartTimer()
+		if err := sel.Open(tmpCtx); err != nil {
+			b.Fatal(err)
+		}
+		for {
+			if err := sel.Next(tmpCtx, chk); err != nil {
+				b.Fatal(b)
+			}
+			if chk.NumRows() == 0 {
+				break
+			}
+		}
+
+		if err := sel.Close(); err != nil {
+			b.Fatal(err)
+		}
+		b.StopTimer()
+	}
+}
+
+func BenchmarkSelectionVec(b *testing.B) {
+	chunk.Vectorized = true
+	sctx := defaultCtx()
+	filters, dataSource := genSelectionDataSource(sctx)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		b.StopTimer()
+		sel := buildSelectionExec(sctx, filters, dataSource)
+		tmpCtx := context.Background()
+		chk := newFirstChunk(sel)
+		dataSource.prepareChunks()
+
+		b.StartTimer()
+		if err := sel.Open(tmpCtx); err != nil {
+			b.Fatal(err)
+		}
+		for {
+			if err := sel.Next(tmpCtx, chk); err != nil {
+				b.Fatal(b)
+			}
+			if chk.NumRows() == 0 {
+				break
+			}
+		}
+
+		if err := sel.Close(); err != nil {
+			b.Fatal(err)
+		}
+		b.StopTimer()
 	}
 }
