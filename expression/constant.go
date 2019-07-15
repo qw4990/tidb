@@ -88,6 +88,11 @@ func (c *Constant) GetType() *types.FieldType {
 	return c.RetType
 }
 
+func (c *Constant) VecEvalInt(ctx sessionctx.Context, chk *chunk.Chunk) (vec *chunk.Vec, err error) {
+	panic("TODO")
+	return nil, nil
+}
+
 // Eval implements Expression interface.
 func (c *Constant) Eval(_ chunk.Row) (types.Datum, error) {
 	if c.DeferredExpr != nil {

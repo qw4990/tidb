@@ -206,7 +206,10 @@ func (b *builtinAbsIntSig) evalInt(row chunk.Row) (int64, bool, error) {
 }
 
 func (b *builtinAbsIntSig) vecEvalInt(ctx sessionctx.Context, chk *chunk.Chunk) (*chunk.Vec, error) {
-	vs := chk.Vector(0)
+	vs, err := b.args[0].VecEvalInt(ctx, chk)
+	if err != nil {
+		return nil, err
+	}
 	vsData := vs.Int64()
 	if vs.MayHasNull() {
 		vsNulls := vs.Nulls()
