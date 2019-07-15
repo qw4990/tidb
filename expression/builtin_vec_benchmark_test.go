@@ -1,6 +1,7 @@
 package expression
 
 import (
+	"fmt"
 	"github.com/pingcap/tidb/sessionctx"
 	"math/rand"
 	"testing"
@@ -240,17 +241,21 @@ func init() {
  */
 func genVecFilterCols(ctx sessionctx.Context) ([]Expression, *chunk.Chunk) {
 	tll := types.NewFieldType(mysql.TypeLonglong)
-	ft := []*types.FieldType{tll, tll, tll, tll}
+	nCol := 4
+	var ft []*types.FieldType
+	for i := 0; i < nCol; i++ {
+		ft = append(ft, tll)
+	}
 
 	chk := chunk.New(ft, 1024, 1024)
 	for i := 0; i < 1024; i++ {
-		for c := 0; c < 4; c++ {
+		for c := 0; c < nCol; c++ {
 			chk.AppendInt64(c, int64(uint(i*fixedSeeds[c])%1024))
 		}
 	}
 
 	exprs := make([]Expression, 0, 4)
-	for i := 0; i < 4; i++ {
+	for i := 0; i < nCol; i++ {
 		col := &Column{
 			RetType: tll,
 			Index:   i,
@@ -291,5 +296,27 @@ func BenchmarkVectorizedFilter2(b *testing.B) {
 }
 
 func TestVectorizedFilter(t *testing.T) {
+	chunk.Vectorized = false
+	ctx := mock.NewContext()
+	filters, chk := genVecFilterCols(ctx)
+	sel := make([]bool, 1024)
+	sel, _ = VectorizedFilter(ctx, filters, chunk.NewIterator4Chunk(chk), sel)
+	rSel := make([]chunk.VecSize, 0, len(sel))
+	for i, v := range sel {
+		if v {
+			rSel = append(rSel, chunk.VecSize(i))
+		}
+	}
 
+	chunk.Vectorized = true
+	filters, chk = genVecFilterCols(ctx)
+	vSel, _ := VectorizedFilter2(ctx, filters, chk)
+
+	for i := range vSel {
+		if vSel[i] != rSel[i] {
+			fmt.Println(rSel)
+			fmt.Println(vSel)
+			t.Fatal(i)
+		}
+	}
 }

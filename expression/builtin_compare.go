@@ -1654,8 +1654,14 @@ func (b *builtinGTIntSig) evalInt(row chunk.Row) (val int64, isNull bool, err er
 
 func (b *builtinGTIntSig) vecEvalInt(chk *chunk.Chunk) (*chunk.Vec, error) {
 	data := make([]int64, chk.MaxIdx())
-	v1 := chk.Vector(0)
-	v2 := chk.Vector(1)
+	v1, err := b.args[0].VecEvalInt(b.ctx, chk)
+	if err != nil {
+		return nil, err
+	}
+	v2, err := b.args[1].VecEvalInt(b.ctx, chk)
+	if err != nil {
+		return nil, err
+	}
 	if v1.MayHasNull() || v2.MayHasNull() {
 		panic("TODO")
 	} else {
