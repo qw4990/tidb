@@ -133,3 +133,52 @@ func BenchmarkPlusRealVecWithoutLoopOpt(b *testing.B) {
 		f.VecEvalReal(ctx, chk)
 	}
 }
+
+func genGTCols() ([]Expression, *chunk.Chunk) {
+	ft := []*types.FieldType{types.NewFieldType(mysql.TypeLonglong), types.NewFieldType(mysql.TypeLonglong)}
+	chk := chunk.New(ft, 1024, 1024)
+	for i := 0; i < 1024; i++ {
+		chk.AppendInt64(0, int64(i))
+		chk.AppendInt64(1, int64(1024-i))
+	}
+
+	exprs := []Expression{
+		&Column{
+			RetType: ft[0],
+			Index:   0,
+		}, &Column{
+			RetType: ft[1],
+			Index:   1,
+		},
+	}
+	return exprs, chk
+}
+
+func BenchmarkGTInt(b *testing.B) {
+	chunk.Vectorized = false
+	exprs, chk := genGTCols()
+	ctx := mock.NewContext()
+	f, err := NewFunction(ctx, ast.GT, exprs[0].GetType(), exprs...)
+	if err != nil {
+		b.Fatal(err)
+	}
+	for i := 0; i < b.N; i++ {
+		it := chunk.NewIterator4Chunk(chk)
+		for r := it.Begin(); r != it.End(); r = it.Next() {
+			f.EvalInt(ctx, r)
+		}
+	}
+}
+
+func BenchmarkGTIntVec(b *testing.B) {
+	chunk.Vectorized = true
+	exprs, chk := genGTCols()
+	ctx := mock.NewContext()
+	f, err := NewFunction(ctx, ast.GT, exprs[0].GetType(), exprs...)
+	if err != nil {
+		b.Fatal(err)
+	}
+	for i := 0; i < b.N; i++ {
+		f.VecEvalInt(ctx, chk)
+	}
+}

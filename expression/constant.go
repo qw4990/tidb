@@ -89,8 +89,12 @@ func (c *Constant) GetType() *types.FieldType {
 }
 
 func (c *Constant) VecEvalInt(ctx sessionctx.Context, chk *chunk.Chunk) (vec *chunk.Vec, err error) {
-	panic("TODO")
-	return nil, nil
+	data := make([]int64, chk.MaxIdx())
+	n := c.Value.GetInt64()
+	for i := range data {
+		data[i] = n
+	}
+	return chunk.ConstructVec(data, nil, chunk.VecTypeInt64), nil
 }
 
 func (c *Constant) VecEvalReal(ctx sessionctx.Context, chk *chunk.Chunk) (vec *chunk.Vec, err error) {

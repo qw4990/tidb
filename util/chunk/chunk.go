@@ -27,6 +27,8 @@ var (
 	Vectorized = false
 )
 
+type Selection []VecSize
+
 // Chunk stores multiple rows of data in Apache Arrow format.
 // See https://arrow.apache.org/docs/memory_layout.html
 // Values are appended in compact format and can be directly accessed without decoding.
@@ -34,7 +36,7 @@ var (
 type Chunk struct {
 	// fields for vectorwise
 	n    VecSize
-	sel  []VecSize
+	sel  Selection
 	vecs []*Vec
 
 	columns []*column
@@ -863,6 +865,16 @@ func (c *Chunk) SetSelection(sel []VecSize) {
 
 func (c *Chunk) Selection() []VecSize {
 	return c.sel
+}
+
+func (c *Chunk) FilterSel(selected []int64) {
+	c.n = 0
+	for i, v := range selected {
+		if v == 1 {
+			c.sel[c.n] = VecSize(i)
+			c.n++
+		}
+	}
 }
 
 func (c *Chunk) Vector(i int) *Vec {

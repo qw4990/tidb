@@ -1652,6 +1652,32 @@ func (b *builtinGTIntSig) evalInt(row chunk.Row) (val int64, isNull bool, err er
 	return resOfGT(CompareInt(b.ctx, b.args[0], b.args[1], row, row))
 }
 
+func (b *builtinGTIntSig) vecEvalInt(chk *chunk.Chunk) (*chunk.Vec, error) {
+	data := make([]int64, chk.MaxIdx())
+	v1 := chk.Vector(0)
+	v2 := chk.Vector(1)
+	if v1.MayHasNull() || v2.MayHasNull() {
+		panic("TODO")
+	} else {
+		vi1 := v1.Int64()
+		vi2 := v2.Int64()
+		if sel := chk.Selection(); sel != nil {
+			for _, i := range sel {
+				if vi1[i] > vi2[i] {
+					data[i] = 1
+				}
+			}
+		} else {
+			for i := range vi1 {
+				if vi1[i] > vi2[i] {
+					data[i] = 1
+				}
+			}
+		}
+	}
+	return chunk.ConstructVec(data, nil, chunk.VecTypeInt64), nil
+}
+
 type builtinGTRealSig struct {
 	baseBuiltinFunc
 }

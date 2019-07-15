@@ -262,3 +262,17 @@ func VectorizedFilter(ctx sessionctx.Context, filters []Expression, iterator *ch
 	}
 	return selected, nil
 }
+
+func VectorizedFilter2(ctx sessionctx.Context, filters []Expression, chk *chunk.Chunk) (chunk.Selection, error) {
+	for _, f := range filters {
+		// TODO: VecEvalBool?
+		selected, err := f.VecEvalInt(ctx, chk)
+		if err != nil {
+			return nil, err
+		}
+
+		chk.FilterSel(selected.Int64())
+	}
+
+	return nil, nil
+}
