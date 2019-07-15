@@ -871,11 +871,11 @@ func (c *Chunk) AppendDatum(colIdx int, d *types.Datum) {
 	}
 }
 
-func (c *Chunk) SetSelection(sel []VecSize) {
+func (c *Chunk) SetSelection(sel Selection) {
 	c.sel = sel
 }
 
-func (c *Chunk) Selection() []VecSize {
+func (c *Chunk) Selection() Selection {
 	return c.sel
 }
 
