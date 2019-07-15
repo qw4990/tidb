@@ -264,6 +264,7 @@ func VectorizedFilter(ctx sessionctx.Context, filters []Expression, iterator *ch
 }
 
 func VectorizedFilter2(ctx sessionctx.Context, filters []Expression, chk *chunk.Chunk) (chunk.Selection, error) {
+	orgSel := chk.CopySel()
 	for _, f := range filters {
 		// TODO: VecEvalBool?
 		selected, err := f.VecEvalInt(ctx, chk)
@@ -274,5 +275,7 @@ func VectorizedFilter2(ctx sessionctx.Context, filters []Expression, chk *chunk.
 		chk.FilterSel(selected.Int64())
 	}
 
-	return nil, nil
+	sel := chk.Selection()
+	chk.SetSelection(orgSel)
+	return sel, nil
 }

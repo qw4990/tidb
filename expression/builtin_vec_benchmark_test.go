@@ -1,6 +1,8 @@
 package expression
 
 import (
+	"github.com/pingcap/tidb/sessionctx"
+	"math/rand"
 	"testing"
 
 	"github.com/pingcap/parser/ast"
@@ -104,7 +106,6 @@ func TestAbsIntVec(t *testing.T) {
 		results = append(results, v)
 		nulls = append(nulls, isNull)
 	}
-
 
 	chunk.Vectorized = true
 	exprs, chk = genAbsCol(0)
@@ -221,4 +222,74 @@ func BenchmarkGTIntVec(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		f.VecEvalInt(ctx, chk)
 	}
+}
+
+var (
+	fixedSeeds []int
+)
+
+func init() {
+	for i := 0; i < 10; i++ {
+		fixedSeeds = append(fixedSeeds, rand.Intn(1024))
+	}
+}
+
+/*
+	4 columns, all values are in [0, 1024);
+	4 filters, all are col[i] > fixedSeeds[i];
+ */
+func genVecFilterCols(ctx sessionctx.Context) ([]Expression, *chunk.Chunk) {
+	tll := types.NewFieldType(mysql.TypeLonglong)
+	ft := []*types.FieldType{tll, tll, tll, tll}
+
+	chk := chunk.New(ft, 1024, 1024)
+	for i := 0; i < 1024; i++ {
+		for c := 0; c < 4; c++ {
+			chk.AppendInt64(c, int64(uint(i*fixedSeeds[c])%1024))
+		}
+	}
+
+	exprs := make([]Expression, 0, 4)
+	for i := 0; i < 4; i++ {
+		col := &Column{
+			RetType: tll,
+			Index:   i,
+		}
+		constVal := &Constant{
+			RetType: tll,
+			Value:   types.NewIntDatum(int64(fixedSeeds[i])),
+		}
+
+		gt, err := NewFunction(ctx, ast.GT, tll, col, constVal)
+		if err != nil {
+			panic(err)
+		}
+		exprs = append(exprs, gt)
+	}
+	return exprs, chk
+}
+
+func BenchmarkVectorizedFilter(b *testing.B) {
+	chunk.Vectorized = false
+	ctx := mock.NewContext()
+	filters, chk := genVecFilterCols(ctx)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		sel := make([]bool, 1024)
+		VectorizedFilter(ctx, filters, chunk.NewIterator4Chunk(chk), sel)
+	}
+}
+
+func BenchmarkVectorizedFilter2(b *testing.B) {
+	chunk.Vectorized = true
+	ctx := mock.NewContext()
+	filters, chk := genVecFilterCols(ctx)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		VectorizedFilter2(ctx, filters, chk)
+	}
+}
+
+func TestVectorizedFilter(t *testing.T) {
+
 }

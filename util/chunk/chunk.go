@@ -35,7 +35,7 @@ type Selection []VecSize
 // When the chunk is done processing, we can reuse the allocated memory by resetting it.
 type Chunk struct {
 	// fields for vectorwise
-	n    VecSize
+	nTot VecSize // all rows = filtered + selected
 	sel  Selection
 	vecs []*Vec
 
@@ -339,7 +339,7 @@ func (c *Chunk) SwapColumns(other *Chunk) {
 
 func (c *Chunk) vecSwapColumns(other *Chunk) {
 	c.vecs, other.vecs = other.vecs, c.vecs
-	c.n, other.n = other.n, c.n
+	c.nTot, other.nTot = other.nTot, c.nTot
 	// TODO: Selection?
 	c.sel, other.sel = other.sel, c.sel
 	c.numVirtualRows, other.numVirtualRows = other.numVirtualRows, c.numVirtualRows
@@ -371,7 +371,7 @@ func (c *Chunk) vecReset() {
 	if c.sel != nil {
 		c.sel = c.sel[:0]
 	}
-	c.n = 0
+	c.nTot = 0
 	for _, v := range c.vecs {
 		v.Reset()
 	}
@@ -457,7 +457,10 @@ func (c *Chunk) NumRows() int {
 }
 
 func (c *Chunk) vecNumRows() int {
-	return int(c.n)
+	if c.sel != nil {
+		return len(c.sel)
+	}
+	return int(c.nTot)
 }
 
 // GetRow gets the Row in the chunk with the row index.
@@ -671,7 +674,7 @@ func (c *Chunk) TruncateTo(numRows int) {
 func (c *Chunk) AppendNull(colIdx int) {
 	if Vectorized {
 		if colIdx == 0 {
-			c.n++
+			c.nTot++
 		}
 		c.vecs[colIdx].AppendNull()
 		return
@@ -683,7 +686,7 @@ func (c *Chunk) AppendNull(colIdx int) {
 func (c *Chunk) AppendInt64(colIdx int, i int64) {
 	if Vectorized {
 		if colIdx == 0 {
-			c.n++
+			c.nTot++
 		}
 		c.vecs[colIdx].AppendInt64(i)
 		return
@@ -695,7 +698,7 @@ func (c *Chunk) AppendInt64(colIdx int, i int64) {
 func (c *Chunk) AppendUint64(colIdx int, u uint64) {
 	if Vectorized {
 		if colIdx == 0 {
-			c.n++
+			c.nTot++
 		}
 		c.vecs[colIdx].AppendUint64(u)
 		return
@@ -707,7 +710,7 @@ func (c *Chunk) AppendUint64(colIdx int, u uint64) {
 func (c *Chunk) AppendFloat32(colIdx int, f float32) {
 	if Vectorized {
 		if colIdx == 0 {
-			c.n++
+			c.nTot++
 		}
 		c.vecs[colIdx].AppendFloat32(f)
 		return
@@ -719,7 +722,7 @@ func (c *Chunk) AppendFloat32(colIdx int, f float32) {
 func (c *Chunk) AppendFloat64(colIdx int, f float64) {
 	if Vectorized {
 		if colIdx == 0 {
-			c.n++
+			c.nTot++
 		}
 		c.vecs[colIdx].AppendFloat64(f)
 		return
@@ -731,7 +734,7 @@ func (c *Chunk) AppendFloat64(colIdx int, f float64) {
 func (c *Chunk) AppendString(colIdx int, str string) {
 	if Vectorized {
 		if colIdx == 0 {
-			c.n++
+			c.nTot++
 		}
 		c.vecs[colIdx].AppendString(str)
 		return
@@ -743,7 +746,7 @@ func (c *Chunk) AppendString(colIdx int, str string) {
 func (c *Chunk) AppendBytes(colIdx int, b []byte) {
 	if Vectorized {
 		if colIdx == 0 {
-			c.n++
+			c.nTot++
 		}
 		c.vecs[colIdx].AppendBytes(b)
 		return
@@ -756,7 +759,7 @@ func (c *Chunk) AppendBytes(colIdx int, b []byte) {
 func (c *Chunk) AppendTime(colIdx int, t types.Time) {
 	if Vectorized {
 		if colIdx == 0 {
-			c.n++
+			c.nTot++
 		}
 		c.vecs[colIdx].AppendTime(t)
 		return
@@ -768,7 +771,7 @@ func (c *Chunk) AppendTime(colIdx int, t types.Time) {
 func (c *Chunk) AppendDuration(colIdx int, dur types.Duration) {
 	if Vectorized {
 		if colIdx == 0 {
-			c.n++
+			c.nTot++
 		}
 		c.vecs[colIdx].AppendDuration(dur)
 		return
@@ -780,7 +783,7 @@ func (c *Chunk) AppendDuration(colIdx int, dur types.Duration) {
 func (c *Chunk) AppendMyDecimal(colIdx int, dec *types.MyDecimal) {
 	if Vectorized {
 		if colIdx == 0 {
-			c.n++
+			c.nTot++
 		}
 		c.vecs[colIdx].AppendMyDecimal(*dec)
 		return
@@ -792,7 +795,7 @@ func (c *Chunk) AppendMyDecimal(colIdx int, dec *types.MyDecimal) {
 func (c *Chunk) AppendEnum(colIdx int, enum types.Enum) {
 	if Vectorized {
 		if colIdx == 0 {
-			c.n++
+			c.nTot++
 		}
 		c.vecs[colIdx].AppendEnum(enum)
 		return
@@ -804,7 +807,7 @@ func (c *Chunk) AppendEnum(colIdx int, enum types.Enum) {
 func (c *Chunk) AppendSet(colIdx int, set types.Set) {
 	if Vectorized {
 		if colIdx == 0 {
-			c.n++
+			c.nTot++
 		}
 		c.vecs[colIdx].AppendSet(set)
 		return
@@ -816,7 +819,7 @@ func (c *Chunk) AppendSet(colIdx int, set types.Set) {
 func (c *Chunk) AppendJSON(colIdx int, j json.BinaryJSON) {
 	if Vectorized {
 		if colIdx == 0 {
-			c.n++
+			c.nTot++
 		}
 		c.vecs[colIdx].AppendJSON(j)
 		return
@@ -859,7 +862,6 @@ func (c *Chunk) AppendDatum(colIdx int, d *types.Datum) {
 }
 
 func (c *Chunk) SetSelection(sel []VecSize) {
-	c.n = VecSize(len(sel))
 	c.sel = sel
 }
 
@@ -867,12 +869,24 @@ func (c *Chunk) Selection() []VecSize {
 	return c.sel
 }
 
+func (c *Chunk) CopySel() []VecSize {
+	if c.sel == nil {
+		return nil
+	}
+	sel := make([]VecSize, len(c.sel))
+	copy(sel, c.sel)
+	return sel
+}
+
 func (c *Chunk) FilterSel(selected []int64) {
-	c.n = 0
+	if c.sel == nil {
+		c.sel = make([]VecSize, len(selected))
+	}
+
+	c.sel = c.sel[:0]
 	for i, v := range selected {
 		if v == 1 {
-			c.sel[c.n] = VecSize(i)
-			c.n++
+			c.sel = append(c.sel, VecSize(i))
 		}
 	}
 }
@@ -883,9 +897,12 @@ func (c *Chunk) Vector(i int) *Vec {
 
 func (c *Chunk) MaxIdx() VecSize {
 	if c.sel == nil {
-		return c.n
+		return c.nTot
 	}
-	return c.sel[c.n-1]
+	if len(c.sel) == 0 {
+		return 0
+	}
+	return c.sel[len(c.sel)-1] + 1
 }
 
 func writeTime(buf []byte, t types.Time) {
