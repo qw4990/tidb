@@ -193,8 +193,7 @@ func (sf *ScalarFunction) Decorrelate(schema *Schema) Expression {
 }
 
 func (sf *ScalarFunction) VecEvalInt(ctx sessionctx.Context, chk *chunk.Chunk) (vec *chunk.Vec, err error) {
-	panic("TODO")
-	return nil, nil
+	return sf.Function.vecEvalInt(chk)
 }
 
 // Eval implements Expression interface.

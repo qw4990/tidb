@@ -205,8 +205,8 @@ func (b *builtinAbsIntSig) evalInt(row chunk.Row) (int64, bool, error) {
 	return -val, false, nil
 }
 
-func (b *builtinAbsIntSig) vecEvalInt(ctx sessionctx.Context, chk *chunk.Chunk) (*chunk.Vec, error) {
-	vs, err := b.args[0].VecEvalInt(ctx, chk)
+func (b *builtinAbsIntSig) vecEvalInt(chk *chunk.Chunk) (*chunk.Vec, error) {
+	vs, err := b.args[0].VecEvalInt(b.ctx, chk)
 	if err != nil {
 		return nil, err
 	}
@@ -265,7 +265,7 @@ func (b *builtinAbsIntSig) vecEvalInt(ctx sessionctx.Context, chk *chunk.Chunk) 
 			return chunk.ConstructVec(data, nil, chunk.VecTypeInt64), nil
 		} else {
 			data := make([]int64, len(vsData))
-			for _, i := range vsData {
+			for i := range vsData {
 				if vsData[i] >= 0 {
 					data[i] = vsData[i]
 				} else {
