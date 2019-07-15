@@ -281,7 +281,18 @@ func (s *builtinArithmeticPlusRealSig) evalReal(row chunk.Row) (float64, bool, e
 	return a + b, false, nil
 }
 
+var (
+	nullLoopOptimize = true
+)
+
 func (s *builtinArithmeticPlusRealSig) vecEvalReal(chk *chunk.Chunk) (*chunk.Vec, error) {
+	if nullLoopOptimize {
+		return s.vecEvalReal1(chk)
+	}
+	return s.vecEvalReal2(chk)
+}
+
+func (s *builtinArithmeticPlusRealSig) vecEvalReal1(chk *chunk.Chunk) (*chunk.Vec, error) {
 	v1, err := s.args[0].VecEvalReal(s.ctx, chk)
 	if err != nil {
 		return nil, err
@@ -317,8 +328,44 @@ func (s *builtinArithmeticPlusRealSig) vecEvalReal(chk *chunk.Chunk) (*chunk.Vec
 	return chunk.ConstructVec(data, nulls, chunk.VecTypeFloat64), nil
 }
 
-func (s *builtinArithmeticPlusRealSig) accumulate() {
+func (s *builtinArithmeticPlusRealSig) vecEvalReal2(chk *chunk.Chunk) (*chunk.Vec, error) {
+	v1, err := s.args[0].VecEvalReal(s.ctx, chk)
+	if err != nil {
+		return nil, err
+	}
+	v2, err := s.args[1].VecEvalReal(s.ctx, chk)
+	if err != nil {
+		return nil, err
+	}
 
+	data := make([]float64, chk.MaxIdx())
+	nulls := make([]bool, chk.MaxIdx())
+
+	if sel := chk.Selection(); sel != nil {
+		panic("TODO")
+	} else {
+		vs := v1.Float64()
+		ns := v1.Nulls()
+		for i := range vs {
+			if ns[i] {
+				nulls[i] = true
+			} else {
+				data[i] += vs[i]
+			}
+		}
+
+		vs = v2.Float64()
+		ns = v2.Nulls()
+		for i := range vs {
+			if ns[i] {
+				nulls[i] = true
+			} else {
+				data[i] += vs[i]
+			}
+		}
+	}
+
+	return chunk.ConstructVec(data, nulls, chunk.VecTypeFloat64), nil
 }
 
 type arithmeticMinusFunctionClass struct {

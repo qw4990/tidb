@@ -117,3 +117,19 @@ func BenchmarkPlusRealVec(b *testing.B) {
 		f.VecEvalReal(ctx, chk)
 	}
 }
+
+func BenchmarkPlusRealVecWithoutLoopOpt(b *testing.B) {
+	chunk.Vectorized = true
+	nullLoopOptimize = false
+	exprs, chk := genPlusCols()
+	ctx := mock.NewContext()
+	f, err := NewFunction(ctx, ast.Plus, exprs[0].GetType(), exprs...)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		f.VecEvalReal(ctx, chk)
+	}
+}
