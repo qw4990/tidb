@@ -54,24 +54,27 @@ func (bvi *int64Vec) Int64() []int64 {
 
 func BenchmarkVecImplInterfaceVec(b *testing.B) {
 	iv := newInterfaceVec(1024)
+	var sum int64
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		iv.Int64()
+		sum += iv.Int64()[0]
 	}
 }
 
 func BenchmarkVecImplBytesVec(b *testing.B) {
 	bv := newBytesVec(1024)
+	var sum int64
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		bv.Int64()
+		sum += bv.Int64()[0]
 	}
 }
 
 func BenchmarkVecImplInt64Vec(b *testing.B) {
 	bvi := newBytesVecInt64(1024)
+	var sum int64
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		bvi.Int64()
+		sum += bvi.Int64()[0]
 	}
 }
