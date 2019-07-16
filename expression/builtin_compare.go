@@ -1279,7 +1279,7 @@ func (c *compareFunctionClass) generateCmpSigs(ctx sessionctx.Context, args []Ex
 			sig = &builtinLEIntSig{bf}
 			sig.setPbCode(tipb.ScalarFuncSig_LEInt)
 		case opcode.GT:
-			sig = &builtinGTIntSig{bf}
+			sig = &builtinGTIntSig{bf, nil, nil}
 			sig.setPbCode(tipb.ScalarFuncSig_GTInt)
 		case opcode.EQ:
 			sig = &builtinEQIntSig{bf}
@@ -1640,6 +1640,9 @@ func (b *builtinLEJSONSig) evalInt(row chunk.Row) (val int64, isNull bool, err e
 
 type builtinGTIntSig struct {
 	baseBuiltinFunc
+
+	buf1 *chunk.Vec
+	buf2 *chunk.Vec
 }
 
 func (b *builtinGTIntSig) Clone() builtinFunc {
@@ -1653,15 +1656,24 @@ func (b *builtinGTIntSig) evalInt(row chunk.Row) (val int64, isNull bool, err er
 }
 
 func (b *builtinGTIntSig) vecEvalInt(chk *chunk.Chunk, buf *chunk.Vec) (*chunk.Vec, error) {
-	data := make([]int64, chk.Capacity())
-	v1, err := b.args[0].VecEvalInt(b.ctx, chk, buf)
+	var err error
+	b.buf1, err = b.args[0].VecEvalInt(b.ctx, chk, b.buf1)
 	if err != nil {
 		return nil, err
 	}
-	v2, err := b.args[1].VecEvalInt(b.ctx, chk, buf)
+	b.buf2, err = b.args[1].VecEvalInt(b.ctx, chk, b.buf2)
 	if err != nil {
 		return nil, err
 	}
+
+	v1 := b.buf1
+	v2 := b.buf2
+	if buf == nil {
+		n := chk.Capacity()
+		buf = chunk.ConstructVec(make([]int64, n), make([]bool, n), chunk.VecTypeInt64)
+	}
+	data := buf.Int64()
+
 	if v1.MayHasNull() || v2.MayHasNull() {
 		panic("TODO")
 	} else {
@@ -1681,7 +1693,8 @@ func (b *builtinGTIntSig) vecEvalInt(chk *chunk.Chunk, buf *chunk.Vec) (*chunk.V
 			}
 		}
 	}
-	return chunk.ConstructVec(data, nil, chunk.VecTypeInt64), nil
+
+	return buf, nil
 }
 
 type builtinGTRealSig struct {

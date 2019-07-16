@@ -240,8 +240,10 @@ func BenchmarkGTIntVec(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
+	
+	var buf *chunk.Vec
 	for i := 0; i < b.N; i++ {
-		f.VecEvalInt(ctx, chk, nil)
+		buf, _ = f.VecEvalInt(ctx, chk, buf)
 	}
 }
 

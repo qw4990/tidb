@@ -150,7 +150,7 @@ func getSignatureByPB(ctx sessionctx.Context, sigCode tipb.ScalarFuncSig, tp *ti
 		f = &builtinCastJSONAsJSONSig{base}
 
 	case tipb.ScalarFuncSig_GTInt:
-		f = &builtinGTIntSig{base}
+		f = &builtinGTIntSig{base, nil, nil}
 	case tipb.ScalarFuncSig_GEInt:
 		f = &builtinGEIntSig{base}
 	case tipb.ScalarFuncSig_LTInt:
