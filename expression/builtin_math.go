@@ -206,21 +206,22 @@ func (b *builtinAbsIntSig) evalInt(row chunk.Row) (int64, bool, error) {
 }
 
 func (b *builtinAbsIntSig) vecEvalInt(chk *chunk.Chunk, buf *chunk.Vec) (*chunk.Vec, error) {
-	vs, err := b.args[0].VecEvalInt(b.ctx, chk, buf)
+	vs, err := b.args[0].VecEvalInt(b.ctx, chk, nil)
 	if err != nil {
 		return nil, err
 	}
 	vsData := vs.Int64()
-	n := chk.MaxIdx()
+
+	if buf == nil {
+		n := chk.Capacity()
+		buf = chunk.ConstructVec(make([]int64, n), make([]bool, n), chunk.VecTypeInt64)
+	}
+	data := buf.Int64()
+	nulls := buf.Nulls()
+
 	if vs.MayHasNull() {
 		vsNulls := vs.Nulls()
 		if sel := chk.Selection(); sel != nil {
-			if len(sel) == 0 {
-				return chunk.ConstructVec(make([]int64, 0), nil, chunk.VecTypeInt64), nil
-			}
-
-			data := make([]int64, n)
-			nulls := make([]bool, n)
 			for _, i := range sel {
 				if vsNulls[i] {
 					nulls[i] = true
@@ -232,10 +233,7 @@ func (b *builtinAbsIntSig) vecEvalInt(chk *chunk.Chunk, buf *chunk.Vec) (*chunk.
 					}
 				}
 			}
-			return chunk.ConstructVec(data, nulls, chunk.VecTypeInt64), nil
 		} else {
-			data := make([]int64, len(vsData))
-			nulls := make([]bool, len(vsData))
 			for i := range vsData {
 				if vsNulls[i] {
 					nulls[i] = true
@@ -247,15 +245,9 @@ func (b *builtinAbsIntSig) vecEvalInt(chk *chunk.Chunk, buf *chunk.Vec) (*chunk.
 					}
 				}
 			}
-			return chunk.ConstructVec(data, nulls, chunk.VecTypeInt64), nil
 		}
 	} else {
 		if sel := chk.Selection(); sel != nil {
-			if len(sel) == 0 {
-				return chunk.ConstructVec(make([]int64, 0), nil, chunk.VecTypeInt64), nil
-			}
-
-			data := make([]int64, n)
 			for _, i := range sel {
 				if vsData[i] >= 0 {
 					data[i] = vsData[i]
@@ -263,9 +255,7 @@ func (b *builtinAbsIntSig) vecEvalInt(chk *chunk.Chunk, buf *chunk.Vec) (*chunk.
 					data[i] = -vsData[i]
 				}
 			}
-			return chunk.ConstructVec(data, nil, chunk.VecTypeInt64), nil
 		} else {
-			data := make([]int64, len(vsData))
 			for i := range vsData {
 				if vsData[i] >= 0 {
 					data[i] = vsData[i]
@@ -273,9 +263,9 @@ func (b *builtinAbsIntSig) vecEvalInt(chk *chunk.Chunk, buf *chunk.Vec) (*chunk.
 					data[i] = -vsData[i]
 				}
 			}
-			return chunk.ConstructVec(data, nil, chunk.VecTypeInt64), nil
 		}
 	}
+	return buf, nil
 }
 
 type builtinAbsUIntSig struct {

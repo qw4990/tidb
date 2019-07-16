@@ -302,10 +302,10 @@ func (s *builtinArithmeticPlusRealSig) vecEvalReal1(chk *chunk.Chunk, buf *chunk
 		return nil, err
 	}
 
-	data := make([]float64, chk.MaxIdx())
+	data := make([]float64, chk.Capacity())
 	var nulls []bool
 	if v1.MayHasNull() || v2.MayHasNull() {
-		nulls = make([]bool, chk.MaxIdx())
+		nulls = make([]bool, chk.Capacity())
 	}
 
 	if nulls == nil {
@@ -338,8 +338,8 @@ func (s *builtinArithmeticPlusRealSig) vecEvalReal2(chk *chunk.Chunk, buf *chunk
 		return nil, err
 	}
 
-	data := make([]float64, chk.MaxIdx())
-	nulls := make([]bool, chk.MaxIdx())
+	data := make([]float64, chk.Capacity())
+	nulls := make([]bool, chk.Capacity())
 
 	if sel := chk.Selection(); sel != nil {
 		panic("TODO")

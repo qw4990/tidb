@@ -89,8 +89,11 @@ type Vec struct {
 }
 
 func ConstructVec(data interface{}, nullBits []bool, tp VecType) *Vec {
-	// TODO
 	return &Vec{
+		nulls: nulls{
+			nulls:     nullBits,
+			nullCount: 0, // TODO: fix it
+		},
 		tp:   tp,
 		data: data,
 	}

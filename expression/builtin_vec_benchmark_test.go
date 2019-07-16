@@ -82,9 +82,10 @@ func BenchmarkAbsIntVec(b *testing.B) {
 		b.Fatal(err)
 	}
 
+	var buf *chunk.Vec
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		f.VecEvalInt(ctx, chk, nil)
+		buf, _ = f.VecEvalInt(ctx, chk, buf)
 	}
 }
 
@@ -97,9 +98,10 @@ func BenchmarkAbsIntVecWithNull(b *testing.B) {
 		b.Fatal(err)
 	}
 
+	var buf *chunk.Vec
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		f.VecEvalInt(ctx, chk, nil)
+		buf, _ = f.VecEvalInt(ctx, chk, buf)
 	}
 }
 

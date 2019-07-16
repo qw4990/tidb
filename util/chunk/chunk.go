@@ -443,7 +443,8 @@ func reCalcCapacity(c *Chunk, maxChunkSize int) int {
 
 // Capacity returns the capacity of the Chunk.
 func (c *Chunk) Capacity() int {
-	return c.capacity
+	return 1024 // for debug now
+	//return c.capacity
 }
 
 // NumCols returns the number of columns in the chunk.
@@ -903,16 +904,6 @@ func (c *Chunk) CopySel() []VecSize {
 
 func (c *Chunk) Vector(i int) *Vec {
 	return c.vecs[i]
-}
-
-func (c *Chunk) MaxIdx() VecSize {
-	if c.sel == nil {
-		return c.nTot
-	}
-	if len(c.sel) == 0 {
-		return 0
-	}
-	return c.sel[len(c.sel)-1] + 1
 }
 
 func writeTime(buf []byte, t types.Time) {
