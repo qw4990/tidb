@@ -402,11 +402,11 @@ type MockExpr struct {
 
 func (m *MockExpr) String() string               { return "" }
 func (m *MockExpr) MarshalJSON() ([]byte, error) { return nil, nil }
-func (m *MockExpr) VecEvalInt(ctx sessionctx.Context, chk *chunk.Chunk) (vec *chunk.Vec, err error) {
+func (m *MockExpr) VecEvalInt(ctx sessionctx.Context, chk *chunk.Chunk, buf *chunk.Vec) (vec *chunk.Vec, err error) {
 	panic("TODO")
 	return nil, nil
 }
-func (m *MockExpr) VecEvalReal(ctx sessionctx.Context, chk *chunk.Chunk) (vec *chunk.Vec, err error) {
+func (m *MockExpr) VecEvalReal(ctx sessionctx.Context, chk *chunk.Chunk, buf *chunk.Vec) (vec *chunk.Vec, err error) {
 	panic("TODO")
 	return nil, nil
 }

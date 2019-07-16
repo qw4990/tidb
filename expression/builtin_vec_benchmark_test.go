@@ -84,7 +84,7 @@ func BenchmarkAbsIntVec(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		f.VecEvalInt(ctx, chk)
+		f.VecEvalInt(ctx, chk, nil)
 	}
 }
 
@@ -99,7 +99,7 @@ func BenchmarkAbsIntVecWithNull(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		f.VecEvalInt(ctx, chk)
+		f.VecEvalInt(ctx, chk, nil)
 	}
 }
 
@@ -129,7 +129,7 @@ func TestAbsIntVec(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	v, err := f.VecEvalInt(ctx, chk)
+	v, err := f.VecEvalInt(ctx, chk, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -172,7 +172,7 @@ func BenchmarkPlusRealVecWithoutLoopOpt(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		f.VecEvalReal(ctx, chk)
+		f.VecEvalReal(ctx, chk, nil)
 	}
 }
 
@@ -188,7 +188,7 @@ func BenchmarkPlusRealVec(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		f.VecEvalReal(ctx, chk)
+		f.VecEvalReal(ctx, chk, nil)
 	}
 }
 
@@ -237,7 +237,7 @@ func BenchmarkGTIntVec(b *testing.B) {
 		b.Fatal(err)
 	}
 	for i := 0; i < b.N; i++ {
-		f.VecEvalInt(ctx, chk)
+		f.VecEvalInt(ctx, chk, nil)
 	}
 }
 
