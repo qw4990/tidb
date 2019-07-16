@@ -92,7 +92,7 @@ func (c *Constant) GetType() *types.FieldType {
 
 func (c *Constant) VecEvalInt(ctx sessionctx.Context, chk *chunk.Chunk) (vec *chunk.Vec, err error) {
 	if c.vecData == nil {
-		data := make([]int64, chk.Capacity())
+		data := make([]int64, 1024)
 		n := c.Value.GetInt64()
 		for i := range data {
 			data[i] = n
