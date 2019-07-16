@@ -883,6 +883,8 @@ type SelectionExec struct {
 	inputIter   *chunk.Iterator4Chunk
 	inputRow    chunk.Row
 	childResult *chunk.Chunk
+
+	vecBuf *chunk.Vec
 }
 
 // Open implements the Executor Open interface.
@@ -921,10 +923,10 @@ func (e *SelectionExec) vecNext(ctx context.Context, req *chunk.Chunk) error {
 	}
 
 	req.SwapColumns(e.childResult)
-	if err := expression.VectorizedFilter3(e.ctx, e.filters, req); err != nil {
-		return err
-	}
-	return nil
+
+	var err error
+	e.vecBuf, err = expression.VectorizedFilter3(e.ctx, e.filters, req, e.vecBuf)
+	return err
 }
 
 // Next implements the Executor Next interface.

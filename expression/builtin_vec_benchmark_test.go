@@ -240,7 +240,7 @@ func BenchmarkGTIntVec(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
-	
+
 	var buf *chunk.Vec
 	for i := 0; i < b.N; i++ {
 		buf, _ = f.VecEvalInt(ctx, chk, buf)
@@ -311,9 +311,10 @@ func BenchmarkVectorizedFilter2(b *testing.B) {
 	chunk.Vectorized = true
 	ctx := mock.NewContext()
 	filters, chk := genVecFilterCols(ctx)
+	var buf *chunk.Vec
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		VectorizedFilter2(ctx, filters, chk)
+		_, buf, _ = VectorizedFilter2(ctx, filters, chk, buf)
 	}
 }
 
@@ -332,7 +333,7 @@ func TestVectorizedFilter(t *testing.T) {
 
 	chunk.Vectorized = true
 	filters, chk = genVecFilterCols(ctx)
-	vSel, _ := VectorizedFilter2(ctx, filters, chk)
+	vSel, _, _ := VectorizedFilter2(ctx, filters, chk, nil)
 
 	for i := range vSel {
 		if vSel[i] != rSel[i] {

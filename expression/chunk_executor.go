@@ -263,32 +263,32 @@ func VectorizedFilter(ctx sessionctx.Context, filters []Expression, iterator *ch
 	return selected, nil
 }
 
-func VectorizedFilter2(ctx sessionctx.Context, filters []Expression, chk *chunk.Chunk) (chunk.Selection, error) {
+func VectorizedFilter2(ctx sessionctx.Context, filters []Expression, chk *chunk.Chunk, buf *chunk.Vec) (chunk.Selection, *chunk.Vec, error) {
 	orgSel := chk.CopySel()
 	for _, f := range filters {
 		// TODO: VecEvalBool?
-		selected, err := f.VecEvalInt(ctx, chk, nil)
+		buf, err := f.VecEvalInt(ctx, chk, buf)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
-		chk.FilterSel(selected.Int64())
+		chk.FilterSel(buf.Int64())
 	}
 
 	sel := chk.Selection()
 	chk.SetSelection(orgSel)
-	return sel, nil
+	return sel, buf, nil
 }
 
-func VectorizedFilter3(ctx sessionctx.Context, filters []Expression, chk *chunk.Chunk) error {
+func VectorizedFilter3(ctx sessionctx.Context, filters []Expression, chk *chunk.Chunk, buf *chunk.Vec) (*chunk.Vec, error) {
 	for _, f := range filters {
 		// TODO: VecEvalBool?
-		selected, err := f.VecEvalInt(ctx, chk, nil)
+		buf, err := f.VecEvalInt(ctx, chk, buf)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
-		chk.FilterSel(selected.Int64())
+		chk.FilterSel(buf.Int64())
 	}
-	return nil
+	return buf, nil
 }
