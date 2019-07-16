@@ -203,11 +203,11 @@ func (col *Column) GetType() *types.FieldType {
 	return col.RetType
 }
 
-func (col *Column) VecEvalInt(ctx sessionctx.Context, chk *chunk.Chunk) (vec *chunk.Vec, err error) {
+func (col *Column) VecEvalInt(ctx sessionctx.Context, chk *chunk.Chunk, buf *chunk.Vec) (*chunk.Vec, error) {
 	return chk.Vector(col.Index), nil
 }
 
-func (col *Column) VecEvalReal(ctx sessionctx.Context, chk *chunk.Chunk) (vec *chunk.Vec, err error) {
+func (col *Column) VecEvalReal(ctx sessionctx.Context, chk *chunk.Chunk, buf *chunk.Vec) (*chunk.Vec, error) {
 	return chk.Vector(col.Index), nil
 }
 

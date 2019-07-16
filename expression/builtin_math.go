@@ -205,8 +205,8 @@ func (b *builtinAbsIntSig) evalInt(row chunk.Row) (int64, bool, error) {
 	return -val, false, nil
 }
 
-func (b *builtinAbsIntSig) vecEvalInt(chk *chunk.Chunk) (*chunk.Vec, error) {
-	vs, err := b.args[0].VecEvalInt(b.ctx, chk)
+func (b *builtinAbsIntSig) vecEvalInt(chk *chunk.Chunk, buf *chunk.Vec) (*chunk.Vec, error) {
+	vs, err := b.args[0].VecEvalInt(b.ctx, chk, buf)
 	if err != nil {
 		return nil, err
 	}

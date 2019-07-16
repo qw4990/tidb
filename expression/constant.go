@@ -55,7 +55,7 @@ type Constant struct {
 	DeferredExpr Expression // parameter getter expression
 	hashcode     []byte
 
-	vecData interface{}
+	vec *chunk.Vec
 }
 
 // String implements fmt.Stringer interface.
@@ -90,19 +90,21 @@ func (c *Constant) GetType() *types.FieldType {
 	return c.RetType
 }
 
-func (c *Constant) VecEvalInt(ctx sessionctx.Context, chk *chunk.Chunk) (vec *chunk.Vec, err error) {
-	if c.vecData == nil {
-		data := make([]int64, 1024)
-		n := c.Value.GetInt64()
-		for i := range data {
-			data[i] = n
-		}
-		c.vecData = data
+func (c *Constant) VecEvalInt(ctx sessionctx.Context, chk *chunk.Chunk, buf *chunk.Vec) (vec *chunk.Vec, err error) {
+	if c.vec != nil {
+		return c.vec, nil
 	}
-	return chunk.ConstructVec(c.vecData.([]int64), nil, chunk.VecTypeInt64), nil
+
+	data := make([]int64, 1024)
+	n := c.Value.GetInt64()
+	for i := range data {
+		data[i] = n
+	}
+	c.vec = chunk.ConstructVec(data, nil, chunk.VecTypeInt64)
+	return c.vec, nil
 }
 
-func (c *Constant) VecEvalReal(ctx sessionctx.Context, chk *chunk.Chunk) (vec *chunk.Vec, err error) {
+func (c *Constant) VecEvalReal(ctx sessionctx.Context, chk *chunk.Chunk, buf *chunk.Vec) (vec *chunk.Vec, err error) {
 	panic("TODO")
 	return nil, nil
 }

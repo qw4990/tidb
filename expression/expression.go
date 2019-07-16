@@ -43,9 +43,9 @@ type Expression interface {
 	fmt.Stringer
 	goJSON.Marshaler
 
-	VecEvalInt(ctx sessionctx.Context, chk *chunk.Chunk) (vec *chunk.Vec, err error)
+	VecEvalInt(ctx sessionctx.Context, chk *chunk.Chunk, buf *chunk.Vec) (vec *chunk.Vec, err error)
 
-	VecEvalReal(ctx sessionctx.Context, chk *chunk.Chunk) (vec *chunk.Vec, err error)
+	VecEvalReal(ctx sessionctx.Context, chk *chunk.Chunk, buf *chunk.Vec) (vec *chunk.Vec, err error)
 
 	// Eval evaluates an expression through a row.
 	Eval(row chunk.Row) (types.Datum, error)

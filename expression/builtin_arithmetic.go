@@ -285,19 +285,19 @@ var (
 	nullLoopOptimize = true
 )
 
-func (s *builtinArithmeticPlusRealSig) vecEvalReal(chk *chunk.Chunk) (*chunk.Vec, error) {
+func (s *builtinArithmeticPlusRealSig) vecEvalReal(chk *chunk.Chunk, buf *chunk.Vec) (*chunk.Vec, error) {
 	if nullLoopOptimize {
-		return s.vecEvalReal1(chk)
+		return s.vecEvalReal1(chk, buf)
 	}
-	return s.vecEvalReal2(chk)
+	return s.vecEvalReal2(chk, buf)
 }
 
-func (s *builtinArithmeticPlusRealSig) vecEvalReal1(chk *chunk.Chunk) (*chunk.Vec, error) {
-	v1, err := s.args[0].VecEvalReal(s.ctx, chk)
+func (s *builtinArithmeticPlusRealSig) vecEvalReal1(chk *chunk.Chunk, buf *chunk.Vec) (*chunk.Vec, error) {
+	v1, err := s.args[0].VecEvalReal(s.ctx, chk, buf)
 	if err != nil {
 		return nil, err
 	}
-	v2, err := s.args[1].VecEvalReal(s.ctx, chk)
+	v2, err := s.args[1].VecEvalReal(s.ctx, chk, buf)
 	if err != nil {
 		return nil, err
 	}
@@ -328,12 +328,12 @@ func (s *builtinArithmeticPlusRealSig) vecEvalReal1(chk *chunk.Chunk) (*chunk.Ve
 	return chunk.ConstructVec(data, nulls, chunk.VecTypeFloat64), nil
 }
 
-func (s *builtinArithmeticPlusRealSig) vecEvalReal2(chk *chunk.Chunk) (*chunk.Vec, error) {
-	v1, err := s.args[0].VecEvalReal(s.ctx, chk)
+func (s *builtinArithmeticPlusRealSig) vecEvalReal2(chk *chunk.Chunk, buf *chunk.Vec) (*chunk.Vec, error) {
+	v1, err := s.args[0].VecEvalReal(s.ctx, chk, buf)
 	if err != nil {
 		return nil, err
 	}
-	v2, err := s.args[1].VecEvalReal(s.ctx, chk)
+	v2, err := s.args[1].VecEvalReal(s.ctx, chk, buf)
 	if err != nil {
 		return nil, err
 	}

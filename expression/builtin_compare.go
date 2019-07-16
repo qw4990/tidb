@@ -1652,13 +1652,13 @@ func (b *builtinGTIntSig) evalInt(row chunk.Row) (val int64, isNull bool, err er
 	return resOfGT(CompareInt(b.ctx, b.args[0], b.args[1], row, row))
 }
 
-func (b *builtinGTIntSig) vecEvalInt(chk *chunk.Chunk) (*chunk.Vec, error) {
+func (b *builtinGTIntSig) vecEvalInt(chk *chunk.Chunk, buf *chunk.Vec) (*chunk.Vec, error) {
 	data := make([]int64, chk.MaxIdx())
-	v1, err := b.args[0].VecEvalInt(b.ctx, chk)
+	v1, err := b.args[0].VecEvalInt(b.ctx, chk, buf)
 	if err != nil {
 		return nil, err
 	}
-	v2, err := b.args[1].VecEvalInt(b.ctx, chk)
+	v2, err := b.args[1].VecEvalInt(b.ctx, chk, buf)
 	if err != nil {
 		return nil, err
 	}

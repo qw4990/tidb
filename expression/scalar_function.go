@@ -192,12 +192,12 @@ func (sf *ScalarFunction) Decorrelate(schema *Schema) Expression {
 	return sf
 }
 
-func (sf *ScalarFunction) VecEvalInt(ctx sessionctx.Context, chk *chunk.Chunk) (vec *chunk.Vec, err error) {
-	return sf.Function.vecEvalInt(chk)
+func (sf *ScalarFunction) VecEvalInt(ctx sessionctx.Context, chk *chunk.Chunk, buf *chunk.Vec) (vec *chunk.Vec, err error) {
+	return sf.Function.vecEvalInt(chk, buf)
 }
 
-func (sf *ScalarFunction) VecEvalReal(ctx sessionctx.Context, chk *chunk.Chunk) (vec *chunk.Vec, err error) {
-	return sf.Function.vecEvalReal(chk)
+func (sf *ScalarFunction) VecEvalReal(ctx sessionctx.Context, chk *chunk.Chunk, buf *chunk.Vec) (vec *chunk.Vec, err error) {
+	return sf.Function.vecEvalReal(chk, buf)
 }
 
 // Eval implements Expression interface.

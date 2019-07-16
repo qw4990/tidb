@@ -267,7 +267,7 @@ func VectorizedFilter2(ctx sessionctx.Context, filters []Expression, chk *chunk.
 	orgSel := chk.CopySel()
 	for _, f := range filters {
 		// TODO: VecEvalBool?
-		selected, err := f.VecEvalInt(ctx, chk)
+		selected, err := f.VecEvalInt(ctx, chk, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -283,7 +283,7 @@ func VectorizedFilter2(ctx sessionctx.Context, filters []Expression, chk *chunk.
 func VectorizedFilter3(ctx sessionctx.Context, filters []Expression, chk *chunk.Chunk) error {
 	for _, f := range filters {
 		// TODO: VecEvalBool?
-		selected, err := f.VecEvalInt(ctx, chk)
+		selected, err := f.VecEvalInt(ctx, chk, nil)
 		if err != nil {
 			return err
 		}
