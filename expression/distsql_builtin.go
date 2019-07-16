@@ -259,7 +259,7 @@ func getSignatureByPB(ctx sessionctx.Context, sigCode tipb.ScalarFuncSig, tp *ti
 	case tipb.ScalarFuncSig_PlusDecimal:
 		f = &builtinArithmeticPlusDecimalSig{base}
 	case tipb.ScalarFuncSig_PlusReal:
-		f = &builtinArithmeticPlusRealSig{base}
+		f = &builtinArithmeticPlusRealSig{base, nil, nil}
 	case tipb.ScalarFuncSig_MinusInt:
 		f = &builtinArithmeticMinusIntSig{base}
 	case tipb.ScalarFuncSig_MinusDecimal:
@@ -277,7 +277,7 @@ func getSignatureByPB(ctx sessionctx.Context, sigCode tipb.ScalarFuncSig, tp *ti
 	case tipb.ScalarFuncSig_DivideReal:
 		f = &builtinArithmeticDivideRealSig{base}
 	case tipb.ScalarFuncSig_AbsInt:
-		f = &builtinAbsIntSig{base}
+		f = &builtinAbsIntSig{base, nil}
 	case tipb.ScalarFuncSig_AbsUInt:
 		f = &builtinAbsUIntSig{base}
 	case tipb.ScalarFuncSig_AbsReal:

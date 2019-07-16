@@ -2,12 +2,12 @@ package expression
 
 import (
 	"fmt"
-	"github.com/pingcap/tidb/sessionctx"
 	"math/rand"
 	"testing"
 
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/parser/mysql"
+	"github.com/pingcap/tidb/sessionctx"
 	"github.com/pingcap/tidb/types"
 	"github.com/pingcap/tidb/util/chunk"
 	"github.com/pingcap/tidb/util/mock"
@@ -172,9 +172,10 @@ func BenchmarkPlusRealVecWithoutLoopOpt(b *testing.B) {
 		b.Fatal(err)
 	}
 
+	var buf *chunk.Vec
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		f.VecEvalReal(ctx, chk, nil)
+		buf, _ = f.VecEvalReal(ctx, chk, buf)
 	}
 }
 
@@ -188,9 +189,10 @@ func BenchmarkPlusRealVec(b *testing.B) {
 		b.Fatal(err)
 	}
 
+	var buf *chunk.Vec
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		f.VecEvalReal(ctx, chk, nil)
+		buf, _ = f.VecEvalReal(ctx, chk, buf)
 	}
 }
 

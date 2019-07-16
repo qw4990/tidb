@@ -156,7 +156,7 @@ func (c *arithmeticPlusFunctionClass) getFunction(ctx sessionctx.Context, args [
 	if lhsEvalTp == types.ETReal || rhsEvalTp == types.ETReal {
 		bf := newBaseBuiltinFuncWithTp(ctx, args, types.ETReal, types.ETReal, types.ETReal)
 		setFlenDecimal4RealOrDecimal(bf.tp, args[0].GetType(), args[1].GetType(), true)
-		sig := &builtinArithmeticPlusRealSig{bf}
+		sig := &builtinArithmeticPlusRealSig{bf, nil, nil}
 		sig.setPbCode(tipb.ScalarFuncSig_PlusReal)
 		return sig, nil
 	} else if lhsEvalTp == types.ETDecimal || rhsEvalTp == types.ETDecimal {
@@ -258,6 +258,9 @@ func (s *builtinArithmeticPlusDecimalSig) evalDecimal(row chunk.Row) (*types.MyD
 
 type builtinArithmeticPlusRealSig struct {
 	baseBuiltinFunc
+
+	buf1 *chunk.Vec
+	buf2 *chunk.Vec
 }
 
 func (s *builtinArithmeticPlusRealSig) Clone() builtinFunc {
@@ -293,22 +296,30 @@ func (s *builtinArithmeticPlusRealSig) vecEvalReal(chk *chunk.Chunk, buf *chunk.
 }
 
 func (s *builtinArithmeticPlusRealSig) vecEvalReal1(chk *chunk.Chunk, buf *chunk.Vec) (*chunk.Vec, error) {
-	v1, err := s.args[0].VecEvalReal(s.ctx, chk, buf)
+	var err error
+	s.buf1, err = s.args[0].VecEvalReal(s.ctx, chk, s.buf1)
 	if err != nil {
 		return nil, err
 	}
-	v2, err := s.args[1].VecEvalReal(s.ctx, chk, buf)
+	s.buf2, err = s.args[1].VecEvalReal(s.ctx, chk, s.buf2)
 	if err != nil {
 		return nil, err
 	}
 
-	data := make([]float64, chk.Capacity())
-	var nulls []bool
+	v1 := s.buf1
+	v2 := s.buf2
+	if buf == nil {
+		n := chk.Capacity()
+		buf = chunk.ConstructVec(make([]float64, n), make([]bool, n), chunk.VecTypeFloat64)
+	}
+
+	data := buf.Float64()
+	hasNull := false
 	if v1.MayHasNull() || v2.MayHasNull() {
-		nulls = make([]bool, chk.Capacity())
+		hasNull = true
 	}
 
-	if nulls == nil {
+	if !hasNull {
 		if sel := chk.Selection(); sel != nil {
 			panic("TODO")
 		} else {
@@ -325,21 +336,29 @@ func (s *builtinArithmeticPlusRealSig) vecEvalReal1(chk *chunk.Chunk, buf *chunk
 		panic("TODO")
 	}
 
-	return chunk.ConstructVec(data, nulls, chunk.VecTypeFloat64), nil
+	return buf, nil
 }
 
 func (s *builtinArithmeticPlusRealSig) vecEvalReal2(chk *chunk.Chunk, buf *chunk.Vec) (*chunk.Vec, error) {
-	v1, err := s.args[0].VecEvalReal(s.ctx, chk, buf)
+	var err error
+	s.buf1, err = s.args[0].VecEvalReal(s.ctx, chk, s.buf1)
 	if err != nil {
 		return nil, err
 	}
-	v2, err := s.args[1].VecEvalReal(s.ctx, chk, buf)
+	s.buf2, err = s.args[1].VecEvalReal(s.ctx, chk, s.buf2)
 	if err != nil {
 		return nil, err
 	}
 
-	data := make([]float64, chk.Capacity())
-	nulls := make([]bool, chk.Capacity())
+	v1 := s.buf1
+	v2 := s.buf2
+	if buf == nil {
+		n := chk.Capacity()
+		buf = chunk.ConstructVec(make([]float64, n), make([]bool, n), chunk.VecTypeFloat64)
+	}
+
+	data := buf.Float64()
+	nulls := buf.Nulls()
 
 	if sel := chk.Selection(); sel != nil {
 		panic("TODO")
@@ -365,7 +384,7 @@ func (s *builtinArithmeticPlusRealSig) vecEvalReal2(chk *chunk.Chunk, buf *chunk
 		}
 	}
 
-	return chunk.ConstructVec(data, nulls, chunk.VecTypeFloat64), nil
+	return buf, nil
 }
 
 type arithmeticMinusFunctionClass struct {

@@ -144,7 +144,7 @@ func (c *absFunctionClass) getFunction(ctx sessionctx.Context, args []Expression
 			sig = &builtinAbsUIntSig{bf}
 			sig.setPbCode(tipb.ScalarFuncSig_AbsUInt)
 		} else {
-			sig = &builtinAbsIntSig{bf}
+			sig = &builtinAbsIntSig{bf, nil}
 			sig.setPbCode(tipb.ScalarFuncSig_AbsInt)
 		}
 	case types.ETDecimal:
@@ -181,6 +181,8 @@ func (b *builtinAbsRealSig) evalReal(row chunk.Row) (float64, bool, error) {
 
 type builtinAbsIntSig struct {
 	baseBuiltinFunc
+
+	vecBuf *chunk.Vec
 }
 
 func (b *builtinAbsIntSig) Clone() builtinFunc {
@@ -206,11 +208,12 @@ func (b *builtinAbsIntSig) evalInt(row chunk.Row) (int64, bool, error) {
 }
 
 func (b *builtinAbsIntSig) vecEvalInt(chk *chunk.Chunk, buf *chunk.Vec) (*chunk.Vec, error) {
-	vs, err := b.args[0].VecEvalInt(b.ctx, chk, nil)
+	var err error
+	b.vecBuf, err = b.args[0].VecEvalInt(b.ctx, chk, b.vecBuf)
 	if err != nil {
 		return nil, err
 	}
-	vsData := vs.Int64()
+	vsData := b.vecBuf.Int64()
 
 	if buf == nil {
 		n := chk.Capacity()
@@ -219,8 +222,8 @@ func (b *builtinAbsIntSig) vecEvalInt(chk *chunk.Chunk, buf *chunk.Vec) (*chunk.
 	data := buf.Int64()
 	nulls := buf.Nulls()
 
-	if vs.MayHasNull() {
-		vsNulls := vs.Nulls()
+	if b.vecBuf.MayHasNull() {
+		vsNulls := b.vecBuf.Nulls()
 		if sel := chk.Selection(); sel != nil {
 			for _, i := range sel {
 				if vsNulls[i] {
