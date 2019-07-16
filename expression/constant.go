@@ -54,6 +54,8 @@ type Constant struct {
 	RetType      *types.FieldType
 	DeferredExpr Expression // parameter getter expression
 	hashcode     []byte
+
+	vecData interface{}
 }
 
 // String implements fmt.Stringer interface.
@@ -89,12 +91,15 @@ func (c *Constant) GetType() *types.FieldType {
 }
 
 func (c *Constant) VecEvalInt(ctx sessionctx.Context, chk *chunk.Chunk) (vec *chunk.Vec, err error) {
-	data := make([]int64, chk.MaxIdx())
-	n := c.Value.GetInt64()
-	for i := range data {
-		data[i] = n
+	if c.vecData == nil {
+		data := make([]int64, chk.Capacity())
+		n := c.Value.GetInt64()
+		for i := range data {
+			data[i] = n
+		}
+		c.vecData = data
 	}
-	return chunk.ConstructVec(data, nil, chunk.VecTypeInt64), nil
+	return chunk.ConstructVec(c.vecData.([]int64), nil, chunk.VecTypeInt64), nil
 }
 
 func (c *Constant) VecEvalReal(ctx sessionctx.Context, chk *chunk.Chunk) (vec *chunk.Vec, err error) {
