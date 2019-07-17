@@ -15,6 +15,8 @@ package chunk
 
 import (
 	"github.com/pingcap/check"
+	"github.com/pingcap/parser/mysql"
+	"github.com/pingcap/tidb/types"
 )
 
 func equalColumn(c1, c2 *Column) bool {
@@ -66,4 +68,20 @@ func (s *testChunkSuite) TestLargeStringColumnOffset(c *check.C) {
 	col := newVarLenColumn(numRows, nil)
 	col.offsets[0] = 6 << 30
 	c.Check(col.offsets[0], check.Equals, int64(6<<30)) // test no overflow.
+}
+
+func (s *testChunkSuite) TestAppendInt64s(c *check.C) {
+	col1 := NewColumn(*types.NewFieldType(mysql.TypeLonglong), 1024, 1024)
+	col2 := NewColumn(*types.NewFieldType(mysql.TypeLonglong), 0, 1024)
+
+	i64s := col1.Int64s()
+	for i := 0; i < 1024; i++ {
+		i64s[i] = int64(i)
+		col2.AppendInt64(int64(i))
+	}
+
+	for i := 0; i < 1024; i++ {
+		c.Assert(col1.GetInt64(i), check.Equals, int64(i))
+		c.Assert(col2.GetInt64(i), check.Equals, int64(i))
+	}
 }
