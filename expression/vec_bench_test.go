@@ -12,7 +12,7 @@ import (
 func genAbsCol(nullRate uint) ([]Expression, *chunk.Chunk) {
 	ft := []*types.FieldType{types.NewFieldType(mysql.TypeLonglong)}
 	chk := chunk.New(ft, 1024, 1024)
-	for i := 0; i < 1024; i ++ {
+	for i := 0; i < 1024; i++ {
 		if nullRate > 0 && uint(i)%nullRate == 0 {
 			chk.AppendNull(0)
 			continue
