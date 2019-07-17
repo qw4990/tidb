@@ -44,9 +44,7 @@ func (c *Column) AppendJSON(j json.BinaryJSON) {
 	c.finishAppendVar()
 }
 
-type ColSize uint16
-
-type Sel []ColSize
+type Sel []uint16
 
 type Column struct {
 	length     int
@@ -59,7 +57,7 @@ type Column struct {
 	ft types.FieldType
 }
 
-func NewColumn(ft types.FieldType, length, cap ColSize) *Column {
+func NewColumn(ft types.FieldType, length, cap uint16) *Column {
 	c := new(Column)
 	c.length = int(length)
 	c.nullCount = 0
@@ -111,8 +109,12 @@ func (c *Column) isNull(rowIdx int) bool {
 	return nullByte&(1<<(uint(rowIdx)&7)) == 0
 }
 
-func (c *Column) IsNull(row ColSize) bool {
+func (c *Column) IsNull(row uint16) bool {
 	return c.nullBitmap[row>>3]&(1<<(row&7)) == 0
+}
+
+func (c *Column) SetNull(row uint16) {
+	c.nullBitmap[row>>3] &= 7 ^ (1 << (row & 7))
 }
 
 func (c *Column) HasNull() bool {
@@ -196,6 +198,20 @@ func (c *Column) Int64s() []int64 {
 	s.Len = c.length
 	s.Cap = h.Cap / 8
 	return res
+}
+
+func (c *Column) Float64s() []float64 {
+	h := (*reflect.SliceHeader)(unsafe.Pointer(&c.data))
+	var res []float64
+	s := (*reflect.SliceHeader)(unsafe.Pointer(&res))
+	s.Data = h.Data
+	s.Len = c.length
+	s.Cap = h.Cap / 8
+	return res
+}
+
+func (c *Column) Length() uint16 {
+	return uint16(c.length)
 }
 
 func (c *Column) GetInt64(rowID int) int64 {

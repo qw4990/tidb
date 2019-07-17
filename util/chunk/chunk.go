@@ -567,13 +567,13 @@ func (c *Chunk) Selection() Sel {
 
 func (c *Chunk) FilterSel(selected []int64) {
 	if c.sel == nil {
-		c.sel = make([]ColSize, len(selected))
+		c.sel = make([]uint16, len(selected))
 	}
 
 	c.sel = c.sel[:0]
 	for i, v := range selected {
 		if v == 1 {
-			c.sel = append(c.sel, ColSize(i))
+			c.sel = append(c.sel, uint16(i))
 		}
 	}
 }

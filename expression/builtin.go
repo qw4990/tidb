@@ -35,6 +35,9 @@ type baseBuiltinFunc struct {
 	ctx    sessionctx.Context
 	tp     *types.FieldType
 	pbCode tipb.ScalarFuncSig
+
+	// fields for vectorized execution
+	buf []*chunk.Column
 }
 
 func (b *baseBuiltinFunc) PbCode() tipb.ScalarFuncSig {

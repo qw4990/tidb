@@ -281,6 +281,74 @@ func (s *builtinArithmeticPlusRealSig) evalReal(row chunk.Row) (float64, bool, e
 	return a + b, false, nil
 }
 
+var (
+	nullLoopOptimize = false
+)
+
+func (s *builtinArithmeticPlusRealSig) vecEval(sel chunk.Sel, result *chunk.Column) error {
+	if nullLoopOptimize {
+		return s.vecEvalHasOpt(sel, result)
+	}
+	return s.vecEvalNoOpt(sel, result)
+}
+
+func (s *builtinArithmeticPlusRealSig) vecEvalHasOpt(sel chunk.Sel, result *chunk.Column) error {
+	if len(s.buf) == 0 {
+		s.buf = append(s.buf, chunk.NewColumn(*result.Type(), result.Length(), result.Length()))
+	}
+	if err := s.args[0].VecEval(s.ctx, sel, result); err != nil {
+		return err
+	}
+	if err := s.args[1].VecEval(s.ctx, sel, s.buf[0]); err != nil {
+		return err
+	}
+
+	f64s1 := result.Float64s()
+	f64s2 := s.buf[0].Float64s()
+	if result.HasNull() || s.buf[0].HasNull() {
+		panic("TODO")
+	} else {
+		if sel != nil {
+			panic("TODO")
+		} else {
+			for i := range f64s1 {
+				f64s1[i] += f64s2[i]
+			}
+		}
+	}
+	return nil
+}
+
+func (s *builtinArithmeticPlusRealSig) vecEvalNoOpt(sel chunk.Sel, result *chunk.Column) error {
+	if len(s.buf) == 0 {
+		s.buf = append(s.buf, chunk.NewColumn(*result.Type(), result.Length(), result.Length()))
+	}
+	if err := s.args[0].VecEval(s.ctx, sel, result); err != nil {
+		return err
+	}
+	if err := s.args[1].VecEval(s.ctx, sel, s.buf[0]); err != nil {
+		return err
+	}
+
+	v2 := s.buf[0]
+	f64s1 := result.Float64s()
+	f64s2 := v2.Float64s()
+	if sel != nil {
+		panic("TODO")
+	} else {
+		for i := range f64s1 {
+			if result.IsNull(uint16(i)) {
+				continue
+			} else if v2.IsNull(uint16(i)) {
+				result.SetNull(uint16(i))
+			} else {
+				f64s1[i] += f64s2[i]
+			}
+		}
+	}
+	return nil
+}
+
 type arithmeticMinusFunctionClass struct {
 	baseFunctionClass
 }
