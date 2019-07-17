@@ -313,6 +313,32 @@ func (b *builtinConcatSig) evalString(row chunk.Row) (d string, isNull bool, err
 	return string(s), false, nil
 }
 
+func (b *builtinConcatSig) vecEval(sel chunk.Sel, result *chunk.Column) error {
+	if len(b.buf) == 0 {
+		for range b.args {
+			b.buf = append(b.buf, chunk.NewColumn(*result.Type(), result.Cap(), result.Cap()))
+		}
+	}
+
+	for i, a := range b.args {
+		if err := a.VecEval(b.ctx, sel, b.buf[i]); err != nil {
+			return err
+		}
+	}
+
+	result.Reset()
+	row := make([]byte, 0, 32)
+	for i := uint16(0); i < b.buf[0].Length(); i++ {
+		row = row[:0]
+		for _, c := range b.buf {
+			str := c.GetString(int(i))
+			row = append(row, str...)
+		}
+		result.AppendString(string(hack.String(row)))
+	}
+	return nil
+}
+
 type concatWSFunctionClass struct {
 	baseFunctionClass
 }

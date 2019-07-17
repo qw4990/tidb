@@ -203,3 +203,62 @@ func BenchmarkGTIntVec(b *testing.B) {
 		f.VecEval(ctx, nil, result)
 	}
 }
+
+func genConcatCols() ([]Expression, *chunk.Chunk) {
+	st := types.NewFieldType(mysql.TypeVarString)
+	nCols := 3
+	str := "PingCAP"
+	st.Flen = len(str)
+	var ft []*types.FieldType
+	for i := 0; i < nCols; i++ {
+		ft = append(ft, st)
+	}
+	chk := chunk.New(ft, 1024, 1024)
+	for i := 0; i < 1024; i++ {
+		for c := 0; c < nCols; c++ {
+			chk.AppendString(c, str)
+		}
+	}
+
+	var exprs []Expression
+	for c := 0; c < nCols; c++ {
+		exprs = append(exprs, &Column{
+			RetType: st,
+			Index:   c,
+			colData: chk.Column(c),
+		})
+	}
+	return exprs, chk
+}
+
+func BenchmarkConcatStr(b *testing.B) {
+	exprs, chk := genConcatCols()
+	ctx := mock.NewContext()
+	f, err := NewFunction(ctx, ast.Concat, exprs[0].GetType(), exprs...)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		it := chunk.NewIterator4Chunk(chk)
+		for r := it.Begin(); r != it.End(); r = it.Next() {
+			f.EvalString(ctx, r)
+		}
+	}
+}
+
+func BenchmarkConcatStrVec(b *testing.B) {
+	exprs, _ := genConcatCols()
+	ctx := mock.NewContext()
+	f, err := NewFunction(ctx, ast.Concat, exprs[0].GetType(), exprs...)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	result := chunk.NewColumn(*exprs[0].GetType(), 1024, 1024)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		f.VecEval(ctx, nil, result)
+	}
+}

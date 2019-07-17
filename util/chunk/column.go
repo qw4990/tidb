@@ -14,6 +14,7 @@
 package chunk
 
 import (
+	"github.com/pingcap/tidb/util/hack"
 	"reflect"
 	"unsafe"
 
@@ -93,7 +94,7 @@ func (c *Column) isFixed() bool {
 	return c.elemBuf != nil
 }
 
-func (c *Column) reset() {
+func (c *Column) Reset() {
 	c.length = 0
 	c.nullCount = 0
 	c.nullBitmap = c.nullBitmap[:0]
@@ -214,8 +215,17 @@ func (c *Column) Length() uint16 {
 	return uint16(c.length)
 }
 
+func (c *Column) Cap() uint16 {
+	return uint16(cap(c.nullBitmap) * 8)
+}
+
 func (c *Column) GetInt64(rowID int) int64 {
 	return *(*int64)(unsafe.Pointer(&c.data[rowID*8]))
+}
+
+func (c *Column) GetString(rowID int) string {
+	start, end := c.offsets[rowID], c.offsets[rowID+1]
+	return string(hack.String(c.data[start:end]))
 }
 
 func (c *Column) AppendUint64(u uint64) {
