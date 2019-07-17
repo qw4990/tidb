@@ -557,14 +557,17 @@ func (c *Chunk) AppendDatum(colIdx int, d *types.Datum) {
 	}
 }
 
+// SetSelection ...
 func (c *Chunk) SetSelection(sel Sel) {
 	c.sel = sel
 }
 
+// Selection ...
 func (c *Chunk) Selection() Sel {
 	return c.sel
 }
 
+// FilterSel ...
 func (c *Chunk) FilterSel(selected []int64) {
 	if c.sel == nil {
 		c.sel = make([]uint16, len(selected))
@@ -578,6 +581,7 @@ func (c *Chunk) FilterSel(selected []int64) {
 	}
 }
 
+// CopySel ...
 func (c *Chunk) CopySel() Sel {
 	if c.sel == nil {
 		return nil
@@ -587,6 +591,7 @@ func (c *Chunk) CopySel() Sel {
 	return sel
 }
 
+// Column ...
 func (c *Chunk) Column(i int) *Column {
 	return c.columns[i]
 }

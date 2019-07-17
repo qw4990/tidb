@@ -110,6 +110,7 @@ func (c *Constant) Eval(_ chunk.Row) (types.Datum, error) {
 	return c.Value, nil
 }
 
+// VecEval ...
 func (c *Constant) VecEval(ctx sessionctx.Context, sel chunk.Sel, result *chunk.Column) error {
 	t := result.Type()
 	switch t.Tp {

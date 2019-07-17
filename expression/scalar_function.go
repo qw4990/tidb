@@ -192,6 +192,7 @@ func (sf *ScalarFunction) Decorrelate(schema *Schema) Expression {
 	return sf
 }
 
+// VecEval ...
 func (sf *ScalarFunction) VecEval(ctx sessionctx.Context, sel chunk.Sel, result *chunk.Column) error {
 	return sf.Function.vecEval(sel, result)
 }

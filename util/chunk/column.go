@@ -22,10 +22,12 @@ import (
 	"github.com/pingcap/tidb/types/json"
 )
 
+// AppendDuration ...
 func (c *Column) AppendDuration(dur types.Duration) {
 	c.AppendInt64(int64(dur.Duration))
 }
 
+// AppendMyDecimal ...
 func (c *Column) AppendMyDecimal(dec *types.MyDecimal) {
 	*(*types.MyDecimal)(unsafe.Pointer(&c.elemBuf[0])) = *dec
 	c.finishAppendFixed()
@@ -39,14 +41,17 @@ func (c *Column) appendNameValue(name string, val uint64) {
 	c.finishAppendVar()
 }
 
+// AppendJSON ...
 func (c *Column) AppendJSON(j json.BinaryJSON) {
 	c.data = append(c.data, j.TypeCode)
 	c.data = append(c.data, j.Value...)
 	c.finishAppendVar()
 }
 
+// Sel ...
 type Sel []uint16
 
+// Column ...
 type Column struct {
 	length     int
 	nullCount  int
@@ -58,6 +63,7 @@ type Column struct {
 	ft types.FieldType
 }
 
+// NewColumn ...
 func NewColumn(ft types.FieldType, length, cap uint16) *Column {
 	c := new(Column)
 	c.length = int(length)
@@ -77,6 +83,7 @@ func NewColumn(ft types.FieldType, length, cap uint16) *Column {
 	return c
 }
 
+// CopyTo ...
 func (c *Column) CopyTo(result *Column) {
 	result.length = c.length
 	result.nullCount = c.nullCount
@@ -86,6 +93,7 @@ func (c *Column) CopyTo(result *Column) {
 	result.elemBuf = append(result.elemBuf[:0], c.elemBuf...)
 }
 
+// Type ...
 func (c *Column) Type() *types.FieldType {
 	return &c.ft
 }
@@ -94,6 +102,7 @@ func (c *Column) isFixed() bool {
 	return c.elemBuf != nil
 }
 
+// Reset ...
 func (c *Column) Reset() {
 	c.length = 0
 	c.nullCount = 0
@@ -110,14 +119,17 @@ func (c *Column) isNull(rowIdx int) bool {
 	return nullByte&(1<<(uint(rowIdx)&7)) == 0
 }
 
+// IsNull ...
 func (c *Column) IsNull(row uint16) bool {
 	return c.nullBitmap[row>>3]&(1<<(row&7)) == 0
 }
 
+// SetNull ...
 func (c *Column) SetNull(row uint16) {
 	c.nullBitmap[row>>3] &= 7 ^ (1 << (row & 7))
 }
 
+// HasNull ...
 func (c *Column) HasNull() bool {
 	return c.nullCount > 0
 }
@@ -170,6 +182,7 @@ func (c *Column) appendMultiSameNullBitmap(notNull bool, num int) {
 	c.nullBitmap[len(c.nullBitmap)-1] &= bitMask
 }
 
+// AppendNull ...
 func (c *Column) AppendNull() {
 	c.appendNullBitmap(false)
 	if c.isFixed() {
@@ -186,11 +199,13 @@ func (c *Column) finishAppendFixed() {
 	c.length++
 }
 
+// AppendInt64 ...
 func (c *Column) AppendInt64(i int64) {
 	*(*int64)(unsafe.Pointer(&c.elemBuf[0])) = i
 	c.finishAppendFixed()
 }
 
+// Int64s ...
 func (c *Column) Int64s() []int64 {
 	h := (*reflect.SliceHeader)(unsafe.Pointer(&c.data))
 	var res []int64
@@ -201,6 +216,7 @@ func (c *Column) Int64s() []int64 {
 	return res
 }
 
+// Float64s ...
 func (c *Column) Float64s() []float64 {
 	h := (*reflect.SliceHeader)(unsafe.Pointer(&c.data))
 	var res []float64
@@ -211,33 +227,40 @@ func (c *Column) Float64s() []float64 {
 	return res
 }
 
+// Length ...
 func (c *Column) Length() uint16 {
 	return uint16(c.length)
 }
 
+// Cap ...
 func (c *Column) Cap() uint16 {
 	return uint16(cap(c.nullBitmap) * 8)
 }
 
+// GetInt64 ...
 func (c *Column) GetInt64(rowID int) int64 {
 	return *(*int64)(unsafe.Pointer(&c.data[rowID*8]))
 }
 
+// GetString ...
 func (c *Column) GetString(rowID int) string {
 	start, end := c.offsets[rowID], c.offsets[rowID+1]
 	return string(hack.String(c.data[start:end]))
 }
 
+// AppendUint64 ...
 func (c *Column) AppendUint64(u uint64) {
 	*(*uint64)(unsafe.Pointer(&c.elemBuf[0])) = u
 	c.finishAppendFixed()
 }
 
+// AppendFloat32 ...
 func (c *Column) AppendFloat32(f float32) {
 	*(*float32)(unsafe.Pointer(&c.elemBuf[0])) = f
 	c.finishAppendFixed()
 }
 
+// AppendFloat64 ...
 func (c *Column) AppendFloat64(f float64) {
 	*(*float64)(unsafe.Pointer(&c.elemBuf[0])) = f
 	c.finishAppendFixed()
@@ -249,16 +272,19 @@ func (c *Column) finishAppendVar() {
 	c.length++
 }
 
+// AppendString ...
 func (c *Column) AppendString(str string) {
 	c.data = append(c.data, str...)
 	c.finishAppendVar()
 }
 
+// AppendBytes ...
 func (c *Column) AppendBytes(b []byte) {
 	c.data = append(c.data, b...)
 	c.finishAppendVar()
 }
 
+// AppendTime ...
 func (c *Column) AppendTime(t types.Time) {
 	writeTime(c.elemBuf, t)
 	c.finishAppendFixed()
