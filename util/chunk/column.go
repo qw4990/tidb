@@ -111,6 +111,10 @@ func (c *Column) isNull(rowIdx int) bool {
 	return nullByte&(1<<(uint(rowIdx)&7)) == 0
 }
 
+func (c *Column) IsNull(row ColSize) bool {
+	return c.nullBitmap[row>>3]&(1<<(row&7)) == 0
+}
+
 func (c *Column) HasNull() bool {
 	return c.nullCount > 0
 }
@@ -163,7 +167,7 @@ func (c *Column) appendMultiSameNullBitmap(notNull bool, num int) {
 	c.nullBitmap[len(c.nullBitmap)-1] &= bitMask
 }
 
-func (c *Column) appendNull() {
+func (c *Column) AppendNull() {
 	c.appendNullBitmap(false)
 	if c.isFixed() {
 		c.data = append(c.data, c.elemBuf...)

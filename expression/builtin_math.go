@@ -209,11 +209,22 @@ func (b *builtinAbsIntSig) vecEval(sel chunk.Sel, result *chunk.Column) error {
 	if err := b.args[0].VecEval(b.ctx, sel, result); err != nil {
 		return err
 	}
-
+	i64s := result.Int64s()
 	if result.HasNull() {
-		panic("TODO")
+		if sel != nil {
+			for _, i := range sel {
+				if !result.IsNull(chunk.ColSize(i)) && i64s[i] < 0 {
+					i64s[i] = -i64s[i]
+				}
+			}
+		} else {
+			for i := range i64s {
+				if !result.IsNull(chunk.ColSize(i)) && i64s[i] < 0 {
+					i64s[i] = -i64s[i]
+				}
+			}
+		}
 	} else {
-		i64s := result.Int64s()
 		if sel != nil {
 			for _, i := range sel {
 				if i64s[i] < 0 {
