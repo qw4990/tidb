@@ -46,6 +46,8 @@ func (c *Column) AppendJSON(j json.BinaryJSON) {
 
 type ColSize uint16
 
+type Sel []ColSize
+
 type Column struct {
 	length     int
 	nullCount  int
@@ -53,6 +55,8 @@ type Column struct {
 	offsets    []int64
 	data       []byte
 	elemBuf    []byte
+
+	ft types.FieldType
 }
 
 func NewColumn(ft types.FieldType, length, cap ColSize) *Column {
@@ -60,6 +64,7 @@ func NewColumn(ft types.FieldType, length, cap ColSize) *Column {
 	c.length = int(length)
 	c.nullCount = 0
 	c.nullBitmap = make([]byte, (cap+7)>>3)
+	c.ft = ft
 	typeSize := getFixedLen(&ft)
 	if typeSize == varElemLen {
 		c.offsets = make([]int64, length, cap)
@@ -71,6 +76,19 @@ func NewColumn(ft types.FieldType, length, cap ColSize) *Column {
 		c.elemBuf = make([]byte, typeSize)
 	}
 	return c
+}
+
+func (c *Column) CopyTo(result *Column) {
+	result.length = c.length
+	result.nullCount = c.nullCount
+	result.nullBitmap = append(result.nullBitmap[:0], c.nullBitmap...)
+	result.offsets = append(result.offsets[:0], c.offsets...)
+	result.data = append(result.data[:0], c.data...)
+	result.elemBuf = append(result.elemBuf[:0], c.elemBuf...)
+}
+
+func (c *Column) Type() *types.FieldType {
+	return &c.ft
 }
 
 func (c *Column) isFixed() bool {

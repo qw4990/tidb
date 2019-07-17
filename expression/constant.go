@@ -110,6 +110,31 @@ func (c *Constant) Eval(_ chunk.Row) (types.Datum, error) {
 	return c.Value, nil
 }
 
+func (c *Constant) VecEval(ctx sessionctx.Context, sel chunk.Sel, result *chunk.Column) error {
+	t := result.Type()
+	switch t.Tp {
+	case mysql.TypeLonglong:
+		if mysql.HasUnsignedFlag(t.Flag) {
+			panic("TODO")
+		} else {
+			num := c.Value.GetInt64()
+			i64s := result.Int64s()
+			if sel == nil {
+				for i := range i64s {
+					i64s[i] = num
+				}
+			} else {
+				for _, i := range sel {
+					i64s[i] = num
+				}
+			}
+			return nil
+		}
+	default:
+		panic("TODO")
+	}
+}
+
 // EvalInt returns int representation of Constant.
 func (c *Constant) EvalInt(ctx sessionctx.Context, _ chunk.Row) (int64, bool, error) {
 	if c.DeferredExpr != nil {

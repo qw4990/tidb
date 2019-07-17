@@ -145,6 +145,10 @@ func (col *CorrelatedColumn) resolveIndices(_ *Schema) error {
 	return nil
 }
 
+func (col *CorrelatedColumn) VecEval(ctx sessionctx.Context, sel chunk.Sel, result *chunk.Column) error {
+	panic("TODO")
+}
+
 // Column represents a column.
 type Column struct {
 	OrigColName model.CIStr
@@ -171,6 +175,9 @@ type Column struct {
 	// InOperand indicates whether this column is the inner operand of column equal condition converted
 	// from `[not] in (subq)`.
 	InOperand bool
+
+	// fields for vectorized expressions
+	colData *chunk.Column
 }
 
 // Equal implements Expression interface.
@@ -206,6 +213,11 @@ func (col *Column) GetType() *types.FieldType {
 // Eval implements Expression interface.
 func (col *Column) Eval(row chunk.Row) (types.Datum, error) {
 	return row.GetDatum(col.Index, col.RetType), nil
+}
+
+func (col *Column) VecEval(ctx sessionctx.Context, sel chunk.Sel, result *chunk.Column) error {
+	col.colData.CopyTo(result)
+	return nil
 }
 
 // EvalInt returns int representation of Column.
