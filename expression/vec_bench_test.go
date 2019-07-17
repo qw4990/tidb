@@ -79,6 +79,47 @@ func BenchmarkAbsIntVecWithNull(b *testing.B) {
 	}
 }
 
+func TestAbsInt(t *testing.T) {
+	exprs, chk := genAbsCol(0)
+	ctx := mock.NewContext()
+	f, err := NewFunction(ctx, ast.Abs, exprs[0].GetType(), exprs...)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var results []int64
+	it := chunk.NewIterator4Chunk(chk)
+	for r := it.Begin(); r != it.End(); r = it.Next() {
+		v, _, err := f.EvalInt(ctx, r)
+		if err != nil {
+			t.Fatal(err)
+		}
+		results = append(results, v)
+	}
+
+	exprs, _ = genAbsCol(0)
+	f, err = NewFunction(ctx, ast.Abs, exprs[0].GetType(), exprs...)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	vecResult := chunk.NewColumn(*f.GetType(), 1024, 1024)
+	if err := f.VecEval(ctx, nil, vecResult); err != nil {
+		t.Fatal(err)
+	}
+
+	vecR := vecResult.Int64s()
+
+	if len(vecR) != len(results) {
+		t.Fatal()
+	}
+	for i := range vecR {
+		if vecR[i] != results[i] {
+			t.Fatal(i, vecR[i], results[i])
+		}
+	}
+}
+
 func genPlusCols() ([]Expression, *chunk.Chunk) {
 	ft := []*types.FieldType{types.NewFieldType(mysql.TypeDouble), types.NewFieldType(mysql.TypeDouble)}
 	chk := chunk.New(ft, 1024, 1024)
@@ -147,6 +188,47 @@ func BenchmarkPlusRealVec(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		f.VecEval(ctx, nil, result)
+	}
+}
+
+func TestPlusReal(t *testing.T) {
+	exprs, chk := genPlusCols()
+	ctx := mock.NewContext()
+	f, err := NewFunction(ctx, ast.Plus, exprs[0].GetType(), exprs...)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var results []float64
+	it := chunk.NewIterator4Chunk(chk)
+	for r := it.Begin(); r != it.End(); r = it.Next() {
+		v, _, err := f.EvalReal(ctx, r)
+		if err != nil {
+			t.Fatal(err)
+		}
+		results = append(results, v)
+	}
+
+	nullLoopOptimize = true
+	exprs, _ = genPlusCols()
+	f, err = NewFunction(ctx, ast.Plus, exprs[0].GetType(), exprs...)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	vecResult := chunk.NewColumn(*exprs[0].GetType(), 1024, 1024)
+	if err := f.VecEval(ctx, nil, vecResult); err != nil {
+		t.Fatal(err)
+	}
+
+	vecR := vecResult.Float64s()
+	if len(vecR) != len(results) {
+		t.Fatal()
+	}
+	for i := range vecR {
+		if vecR[i] != results[i] {
+			t.Fatal(i, vecR[i], results[i])
+		}
 	}
 }
 
@@ -260,5 +342,44 @@ func BenchmarkConcatStrVec(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		f.VecEval(ctx, nil, result)
+	}
+}
+
+func TestConcatStr(t *testing.T) {
+	exprs, chk := genConcatCols()
+	ctx := mock.NewContext()
+	f, err := NewFunction(ctx, ast.Concat, exprs[0].GetType(), exprs...)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var results []string
+	it := chunk.NewIterator4Chunk(chk)
+	for r := it.Begin(); r != it.End(); r = it.Next() {
+		v, _, err := f.EvalString(ctx, r)
+		if err != nil {
+			t.Fatal(err)
+		}
+		results = append(results, v)
+	}
+
+	exprs, _ = genConcatCols()
+	f, err = NewFunction(ctx, ast.Concat, exprs[0].GetType(), exprs...)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	vecResult := chunk.NewColumn(*exprs[0].GetType(), 1024, 1024)
+	if err := f.VecEval(ctx, nil, vecResult); err != nil {
+		t.Fatal(err)
+	}
+
+	if int(vecResult.Length()) != len(results) {
+		t.Fatal()
+	}
+	for i := 0; i < len(results); i++ {
+		if results[i] != vecResult.GetString(i) {
+			t.Fatal()
+		}
 	}
 }
