@@ -38,16 +38,13 @@ const (
 // EvalAstExpr evaluates ast expression directly.
 var EvalAstExpr func(ctx sessionctx.Context, expr ast.ExprNode) (types.Datum, error)
 
-type VecExpression interface {
-	VecEval(ctx sessionctx.Context, sel chunk.Sel, result *chunk.Column) error
-}
-
 // Expression represents all scalar expression in SQL.
 type Expression interface {
 	fmt.Stringer
 	goJSON.Marshaler
 
-	VecExpression
+	// VecEval ...
+	VecEval(ctx sessionctx.Context, sel chunk.Sel, result *chunk.Column) error
 
 	// Eval evaluates an expression through a row.
 	Eval(row chunk.Row) (types.Datum, error)

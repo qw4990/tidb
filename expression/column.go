@@ -145,6 +145,7 @@ func (col *CorrelatedColumn) resolveIndices(_ *Schema) error {
 	return nil
 }
 
+// VecEval ...
 func (col *CorrelatedColumn) VecEval(ctx sessionctx.Context, sel chunk.Sel, result *chunk.Column) error {
 	panic("TODO")
 }
@@ -215,6 +216,7 @@ func (col *Column) Eval(row chunk.Row) (types.Datum, error) {
 	return row.GetDatum(col.Index, col.RetType), nil
 }
 
+// VecEval ...
 func (col *Column) VecEval(ctx sessionctx.Context, sel chunk.Sel, result *chunk.Column) error {
 	col.colData.CopyTo(result)
 	return nil
