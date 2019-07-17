@@ -14,6 +14,7 @@
 package chunk
 
 import (
+	"reflect"
 	"unsafe"
 
 	"github.com/pingcap/tidb/types"
@@ -139,6 +140,20 @@ func (c *Column) finishAppendFixed() {
 func (c *Column) AppendInt64(i int64) {
 	*(*int64)(unsafe.Pointer(&c.elemBuf[0])) = i
 	c.finishAppendFixed()
+}
+
+func (c *Column) Int64s() []int64 {
+	h := (*reflect.SliceHeader)(unsafe.Pointer(&c.data))
+	var res []int64
+	s := (*reflect.SliceHeader)(unsafe.Pointer(&res))
+	s.Data = h.Data
+	s.Len = c.length
+	s.Cap = h.Cap / 8
+	return res
+}
+
+func (c *Column) GetInt64(rowID int) int64 {
+	return *(*int64)(unsafe.Pointer(&c.data[rowID*8]))
 }
 
 func (c *Column) AppendUint64(u uint64) {
