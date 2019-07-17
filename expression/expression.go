@@ -47,6 +47,8 @@ type Expression interface {
 	fmt.Stringer
 	goJSON.Marshaler
 
+	VecExpression
+
 	// Eval evaluates an expression through a row.
 	Eval(row chunk.Row) (types.Datum, error)
 

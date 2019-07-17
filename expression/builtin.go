@@ -167,6 +167,10 @@ func newBaseBuiltinFuncWithTp(ctx sessionctx.Context, args []Expression, retType
 	}
 }
 
+func (b *baseBuiltinFunc) vecEval(sel chunk.Sel, result *chunk.Column) error {
+	panic("TODO")
+}
+
 func (b *baseBuiltinFunc) getArgs() []Expression {
 	return b.args
 }
@@ -276,8 +280,14 @@ func newBaseBuiltinCastFunc(builtinFunc baseBuiltinFunc, inUnion bool) baseBuilt
 	}
 }
 
+type vecBuiltinFunc interface {
+	vecEval(sel chunk.Sel, result *chunk.Column) error
+}
+
 // builtinFunc stands for a particular function signature.
 type builtinFunc interface {
+	vecBuiltinFunc
+
 	// evalInt evaluates int result of builtinFunc by given row.
 	evalInt(row chunk.Row) (val int64, isNull bool, err error)
 	// evalReal evaluates real representation of builtinFunc by given row.
