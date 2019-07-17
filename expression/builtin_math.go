@@ -205,6 +205,32 @@ func (b *builtinAbsIntSig) evalInt(row chunk.Row) (int64, bool, error) {
 	return -val, false, nil
 }
 
+func (b *builtinAbsIntSig) vecEval(sel chunk.Sel, result *chunk.Column) error {
+	if err := b.args[0].VecEval(b.ctx, sel, result); err != nil {
+		return err
+	}
+
+	if result.HasNull() {
+		panic("TODO")
+	} else {
+		i64s := result.Int64s()
+		if sel != nil {
+			for _, i := range sel {
+				if i64s[i] < 0 {
+					i64s[i] = -i64s[i]
+				}
+			}
+		} else {
+			for i := range i64s {
+				if i64s[i] < 0 {
+					i64s[i] = -i64s[i]
+				}
+			}
+		}
+	}
+	return nil
+}
+
 type builtinAbsUIntSig struct {
 	baseBuiltinFunc
 }

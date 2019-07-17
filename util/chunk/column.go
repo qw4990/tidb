@@ -111,6 +111,10 @@ func (c *Column) isNull(rowIdx int) bool {
 	return nullByte&(1<<(uint(rowIdx)&7)) == 0
 }
 
+func (c *Column) HasNull() bool {
+	return c.nullCount > 0
+}
+
 func (c *Column) copyConstruct() *Column {
 	newCol := &Column{length: c.length, nullCount: c.nullCount}
 	newCol.nullBitmap = append(newCol.nullBitmap, c.nullBitmap...)
