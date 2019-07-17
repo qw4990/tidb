@@ -28,6 +28,8 @@ import (
 // Values are appended in compact format and can be directly accessed without decoding.
 // When the chunk is done processing, we can reuse the allocated memory by resetting it.
 type Chunk struct {
+	sel Sel
+
 	columns []*Column
 	// numVirtualRows indicates the number of virtual rows, which have zero Column.
 	// It is used only when this Chunk doesn't hold any data, i.e. "len(columns)==0".
@@ -553,6 +555,40 @@ func (c *Chunk) AppendDatum(colIdx int, d *types.Datum) {
 	case types.KindMysqlJSON:
 		c.AppendJSON(colIdx, d.GetMysqlJSON())
 	}
+}
+
+func (c *Chunk) SetSelection(sel Sel) {
+	c.sel = sel
+}
+
+func (c *Chunk) Selection() Sel {
+	return c.sel
+}
+
+func (c *Chunk) FilterSel(selected []int64) {
+	if c.sel == nil {
+		c.sel = make([]ColSize, len(selected))
+	}
+
+	c.sel = c.sel[:0]
+	for i, v := range selected {
+		if v == 1 {
+			c.sel = append(c.sel, ColSize(i))
+		}
+	}
+}
+
+func (c *Chunk) CopySel() Sel {
+	if c.sel == nil {
+		return nil
+	}
+	sel := make(Sel, len(c.sel))
+	copy(sel, c.sel)
+	return sel
+}
+
+func (c *Chunk) Column(i int) *Column {
+	return c.columns[i]
 }
 
 func writeTime(buf []byte, t types.Time) {
