@@ -15,6 +15,7 @@ package expensivequery
 
 import (
 	"fmt"
+	"github.com/pingcap/tidb/util/memory"
 	"strconv"
 	"strings"
 	"sync"
@@ -138,7 +139,7 @@ func logExpensiveQuery(costTime time.Duration, info *util.ProcessInfo) {
 	}
 	logFields = append(logFields, zap.Uint64("txn_start_ts", info.CurTxnStartTS))
 	if memTracker := info.StmtCtx.MemTracker; memTracker != nil {
-		logFields = append(logFields, zap.String("mem_max", memTracker.BytesToString(memTracker.MaxConsumed())))
+		logFields = append(logFields, zap.String("mem_max", memory.BytesToString(memTracker.MaxConsumed())))
 	}
 
 	const logSQLLen = 1024 * 8

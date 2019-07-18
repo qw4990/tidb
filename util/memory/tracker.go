@@ -87,11 +87,6 @@ func (t *Tracker) AttachTo(parent *Tracker) {
 	t.parent.Consume(t.BytesConsumed())
 }
 
-// Detach detaches this Tracker from its parent.
-func (t *Tracker) Detach() {
-	t.parent.remove(t)
-}
-
 func (t *Tracker) remove(oldChild *Tracker) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -170,6 +165,21 @@ func (t *Tracker) MaxConsumed() int64 {
 	return atomic.LoadInt64(&t.maxConsumed)
 }
 
+// SearchMaxConsumed searches the max consumed with the specific label in this tracker.
+func (t *Tracker) SearchMaxConsumed(label string) (int64, bool) {
+	if t.label.String() == label {
+		return t.MaxConsumed(), true
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	for _, child := range t.mu.children {
+		if m, ok := child.SearchMaxConsumed(label); ok {
+			return m, ok
+		}
+	}
+	return 0, false
+}
+
 // String returns the string representation of this Tracker tree.
 func (t *Tracker) String() string {
 	buffer := bytes.NewBufferString("\n")
@@ -180,10 +190,10 @@ func (t *Tracker) String() string {
 func (t *Tracker) toString(indent string, buffer *bytes.Buffer) {
 	fmt.Fprintf(buffer, "%s\"%s\"{\n", indent, t.label)
 	if t.bytesLimit > 0 {
-		fmt.Fprintf(buffer, "%s  \"quota\": %s\n", indent, t.BytesToString(t.bytesLimit))
+		fmt.Fprintf(buffer, "%s  \"quota\": %s\n", indent, BytesToString(t.bytesLimit))
 	}
-	fmt.Fprintf(buffer, "%s  \"consumed\": %s\n", indent, t.BytesToString(t.BytesConsumed()))
-	fmt.Fprintf(buffer, "%s  \"max-consumed\": %s\n", indent, t.BytesToString(t.MaxConsumed()))
+	fmt.Fprintf(buffer, "%s  \"consumed\": %s\n", indent, BytesToString(t.BytesConsumed()))
+	fmt.Fprintf(buffer, "%s  \"max-consumed\": %s\n", indent, BytesToString(t.MaxConsumed()))
 
 	t.mu.Lock()
 	for i := range t.mu.children {
@@ -196,7 +206,7 @@ func (t *Tracker) toString(indent string, buffer *bytes.Buffer) {
 }
 
 // BytesToString converts the memory consumption to a readable string.
-func (t *Tracker) BytesToString(numBytes int64) string {
+func BytesToString(numBytes int64) string {
 	GB := float64(numBytes) / float64(1<<30)
 	if GB > 1 {
 		return fmt.Sprintf("%v GB", GB)

@@ -82,11 +82,6 @@ func (e *ExplainExec) generateExplainInfo(ctx context.Context) ([][]string, erro
 			}
 		}
 
-		// TODO: for debug
-		//fmt.Println("======================================")
-		//fmt.Println(e.ctx.GetSessionVars().StmtCtx.MemTracker.String())
-		//fmt.Println("======================================")
-
 		if err := e.analyzeExec.Close(); err != nil {
 			return nil, err
 		}

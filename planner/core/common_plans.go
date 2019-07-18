@@ -16,6 +16,7 @@ package core
 import (
 	"bytes"
 	"fmt"
+	"github.com/pingcap/tidb/util/memory"
 	"strconv"
 	"strings"
 
@@ -30,7 +31,7 @@ import (
 	"github.com/pingcap/tidb/sessionctx"
 	"github.com/pingcap/tidb/table"
 	"github.com/pingcap/tidb/types"
-	driver "github.com/pingcap/tidb/types/parser_driver"
+	"github.com/pingcap/tidb/types/parser_driver"
 	"github.com/pingcap/tidb/util/chunk"
 	"github.com/pingcap/tidb/util/kvcache"
 	"github.com/pingcap/tidb/util/ranger"
@@ -563,7 +564,7 @@ func (e *Explain) prepareSchema() error {
 	case ast.ExplainFormatROW:
 		retFields := []string{"id", "count", "task", "operator info"}
 		if e.Analyze {
-			retFields = append(retFields, "execution info")
+			retFields = append(retFields, "execution info", "memory")
 		}
 		schema := expression.NewSchema(make([]*expression.Column, 0, len(retFields))...)
 		for _, fieldName := range retFields {
@@ -642,6 +643,13 @@ func (e *Explain) prepareOperatorInfo(p PhysicalPlan, taskType string, indent st
 			row = append(row, runtimeStatsColl.GetRootStats(explainID).String())
 		} else {
 			row = append(row, "time:0ns, loops:0, rows:0")
+		}
+
+		maxConsumed, ok := e.ctx.GetSessionVars().StmtCtx.MemTracker.SearchMaxConsumed(p.ExplainID().String())
+		if ok {
+			row = append(row, memory.BytesToString(maxConsumed))
+		} else {
+			row = append(row, "-")
 		}
 	}
 	e.Rows = append(e.Rows, row)
@@ -763,4 +771,21 @@ func (e *Explain) prepareTaskDot(p PhysicalPlan, taskTp string, buffer *bytes.Bu
 	for i := range pipelines {
 		buffer.WriteString(pipelines[i])
 	}
+}
+
+const (
+	KB = 1 << 10
+	MB = KB << 10
+	GB = MB << 10
+)
+
+func formatMemoryUsage(bytes int64) string {
+	if bytes < KB {
+		return fmt.Sprintf("%dbytes", bytes)
+	} else if bytes < MB {
+		return fmt.Sprintf("%.2fKB", float64(bytes)/float64(KB))
+	} else if bytes < GB {
+		return fmt.Sprintf("%.2fMB", float64(bytes)/float64(MB))
+	}
+	return fmt.Sprintf("%.2fGB", float64(bytes)/float64(GB))
 }
