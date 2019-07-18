@@ -15,7 +15,6 @@ package executor
 
 import (
 	"context"
-
 	"github.com/cznic/mathutil"
 	"github.com/pingcap/tidb/planner/core"
 	"github.com/pingcap/tidb/util/chunk"
@@ -82,6 +81,12 @@ func (e *ExplainExec) generateExplainInfo(ctx context.Context) ([][]string, erro
 				break
 			}
 		}
+
+		// TODO: for debug
+		//fmt.Println("======================================")
+		//fmt.Println(e.ctx.GetSessionVars().StmtCtx.MemTracker.String())
+		//fmt.Println("======================================")
+
 		if err := e.analyzeExec.Close(); err != nil {
 			return nil, err
 		}
