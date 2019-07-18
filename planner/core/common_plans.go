@@ -645,9 +645,13 @@ func (e *Explain) prepareOperatorInfo(p PhysicalPlan, taskType string, indent st
 			row = append(row, "time:0ns, loops:0, rows:0")
 		}
 
-		maxConsumed, ok := e.ctx.GetSessionVars().StmtCtx.MemTracker.SearchMaxConsumed(p.ExplainID().String())
-		if ok {
-			row = append(row, memory.BytesToString(maxConsumed))
+		tracker := e.ctx.GetSessionVars().StmtCtx.MemTracker.SearchTracker(p.ExplainID().String())
+		if tracker != nil {
+			str := fmt.Sprintf("tot: %v", memory.BytesToString(tracker.MaxConsumed()))
+			for _, child := range tracker.Children() {
+				str += fmt.Sprintf(", %v: %v", tracker.Label(), memory.BytesToString(child.MaxConsumed()))
+			}
+			row = append(row, str)
 		} else {
 			row = append(row, "-")
 		}
@@ -771,21 +775,4 @@ func (e *Explain) prepareTaskDot(p PhysicalPlan, taskTp string, buffer *bytes.Bu
 	for i := range pipelines {
 		buffer.WriteString(pipelines[i])
 	}
-}
-
-const (
-	KB = 1 << 10
-	MB = KB << 10
-	GB = MB << 10
-)
-
-func formatMemoryUsage(bytes int64) string {
-	if bytes < KB {
-		return fmt.Sprintf("%dbytes", bytes)
-	} else if bytes < MB {
-		return fmt.Sprintf("%.2fKB", float64(bytes)/float64(KB))
-	} else if bytes < GB {
-		return fmt.Sprintf("%.2fMB", float64(bytes)/float64(MB))
-	}
-	return fmt.Sprintf("%.2fGB", float64(bytes)/float64(GB))
 }

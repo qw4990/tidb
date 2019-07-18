@@ -165,19 +165,35 @@ func (t *Tracker) MaxConsumed() int64 {
 	return atomic.LoadInt64(&t.maxConsumed)
 }
 
-// SearchMaxConsumed searches the max consumed with the specific label in this tracker.
-func (t *Tracker) SearchMaxConsumed(label string) (int64, bool) {
+// Label returns this tracker's label.
+func (t *Tracker) Label() string {
+	return t.label.String()
+}
+
+// Children returns this tracker's children.
+func (t *Tracker) Children() []*Tracker {
+	results := make([]*Tracker, 0, 4)
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	for _, child := range t.mu.children {
+		results = append(results, child)
+	}
+	return results
+}
+
+// SearchTracker searches the specific tracker.
+func (t *Tracker) SearchTracker(label string) *Tracker {
 	if t.label.String() == label {
-		return t.MaxConsumed(), true
+		return t
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	for _, child := range t.mu.children {
-		if m, ok := child.SearchMaxConsumed(label); ok {
-			return m, ok
+		if result := child.SearchTracker(label); result != nil {
+			return result
 		}
 	}
-	return 0, false
+	return nil
 }
 
 // String returns the string representation of this Tracker tree.
