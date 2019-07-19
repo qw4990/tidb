@@ -23,11 +23,15 @@ import (
 	"github.com/pingcap/tidb/types/json"
 )
 
+// Selector indicates which rows are selected.
+type Selector []uint16
+
 // Chunk stores multiple rows of data in Apache Arrow format.
 // See https://arrow.apache.org/docs/memory_layout.html
 // Values are appended in compact format and can be directly accessed without decoding.
 // When the chunk is done processing, we can reuse the allocated memory by resetting it.
 type Chunk struct {
+	sel     Selector
 	columns []*Column
 	// numVirtualRows indicates the number of virtual rows, which have zero Column.
 	// It is used only when this Chunk doesn't hold any data, i.e. "len(columns)==0".
@@ -107,6 +111,16 @@ func renewColumns(oldCol []*Column, cap int) []*Column {
 		}
 	}
 	return columns
+}
+
+// Selector returns the selector this chunk has.
+func (c *Chunk) Selector() Selector {
+	return c.sel
+}
+
+// SetSelector updates this chunk's selector.
+func (c *Chunk) SetSelector(sel Selector) {
+	c.sel = sel
 }
 
 // MemoryUsage returns the total memory usage of a Chunk in B.
