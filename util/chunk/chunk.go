@@ -31,7 +31,11 @@ type Selector []uint16
 // Values are appended in compact format and can be directly accessed without decoding.
 // When the chunk is done processing, we can reuse the allocated memory by resetting it.
 type Chunk struct {
-	sel     Selector
+	// sel indicates wwhich rows are selected.
+	// for simplify, we assume that if sel is not nil we can't Append or Insert data into this Chunk.
+	// TODO: add checks in all Append and Insert methods.
+	sel Selector
+
 	columns []*Column
 	// numVirtualRows indicates the number of virtual rows, which have zero Column.
 	// It is used only when this Chunk doesn't hold any data, i.e. "len(columns)==0".
@@ -253,6 +257,9 @@ func (c *Chunk) Reset() {
 		col.Reset()
 	}
 	c.numVirtualRows = 0
+	if c.sel != nil {
+		c.sel = c.sel[:0]
+	}
 }
 
 // CopyConstruct creates a new chunk and copies this chunk's data into it.
@@ -260,6 +267,10 @@ func (c *Chunk) CopyConstruct() *Chunk {
 	newChk := &Chunk{numVirtualRows: c.numVirtualRows, capacity: c.capacity, columns: make([]*Column, len(c.columns))}
 	for i := range c.columns {
 		newChk.columns[i] = c.columns[i].copyConstruct()
+	}
+	if c.sel != nil {
+		newChk.sel = make([]uint16, len(c.sel))
+		copy(newChk.sel, c.sel)
 	}
 	return newChk
 }
@@ -303,6 +314,9 @@ func (c *Chunk) NumCols() int {
 
 // NumRows returns the number of rows in the chunk.
 func (c *Chunk) NumRows() int {
+	if c.sel != nil {
+		return len(c.sel)
+	}
 	if c.NumCols() == 0 {
 		return c.numVirtualRows
 	}
@@ -311,6 +325,9 @@ func (c *Chunk) NumRows() int {
 
 // GetRow gets the Row in the chunk with the row index.
 func (c *Chunk) GetRow(idx int) Row {
+	if c.sel != nil {
+		return Row{c: c, idx: int(c.sel[idx])}
+	}
 	return Row{c: c, idx: idx}
 }
 
@@ -444,6 +461,7 @@ func (c *Chunk) Append(other *Chunk, begin, end int) {
 
 // TruncateTo truncates rows from tail to head in a Chunk to "numRows" rows.
 func (c *Chunk) TruncateTo(numRows int) {
+	// assert (c.sel == nil)
 	for _, col := range c.columns {
 		if col.isFixed() {
 			elemLen := len(col.elemBuf)
