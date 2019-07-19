@@ -14,6 +14,7 @@
 package chunk
 
 import (
+	"reflect"
 	"unsafe"
 
 	"github.com/pingcap/tidb/types"
@@ -189,4 +190,91 @@ func (c *Column) AppendBytes(b []byte) {
 func (c *Column) AppendTime(t types.Time) {
 	writeTime(c.elemBuf, t)
 	c.finishAppendFixed()
+}
+
+const (
+	sizeInt64     = int(unsafe.Sizeof(int64(0)))
+	sizeUint64    = int(unsafe.Sizeof(uint64(0)))
+	sizeFloat32   = int(unsafe.Sizeof(float32(0)))
+	sizeFloat64   = int(unsafe.Sizeof(float64(0)))
+	sizeTime      = int(unsafe.Sizeof(types.Time{}))
+	sizeDuration  = int(unsafe.Sizeof(types.Duration{}))
+	sizeMyDecimal = int(unsafe.Sizeof(types.MyDecimal{}))
+)
+
+// Int64s returns a int64 slice stored in this Column.
+func (c *Column) Int64s() []int64 {
+	h := (*reflect.SliceHeader)(unsafe.Pointer(&c.data))
+	var res []int64
+	s := (*reflect.SliceHeader)(unsafe.Pointer(&res))
+	s.Data = h.Data
+	s.Len = c.length
+	s.Cap = h.Cap / sizeInt64
+	return res
+}
+
+// Uint64s returns a uint64 slice stored in this Column.
+func (c *Column) Uint64s() []uint64 {
+	h := (*reflect.SliceHeader)(unsafe.Pointer(&c.data))
+	var res []uint64
+	s := (*reflect.SliceHeader)(unsafe.Pointer(&res))
+	s.Data = h.Data
+	s.Len = c.length
+	s.Cap = h.Cap / sizeUint64
+	return res
+}
+
+// Float32s returns a float32 slice stored in this Column.
+func (c *Column) Float32s() []float32 {
+	h := (*reflect.SliceHeader)(unsafe.Pointer(&c.data))
+	var res []float32
+	s := (*reflect.SliceHeader)(unsafe.Pointer(&res))
+	s.Data = h.Data
+	s.Len = c.length
+	s.Cap = h.Cap / sizeFloat32
+	return res
+}
+
+// Float64s returns a float64 slice stored in this Column.
+func (c *Column) Float64s() []float64 {
+	h := (*reflect.SliceHeader)(unsafe.Pointer(&c.data))
+	var res []float64
+	s := (*reflect.SliceHeader)(unsafe.Pointer(&res))
+	s.Data = h.Data
+	s.Len = c.length
+	s.Cap = h.Cap / sizeFloat64
+	return res
+}
+
+// Times returns a Time slice stored in this Column.
+func (c *Column) Times() []types.Time {
+	h := (*reflect.SliceHeader)(unsafe.Pointer(&c.data))
+	var res []types.Time
+	s := (*reflect.SliceHeader)(unsafe.Pointer(&res))
+	s.Data = h.Data
+	s.Len = c.length
+	s.Cap = h.Cap / sizeTime
+	return res
+}
+
+// Durations returns a Duration slice stored in this Column.
+func (c *Column) Durations() []types.Duration {
+	h := (*reflect.SliceHeader)(unsafe.Pointer(&c.data))
+	var res []types.Duration
+	s := (*reflect.SliceHeader)(unsafe.Pointer(&res))
+	s.Data = h.Data
+	s.Len = c.length
+	s.Cap = h.Cap / sizeDuration
+	return res
+}
+
+// MyDecimals returns a MyDecimal slice stored in this Column.
+func (c *Column) MyDecimals() []types.MyDecimal {
+	h := (*reflect.SliceHeader)(unsafe.Pointer(&c.data))
+	var res []types.MyDecimal
+	s := (*reflect.SliceHeader)(unsafe.Pointer(&res))
+	s.Data = h.Data
+	s.Len = c.length
+	s.Cap = h.Cap / sizeMyDecimal
+	return res
 }
