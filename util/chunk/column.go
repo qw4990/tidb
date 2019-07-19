@@ -68,6 +68,26 @@ type Column struct {
 	elemBuf    []byte
 }
 
+// NewColumn creates a new column with the specific length and capacity.
+func NewColumn(ft *types.FieldType, length, cap uint16) *Column {
+	c := new(Column)
+	c.length = int(length)
+	c.nullCount = 0
+	c.nullBitmap = make([]byte, (cap+7)>>3)
+	typeSize := getFixedLen(ft)
+	if typeSize == varElemLen {
+		// ignore length if it is varElemLen
+		c.offsets = make([]int64, 1, cap)
+		c.data = make([]byte, 0, 8*cap)
+		c.elemBuf = nil
+	} else {
+		c.offsets = nil
+		c.data = make([]byte, int(length)*typeSize, int(cap)*typeSize)
+		c.elemBuf = make([]byte, typeSize)
+	}
+	return c
+}
+
 func (c *Column) isFixed() bool {
 	return c.elemBuf != nil
 }

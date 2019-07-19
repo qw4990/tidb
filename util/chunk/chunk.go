@@ -555,6 +555,11 @@ func (c *Chunk) AppendDatum(colIdx int, d *types.Datum) {
 	}
 }
 
+// Column returns the specific column.
+func (c *Chunk) Column(colID int) *Column {
+	return c.columns[colID]
+}
+
 func writeTime(buf []byte, t types.Time) {
 	binary.BigEndian.PutUint16(buf, uint16(t.Time.Year()))
 	buf[2] = uint8(t.Time.Month())
