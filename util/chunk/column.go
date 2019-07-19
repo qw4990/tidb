@@ -46,6 +46,7 @@ func (c *Column) AppendJSON(j json.BinaryJSON) {
 	c.finishAppendVar()
 }
 
+// Column stores a column of data in Apache Arrow format.
 type Column struct {
 	length     int
 	nullCount  int
