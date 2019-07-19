@@ -20,10 +20,12 @@ import (
 	"github.com/pingcap/tidb/types/json"
 )
 
+// AppendDuration appends a duration variable to this column.
 func (c *Column) AppendDuration(dur types.Duration) {
 	c.AppendInt64(int64(dur.Duration))
 }
 
+// AppendMyDecimal appends a decimal variable to this column.
 func (c *Column) AppendMyDecimal(dec *types.MyDecimal) {
 	*(*types.MyDecimal)(unsafe.Pointer(&c.elemBuf[0])) = *dec
 	c.finishAppendFixed()
@@ -37,6 +39,7 @@ func (c *Column) appendNameValue(name string, val uint64) {
 	c.finishAppendVar()
 }
 
+// AppendJSON appends a JSON variable to this column.
 func (c *Column) AppendJSON(j json.BinaryJSON) {
 	c.data = append(c.data, j.TypeCode)
 	c.data = append(c.data, j.Value...)
@@ -56,6 +59,7 @@ func (c *Column) isFixed() bool {
 	return c.elemBuf != nil
 }
 
+// Reset resets this column.
 func (c *Column) Reset() {
 	c.length = 0
 	c.nullCount = 0
@@ -67,6 +71,7 @@ func (c *Column) Reset() {
 	c.data = c.data[:0]
 }
 
+// IsNull returns if the specific row is null.
 func (c *Column) IsNull(rowIdx int) bool {
 	nullByte := c.nullBitmap[rowIdx/8]
 	return nullByte&(1<<(uint(rowIdx)&7)) == 0
@@ -120,6 +125,7 @@ func (c *Column) appendMultiSameNullBitmap(notNull bool, num int) {
 	c.nullBitmap[len(c.nullBitmap)-1] &= bitMask
 }
 
+// AppendNull appends a null variable to this column.
 func (c *Column) AppendNull() {
 	c.appendNullBitmap(false)
 	if c.isFixed() {
@@ -136,21 +142,25 @@ func (c *Column) finishAppendFixed() {
 	c.length++
 }
 
+// AppendInt64 appends a int64 variable to this column.
 func (c *Column) AppendInt64(i int64) {
 	*(*int64)(unsafe.Pointer(&c.elemBuf[0])) = i
 	c.finishAppendFixed()
 }
 
+// AppendUint64 appends a uint64 variable to this column.
 func (c *Column) AppendUint64(u uint64) {
 	*(*uint64)(unsafe.Pointer(&c.elemBuf[0])) = u
 	c.finishAppendFixed()
 }
 
+// AppendFloat32 appends a float32 variable to this column.
 func (c *Column) AppendFloat32(f float32) {
 	*(*float32)(unsafe.Pointer(&c.elemBuf[0])) = f
 	c.finishAppendFixed()
 }
 
+// AppendFloat64 appends a float64 variable to this column.
 func (c *Column) AppendFloat64(f float64) {
 	*(*float64)(unsafe.Pointer(&c.elemBuf[0])) = f
 	c.finishAppendFixed()
@@ -162,16 +172,19 @@ func (c *Column) finishAppendVar() {
 	c.length++
 }
 
+// AppendString appends a string variable to this column.
 func (c *Column) AppendString(str string) {
 	c.data = append(c.data, str...)
 	c.finishAppendVar()
 }
 
+// AppendBytes appends a bytes variable to this column.
 func (c *Column) AppendBytes(b []byte) {
 	c.data = append(c.data, b...)
 	c.finishAppendVar()
 }
 
+// AppendTime( appends a time variable to this column.
 func (c *Column) AppendTime(t types.Time) {
 	writeTime(c.elemBuf, t)
 	c.finishAppendFixed()
