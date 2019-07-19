@@ -19,6 +19,32 @@ import (
 	"github.com/pingcap/tidb/types"
 )
 
+func (s *testChunkSuite) TestIteratorOnSel(c *check.C) {
+	fields := []*types.FieldType{types.NewFieldType(mysql.TypeLonglong)}
+	chk := New(fields, 32, 1024)
+	for i := 0; i < 1024; i++ {
+		chk.AppendInt64(0, int64(i))
+	}
+
+	var sel Selector
+	for i := 0; i < 1024; i++ {
+		if i%3 == 0 {
+			sel = append(sel, uint16(i))
+		}
+	}
+	chk.SetSelector(sel)
+
+	it := NewIterator4Chunk(chk)
+	var cnt int64
+	for row := it.Begin(); row != it.End(); row = it.Next() {
+		v := row.GetInt64(0)
+		c.Assert(v, check.Equals, cnt*3)
+		cnt++
+	}
+
+	c.Assert(cnt, check.Equals, int64(len(sel)))
+}
+
 func (s *testChunkSuite) TestIterator(c *check.C) {
 	fields := []*types.FieldType{types.NewFieldType(mysql.TypeLonglong)}
 	chk := New(fields, 32, 1024)
