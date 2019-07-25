@@ -171,6 +171,12 @@ func (b *baseBuiltinFunc) getArgs() []Expression {
 	return b.args
 }
 
+func (b *baseBuiltinFunc) vectorized() bool { return false }
+
+func (b *baseBuiltinFunc) vecEval(chk *chunk.Chunk, result *chunk.Column) error {
+	panic("baseBuiltinFunc.vecEval() should never be called")
+}
+
 func (b *baseBuiltinFunc) evalInt(row chunk.Row) (int64, bool, error) {
 	panic("baseBuiltinFunc.evalInt() should never be called.")
 }
@@ -276,8 +282,19 @@ func newBaseBuiltinCastFunc(builtinFunc baseBuiltinFunc, inUnion bool) baseBuilt
 	}
 }
 
+// vectorizedBuiltinFunc contains all vectorized methods for a builtin function.
+type vectorizedBuiltinFunc interface {
+	// vectorized returns if this builtin function supports vectorized evaluation.
+	vectorized() bool
+
+	// vecEval evaluates this builtin function in a vectorized manner.
+	vecEval(chk *chunk.Chunk, result *chunk.Column) error
+}
+
 // builtinFunc stands for a particular function signature.
 type builtinFunc interface {
+	vectorizedBuiltinFunc
+
 	// evalInt evaluates int result of builtinFunc by given row.
 	evalInt(row chunk.Row) (val int64, isNull bool, err error)
 	// evalReal evaluates real representation of builtinFunc by given row.

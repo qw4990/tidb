@@ -400,6 +400,9 @@ type MockExpr struct {
 	i   interface{}
 }
 
+func (m *MockExpr) Vectorized() bool                                                             { return false }
+func (m *MockExpr) VecEval(ctx sessionctx.Context, chk *chunk.Chunk, result *chunk.Column) error { return nil }
+
 func (m *MockExpr) String() string                          { return "" }
 func (m *MockExpr) MarshalJSON() ([]byte, error)            { return nil, nil }
 func (m *MockExpr) Eval(row chunk.Row) (types.Datum, error) { return types.NewDatum(m.i), m.err }

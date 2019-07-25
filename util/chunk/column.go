@@ -103,6 +103,52 @@ func (c *Column) Reset() {
 	c.data = c.data[:0]
 }
 
+func (c *Column) preAlloc(length, typeSize int) {
+	c.nullCount = 0
+	nData := length * typeSize
+	if len(c.data) > nData {
+		c.data = c.data[:nData]
+	} else {
+		c.data = make([]byte, nData)
+	}
+
+	nBitmap := (length + 7) >> 3
+	if len(c.nullBitmap) > nBitmap {
+		c.nullBitmap = c.nullBitmap[:nBitmap]
+		for i := range c.nullBitmap {
+			c.nullBitmap[i] = 7
+		}
+	} else {
+		c.nullBitmap = make([]byte, nBitmap)
+	}
+
+	c.length = length
+	c.nullCount = 0
+}
+
+// SetNull sets the rowIdx to null.
+func (c *Column) SetNull(rowIdx int) {
+	if !c.IsNull(rowIdx) {
+		c.nullCount++
+		c.nullBitmap[rowIdx>>3] &= ^(1 << uint(rowIdx&7))
+	}
+}
+
+// PreAllocInt64s pre-allocates memory for int64 slice.
+func (c *Column) PreAllocInt64s(length int) {
+	c.preAlloc(length, sizeInt64)
+}
+
+// PreAllocFloat64s pre-allocates memory for float64 slice.
+func (c *Column) PreAllocFloat64s(length int) {
+	c.preAlloc(length, sizeFloat64)
+}
+
+// PreAllocDecimal pre-allocates memory for decimal slice.
+func (c *Column) PreAllocDecimal(length int) {
+	c.preAlloc(length, sizeMyDecimal)
+}
+
 // IsNull returns if this row is null.
 func (c *Column) IsNull(rowIdx int) bool {
 	nullByte := c.nullBitmap[rowIdx/8]

@@ -39,6 +39,24 @@ type ScalarFunction struct {
 	RetType  *types.FieldType
 	Function builtinFunc
 	hashcode []byte
+
+	// fields for vectorized evaluation
+	testVectorized bool
+	vectorized     bool
+}
+
+// Vectorized returns if this expression supports vectorized evaluation.
+func (sf *ScalarFunction) Vectorized() bool {
+	if !sf.testVectorized {
+		sf.vectorized = sf.Function.vectorized()
+		sf.testVectorized = true
+	}
+	return sf.vectorized
+}
+
+// VecEval evaluates this expression in a vectorized manner.
+func (sf *ScalarFunction) VecEval(ctx sessionctx.Context, chk *chunk.Chunk, result *chunk.Column) error {
+	return sf.Function.vecEval(chk, result)
 }
 
 // GetArgs gets arguments of function.

@@ -173,6 +173,15 @@ type Column struct {
 	InOperand bool
 }
 
+// Vectorized returns if this expression supports vectorized evaluation.
+func (col *Column) Vectorized() bool { return true }
+
+// VecEval evaluates this expression in a vectorized manner.
+func (col *Column) VecEval(ctx sessionctx.Context, chk *chunk.Chunk, result *chunk.Column) error {
+	result = chk.Column(col.Index).CopyConstruct(result)
+	return nil
+}
+
 // Equal implements Expression interface.
 func (col *Column) Equal(_ sessionctx.Context, expr Expression) bool {
 	if newCol, ok := expr.(*Column); ok {

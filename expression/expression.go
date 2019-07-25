@@ -38,10 +38,21 @@ const (
 // EvalAstExpr evaluates ast expression directly.
 var EvalAstExpr func(sctx sessionctx.Context, expr ast.ExprNode) (types.Datum, error)
 
+// VectorizedExpression contains all vectorized evaluation methods.
+type VectorizedExpression interface {
+	// Vectorized returns if this expression supports vectorized evaluation.
+	Vectorized() bool
+
+	// VecEval evaluates this expression in a vectorized manner.
+	VecEval(ctx sessionctx.Context, chk *chunk.Chunk, result *chunk.Column) error
+}
+
 // Expression represents all scalar expression in SQL.
 type Expression interface {
 	fmt.Stringer
 	goJSON.Marshaler
+
+	VectorizedExpression
 
 	// Eval evaluates an expression through a row.
 	Eval(row chunk.Row) (types.Datum, error)

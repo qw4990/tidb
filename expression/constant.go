@@ -88,6 +88,327 @@ func (c *Constant) GetType() *types.FieldType {
 	return c.RetType
 }
 
+// Vectorized returns if this expression supports vectorized evaluation.
+func (c *Constant) Vectorized() bool { return true }
+
+// VecEval evaluates this expression in a vectorized manner.
+func (c *Constant) VecEval(ctx sessionctx.Context, chk *chunk.Chunk, result *chunk.Column) error {
+	if c.DeferredExpr == nil {
+		return c.vecEvalNilDeffer(ctx, chk, result)
+	}
+	return c.vecEvalWithDeffer(ctx, chk, result)
+}
+
+func (c *Constant) vecEvalWithDeffer(ctx sessionctx.Context, chk *chunk.Chunk, result *chunk.Column) (err error) {
+	n := c.vecLen(chk)
+	tp := c.GetType()
+	sel := chk.Sel()
+
+	switch tp.EvalType() {
+	case types.ETInt:
+		result.PreAllocInt64s(n)
+		i64s := result.Int64s()
+		var isNull bool
+		if sel == nil {
+			for i := 0; i < n; i++ {
+				i64s[i], isNull, err = c.EvalInt(ctx, chunk.Row{})
+				if err != nil {
+					return err
+				}
+				if isNull{
+					result.SetNull(i)
+				}
+			}
+		} else {
+			for _, i := range sel {
+				i64s[i], isNull, err = c.EvalInt(ctx, chunk.Row{})
+				if err != nil {
+					return err
+				}
+				if isNull{
+					result.SetNull(i)
+				}
+			}
+		}
+	case types.ETReal:
+		result.PreAllocFloat64s(n)
+		f64s := result.Float64s()
+		var isNull bool
+		if sel == nil {
+			for i := 0; i < n; i++ {
+				f64s[i], isNull, err = c.EvalReal(ctx, chunk.Row{})
+				if err != nil {
+					return err
+				}
+				if isNull{
+					result.SetNull(i)
+				}
+			}
+		} else {
+			for _, i := range sel {
+				f64s[i], isNull, err = c.EvalReal(ctx, chunk.Row{})
+				if err != nil {
+					return err
+				}
+				if isNull{
+					result.SetNull(i)
+				}
+			}
+		}
+	case types.ETDecimal:
+		result.PreAllocDecimal(n)
+		ds := result.Decimals()
+		var d *types.MyDecimal
+		var isNull bool
+		if sel == nil {
+			for i := 0; i < n; i++ {
+				d, isNull, err = c.EvalDecimal(ctx, chunk.Row{})
+				if err != nil {
+					return err
+				}
+				if isNull{
+					result.SetNull(i)
+				} else {
+					ds[i] = *d
+				}
+			}
+		} else {
+			for _, i := range sel {
+				d, isNull, err = c.EvalDecimal(ctx, chunk.Row{})
+				if err != nil {
+					return err
+				}
+				if isNull{
+					result.SetNull(i)
+				} else {
+					ds[i] = *d
+				}
+			}
+		}
+	case types.ETDatetime, types.ETTimestamp:
+		result.Reset()
+		if sel == nil {
+			for i := 0; i < n;i ++ {
+				t, isNull, err := c.EvalTime(ctx, chunk.Row{})
+				if err != nil {
+					return err
+				}
+				if isNull {
+					result.AppendNull()
+				} else {
+					result.AppendTime(t)
+				}
+			}
+		} else {
+			pos := 0
+			for _, i := range sel {
+				for pos < i {
+					result.AppendNull()
+					pos++
+				}
+				t, isNull, err := c.EvalTime(ctx, chunk.Row{})
+				if err != nil {
+					return err
+				}
+				if isNull {
+					result.AppendNull()
+				} else {
+					result.AppendTime(t)
+				}
+			}
+		}
+	case types.ETDuration:
+		result.Reset()
+		if sel == nil {
+			for i := 0; i < n;i ++ {
+				d, isNull, err := c.EvalDuration(ctx, chunk.Row{})
+				if err != nil {
+					return err
+				}
+				if isNull {
+					result.AppendNull()
+				} else {
+					result.AppendDuration(d)
+				}
+			}
+		} else {
+			pos := 0
+			for _, i := range sel {
+				for pos < i {
+					result.AppendNull()
+					pos++
+				}
+				d, isNull, err := c.EvalDuration(ctx, chunk.Row{})
+				if err != nil {
+					return err
+				}
+				if isNull {
+					result.AppendNull()
+				} else {
+					result.AppendDuration(d)
+				}
+			}
+		}
+	case types.ETJson:
+		result.Reset()
+		if sel == nil {
+			for i := 0; i < n;i ++ {
+				j, isNull, err := c.EvalJSON(ctx, chunk.Row{})
+				if err != nil {
+					return err
+				}
+				if isNull {
+					result.AppendNull()
+				} else {
+					result.AppendJSON(j)
+				}
+			}
+		} else {
+			pos := 0
+			for _, i := range sel {
+				for pos < i {
+					result.AppendNull()
+					pos++
+				}
+				j, isNull, err := c.EvalJSON(ctx, chunk.Row{})
+				if err != nil {
+					return err
+				}
+				if isNull {
+					result.AppendNull()
+				} else {
+					result.AppendJSON(j)
+				}
+			}
+		}
+	case types.ETString:
+		result.Reset()
+		if sel == nil {
+			for i := 0; i < n;i ++ {
+				str, isNull, err := c.EvalString(ctx, chunk.Row{})
+				if err != nil {
+					return err
+				}
+				if isNull {
+					result.AppendNull()
+				} else {
+					result.AppendString(str)
+				}
+			}
+		} else {
+			pos := 0
+			for _, i := range sel {
+				for pos < i {
+					result.AppendNull()
+					pos++
+				}
+				str, isNull, err := c.EvalString(ctx, chunk.Row{})
+				if err != nil {
+					return err
+				}
+				if isNull {
+					result.AppendNull()
+				} else {
+					result.AppendString(str)
+				}
+			}
+		}
+	default:
+		return fmt.Errorf("unsupported Constant type for vectorized evaluation")
+	}
+	return nil
+
+}
+
+func (c *Constant) vecEvalNilDeffer(ctx sessionctx.Context, chk *chunk.Chunk, result *chunk.Column) (err error) {
+	result.Reset()
+	n := c.vecLen(chk)
+
+	tp := c.GetType()
+	if tp.Tp == mysql.TypeNull || c.Value.IsNull() {
+		for i := 0; i < n; i++ {
+			result.AppendNull()
+		}
+		return nil
+	}
+
+	switch tp.EvalType() {
+	case types.ETInt:
+		var v int64
+		if tp.Hybrid() || c.Value.Kind() == types.KindBinaryLiteral || c.Value.Kind() == types.KindString {
+			v, err = c.Value.ToInt64(ctx.GetSessionVars().StmtCtx)
+			if err != nil {
+				return err
+			}
+		} else {
+			v = c.Value.GetInt64()
+		}
+		for i := 0; i < n; i ++ {
+			result.AppendInt64(v)
+		}
+	case types.ETReal:
+		var v float64
+		if tp.Hybrid() || c.Value.Kind() == types.KindBinaryLiteral || c.Value.Kind() == types.KindString {
+			v, err = c.Value.ToFloat64(ctx.GetSessionVars().StmtCtx)
+			if err != nil {
+				return err
+			}
+		} else {
+			v = c.Value.GetFloat64()
+		}
+		for i := 0; i < n; i++ {
+			result.AppendFloat64(v)
+		}
+	case types.ETDecimal:
+		var d *types.MyDecimal
+		d, err = c.Value.ToDecimal(ctx.GetSessionVars().StmtCtx)
+		if err != nil {
+			return err
+		}
+		for i := 0; i < n; i ++ {
+			result.AppendMyDecimal(d)
+		}
+	case types.ETDatetime, types.ETTimestamp:
+		t := c.Value.GetMysqlTime()
+		for i := 0; i < n; i++ {
+			result.AppendTime(t)
+		}
+	case types.ETDuration:
+		d := c.Value.GetMysqlDuration()
+		for i := 0; i < n; i++ {
+			result.AppendDuration(d)
+		}
+	case types.ETJson:
+		j := c.Value.GetMysqlJSON()
+		for i := 0; i < n; i ++ {
+			result.AppendJSON(j)
+		}
+	case types.ETString:
+		var str string
+		str, err = c.Value.ToString()
+		if err != nil {
+			return err
+		}
+		for i := 0; i < n; i ++ {
+			result.AppendString(str)
+		}
+	default:
+		return fmt.Errorf("unsupported Constant type for vectorized evaluation")
+	}
+	return nil
+}
+
+func (c *Constant) vecLen(chk *chunk.Chunk) int {
+	sel := chk.Sel()
+	if sel == nil {
+		return chk.NumRows()
+	}
+	if len(sel) == 0 {
+		return 0
+	}
+	return sel[len(sel)-1]
+}
+
 // Eval implements Expression interface.
 func (c *Constant) Eval(_ chunk.Row) (types.Datum, error) {
 	if c.DeferredExpr != nil {
