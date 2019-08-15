@@ -170,11 +170,12 @@ func BenchmarkPlusIntBufAllocator(b *testing.B) {
 	}
 }
 
-type mockRowBuiltinDouble struct {
+type mockBuiltinDouble struct {
 	baseBuiltinFunc
+	evalType types.EvalType
 }
 
-func (p *mockRowBuiltinDouble) evalInt(row chunk.Row) (int64, bool, error) {
+func (p *mockBuiltinDouble) evalInt(row chunk.Row) (int64, bool, error) {
 	v, isNull, err := p.args[0].EvalInt(p.ctx, row)
 	if err != nil {
 		return 0, false, err
@@ -182,7 +183,7 @@ func (p *mockRowBuiltinDouble) evalInt(row chunk.Row) (int64, bool, error) {
 	return v * 2, isNull, nil
 }
 
-func (p *mockRowBuiltinDouble) evalReal(row chunk.Row) (float64, bool, error) {
+func (p *mockBuiltinDouble) evalReal(row chunk.Row) (float64, bool, error) {
 	v, isNull, err := p.args[0].EvalReal(p.ctx, row)
 	if err != nil {
 		return 0, false, err
@@ -190,7 +191,7 @@ func (p *mockRowBuiltinDouble) evalReal(row chunk.Row) (float64, bool, error) {
 	return v * 2, isNull, nil
 }
 
-func (p *mockRowBuiltinDouble) evalString(row chunk.Row) (string, bool, error) {
+func (p *mockBuiltinDouble) evalString(row chunk.Row) (string, bool, error) {
 	v, isNull, err := p.args[0].EvalString(p.ctx, row)
 	if err != nil {
 		return "", false, err
@@ -198,7 +199,7 @@ func (p *mockRowBuiltinDouble) evalString(row chunk.Row) (string, bool, error) {
 	return v + v, isNull, nil
 }
 
-func (p *mockRowBuiltinDouble) evalDecimal(row chunk.Row) (*types.MyDecimal, bool, error) {
+func (p *mockBuiltinDouble) evalDecimal(row chunk.Row) (*types.MyDecimal, bool, error) {
 	v, isNull, err := p.args[0].EvalDecimal(p.ctx, row)
 	if err != nil {
 		return nil, false, err
@@ -210,7 +211,7 @@ func (p *mockRowBuiltinDouble) evalDecimal(row chunk.Row) (*types.MyDecimal, boo
 	return r, isNull, nil
 }
 
-func (p *mockRowBuiltinDouble) evalTime(row chunk.Row) (types.Time, bool, error) {
+func (p *mockBuiltinDouble) evalTime(row chunk.Row) (types.Time, bool, error) {
 	v, isNull, err := p.args[0].EvalTime(p.ctx, row)
 	if err != nil {
 		return types.Time{}, false, err
@@ -223,7 +224,7 @@ func (p *mockRowBuiltinDouble) evalTime(row chunk.Row) (types.Time, bool, error)
 	return v, isNull, err
 }
 
-func (p *mockRowBuiltinDouble) evalDuration(row chunk.Row) (types.Duration, bool, error) {
+func (p *mockBuiltinDouble) evalDuration(row chunk.Row) (types.Duration, bool, error) {
 	v, isNull, err := p.args[0].EvalDuration(p.ctx, row)
 	if err != nil {
 		return types.Duration{}, false, err
@@ -232,7 +233,7 @@ func (p *mockRowBuiltinDouble) evalDuration(row chunk.Row) (types.Duration, bool
 	return v, isNull, err
 }
 
-func (p *mockRowBuiltinDouble) evalJSON(row chunk.Row) (json.BinaryJSON, bool, error) {
+func (p *mockBuiltinDouble) evalJSON(row chunk.Row) (json.BinaryJSON, bool, error) {
 	j, isNull, err := p.args[0].EvalJSON(p.ctx, row)
 	if err != nil {
 		return json.BinaryJSON{}, false, err
@@ -281,7 +282,7 @@ func genMockRowDouble(eType types.EvalType) (builtinFunc, *chunk.Chunk, *chunk.C
 	col1.Index = 0
 	col1.RetType = tp
 	bf := newBaseBuiltinFuncWithTp(mock.NewContext(), []Expression{col1}, eType, eType)
-	rowDouble := &mockRowBuiltinDouble{bf}
+	rowDouble := &mockBuiltinDouble{bf, eType}
 	input := chunk.New([]*types.FieldType{tp}, 1024, 1024)
 	buf := chunk.NewColumn(types.NewFieldType(convertETType(eType)), 1024)
 	for i := 0; i < 1024; i++ {
@@ -311,7 +312,7 @@ func genMockRowDouble(eType types.EvalType) (builtinFunc, *chunk.Chunk, *chunk.C
 			input.AppendTime(0, types.Time{Time: t, Type: mysqlType})
 		}
 	}
-	return &vecRowConverter{rowDouble}, input, buf, nil
+	return &vecRowConverter{rowDouble, nil, nil}, input, buf, nil
 }
 
 func (s *testEvaluatorSuite) checkVecEval(c *C, eType types.EvalType, sel []int, result *chunk.Column) {
