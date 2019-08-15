@@ -172,7 +172,26 @@ func BenchmarkPlusIntBufAllocator(b *testing.B) {
 
 type mockBuiltinDouble struct {
 	baseBuiltinFunc
-	evalType types.EvalType
+	evalType  types.EvalType
+	enableVec bool
+}
+
+func (p *mockBuiltinDouble) vectorized() bool {
+	return p.enableVec
+}
+
+func (p *mockBuiltinDouble) vecEval(input *chunk.Chunk, result *chunk.Column) error {
+	if err := p.args[0].VecEval(p.ctx, input, result); err != nil {
+		return err
+	}
+	switch p.evalType {
+	case types.ETInt:
+		i64s := result.Int64s()
+		for i := range i64s {
+			i64s[i] *= 2
+		}
+	}
+	return nil
 }
 
 func (p *mockBuiltinDouble) evalInt(row chunk.Row) (int64, bool, error) {
@@ -275,14 +294,14 @@ func convertETType(eType types.EvalType) (mysqlType byte) {
 	return
 }
 
-func genMockRowDouble(eType types.EvalType) (builtinFunc, *chunk.Chunk, *chunk.Column, error) {
+func genMockRowDouble(eType types.EvalType, enableVec bool) (builtinFunc, *chunk.Chunk, *chunk.Column, error) {
 	mysqlType := convertETType(eType)
 	tp := types.NewFieldType(mysqlType)
 	col1 := newColumn(1)
 	col1.Index = 0
 	col1.RetType = tp
 	bf := newBaseBuiltinFuncWithTp(mock.NewContext(), []Expression{col1}, eType, eType)
-	rowDouble := &mockBuiltinDouble{bf, eType}
+	rowDouble := &mockBuiltinDouble{bf, eType, enableVec}
 	input := chunk.New([]*types.FieldType{tp}, 1024, 1024)
 	buf := chunk.NewColumn(types.NewFieldType(convertETType(eType)), 1024)
 	for i := 0; i < 1024; i++ {
@@ -381,7 +400,7 @@ func (s *testEvaluatorSuite) TestDoubleRow2Vec(c *C) {
 	defer testleak.AfterTest(c)()
 	eTypes := []types.EvalType{types.ETInt, types.ETReal, types.ETDecimal, types.ETDuration, types.ETString, types.ETDatetime, types.ETJson}
 	for _, eType := range eTypes {
-		rowDouble, input, result, err := genMockRowDouble(eType)
+		rowDouble, input, result, err := genMockRowDouble(eType, false)
 		c.Assert(err, IsNil)
 		c.Assert(rowDouble.vecEval(input, result), IsNil)
 		s.checkVecEval(c, eType, nil, result)
@@ -407,7 +426,7 @@ func BenchmarkMockDoubleRow(b *testing.B) {
 	eTypes := []types.EvalType{types.ETInt, types.ETReal, types.ETDecimal, types.ETDuration, types.ETString, types.ETDatetime, types.ETJson}
 	for i, eType := range eTypes {
 		b.Run(typeNames[i], func(b *testing.B) {
-			rowDouble, input, result, _ := genMockRowDouble(eType)
+			rowDouble, input, result, _ := genMockRowDouble(eType, false)
 			it := chunk.NewIterator4Chunk(input)
 			b.ResetTimer()
 			switch eType {
@@ -526,12 +545,38 @@ func BenchmarkMockDoubleRow2Vec(b *testing.B) {
 	eTypes := []types.EvalType{types.ETInt, types.ETReal, types.ETDecimal, types.ETDuration, types.ETString, types.ETDatetime, types.ETJson}
 	for i, eType := range eTypes {
 		b.Run(typeNames[i], func(b *testing.B) {
-			rowDouble, input, result, _ := genMockRowDouble(eType)
+			rowDouble, input, result, _ := genMockRowDouble(eType, false)
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
 				err := rowDouble.vecEval(input, result)
 				if err != nil {
 					b.Fatal(err)
+				}
+			}
+		})
+	}
+}
+
+func BenchmarkMockDoubleVec2Row(b *testing.B) {
+	typeNames := []string{"Int"}
+	eTypes := []types.EvalType{types.ETInt}
+	for i, eType := range eTypes {
+		b.Run(typeNames[i], func(b *testing.B) {
+			rowDouble, input, result, _ := genMockRowDouble(eType, true)
+			it := chunk.NewIterator4Chunk(input)
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				result.Reset()
+				for r := it.Begin(); r != it.End(); r = it.Next() {
+					v, isNull, err := rowDouble.evalInt(r)
+					if err != nil {
+						b.Fatal(err)
+					}
+					if isNull {
+						result.AppendNull()
+					} else {
+						result.AppendInt64(v)
+					}
 				}
 			}
 		})
