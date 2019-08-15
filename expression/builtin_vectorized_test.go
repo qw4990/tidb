@@ -627,8 +627,8 @@ func BenchmarkMockDoubleRow2Vec(b *testing.B) {
 }
 
 func BenchmarkMockDoubleVec2Row(b *testing.B) {
-	typeNames := []string{"Int"}
-	eTypes := []types.EvalType{types.ETInt}
+	typeNames := []string{"Int", "Real", "Decimal", "Duration", "String", "Datetime", "JSON"}
+	eTypes := []types.EvalType{types.ETInt, types.ETReal, types.ETDecimal, types.ETDuration, types.ETString, types.ETDatetime, types.ETJson}
 	for i, eType := range eTypes {
 		b.Run(typeNames[i], func(b *testing.B) {
 			rowDouble, input, result, _ := genMockRowDouble(eType, true)
@@ -637,14 +637,9 @@ func BenchmarkMockDoubleVec2Row(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				result.Reset()
 				for r := it.Begin(); r != it.End(); r = it.Next() {
-					v, isNull, err := rowDouble.evalInt(r)
+					_, _, err := rowDouble.evalInt(r)
 					if err != nil {
 						b.Fatal(err)
-					}
-					if isNull {
-						result.AppendNull()
-					} else {
-						result.AppendInt64(v)
 					}
 				}
 			}
