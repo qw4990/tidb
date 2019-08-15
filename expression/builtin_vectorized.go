@@ -272,5 +272,5 @@ func (c *vecRowConvertFuncClass) getFunction(ctx sessionctx.Context, args []Expr
 	if err != nil {
 		return nil, err
 	}
-	return &vecRowConverter{bf}, nil
+	return &vecRowConverter{bf, nil, nil}, nil
 }
