@@ -246,12 +246,65 @@ func (c *vecRowConverter) evalInt(row chunk.Row) (val int64, isNull bool, err er
 	return c.buf.GetInt64(0), c.buf.IsNull(0), nil
 }
 
-//func (c *vecRowConverter) evalReal(row chunk.Row) (val float64, isNull bool, err error)             {}
-//func (c *vecRowConverter) evalString(row chunk.Row) (val string, isNull bool, err error)            {}
-//func (c *vecRowConverter) evalDecimal(row chunk.Row) (val *types.MyDecimal, isNull bool, err error) {}
-//func (c *vecRowConverter) evalTime(row chunk.Row) (val types.Time, isNull bool, err error)          {}
-//func (c *vecRowConverter) evalDuration(row chunk.Row) (val types.Duration, isNull bool, err error)  {}
-//func (c *vecRowConverter) evalJSON(row chunk.Row) (val json.BinaryJSON, isNull bool, err error)     {}
+func (c *vecRowConverter) evalReal(row chunk.Row) (val float64, isNull bool, err error) {
+	if !c.builtinFunc.vectorized() {
+		return c.builtinFunc.evalReal(row)
+	}
+	if err = c.vecEvalRow(types.ETReal, row); err != nil {
+		return
+	}
+	return c.buf.GetFloat64(0), c.buf.IsNull(0), nil
+}
+
+func (c *vecRowConverter) evalString(row chunk.Row) (val string, isNull bool, err error) {
+	if !c.builtinFunc.vectorized() {
+		return c.builtinFunc.evalString(row)
+	}
+	if err = c.vecEvalRow(types.ETString, row); err != nil {
+		return
+	}
+	return c.buf.GetString(0), c.buf.IsNull(0), nil
+}
+
+func (c *vecRowConverter) evalDecimal(row chunk.Row) (val *types.MyDecimal, isNull bool, err error) {
+	if !c.builtinFunc.vectorized() {
+		return c.builtinFunc.evalDecimal(row)
+	}
+	if err = c.vecEvalRow(types.ETDecimal, row); err != nil {
+		return
+	}
+	return c.buf.GetDecimal(0), c.buf.IsNull(0), nil
+}
+
+func (c *vecRowConverter) evalTime(row chunk.Row) (val types.Time, isNull bool, err error) {
+	if !c.builtinFunc.vectorized() {
+		return c.builtinFunc.evalTime(row)
+	}
+	if err = c.vecEvalRow(types.ETDatetime, row); err != nil {
+		return
+	}
+	return c.buf.GetTime(0), c.buf.IsNull(0), nil
+}
+
+func (c *vecRowConverter) evalDuration(row chunk.Row) (val types.Duration, isNull bool, err error) {
+	if !c.builtinFunc.vectorized() {
+		return c.builtinFunc.evalDuration(row)
+	}
+	if err = c.vecEvalRow(types.ETReal, row); err != nil {
+		return
+	}
+	return c.buf.GetDuration(0, 0), c.buf.IsNull(0), nil
+}
+
+func (c *vecRowConverter) evalJSON(row chunk.Row) (val json.BinaryJSON, isNull bool, err error) {
+	if !c.builtinFunc.vectorized() {
+		return c.builtinFunc.evalJSON(row)
+	}
+	if err = c.vecEvalRow(types.ETReal, row); err != nil {
+		return
+	}
+	return c.buf.GetJSON(0), c.buf.IsNull(0), nil
+}
 
 func (c *vecRowConverter) equal(bf builtinFunc) bool {
 	if converter, ok := bf.(*vecRowConverter); ok {
