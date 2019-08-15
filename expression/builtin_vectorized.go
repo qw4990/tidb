@@ -231,8 +231,9 @@ func (c *vecRowConverter) vecEvalRow(evalType types.EvalType, row chunk.Row) (er
 	input := row.Chunk()
 	sel := input.Sel()
 	input.SetSel(c.sel)
-	defer input.SetSel(sel)
-	return c.builtinFunc.vecEval(input, c.buf)
+	err = c.builtinFunc.vecEval(input, c.buf)
+	input.SetSel(sel)
+	return
 }
 
 func (c *vecRowConverter) evalInt(row chunk.Row) (val int64, isNull bool, err error) {
