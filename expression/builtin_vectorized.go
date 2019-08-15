@@ -237,7 +237,7 @@ func (c *vecRowConverter) vecEvalRow(evalType types.EvalType, row chunk.Row) (er
 
 func (c *vecRowConverter) evalInt(row chunk.Row) (val int64, isNull bool, err error) {
 	if !c.builtinFunc.vectorized() {
-		return c.evalInt(row)
+		return c.builtinFunc.evalInt(row)
 	}
 	if err = c.vecEvalRow(types.ETInt, row); err != nil {
 		return
