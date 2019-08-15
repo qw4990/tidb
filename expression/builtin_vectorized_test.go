@@ -21,6 +21,7 @@ import (
 	"time"
 
 	. "github.com/pingcap/check"
+	"github.com/pingcap/errors"
 	"github.com/pingcap/parser/mysql"
 	"github.com/pingcap/tidb/types"
 	"github.com/pingcap/tidb/types/json"
@@ -181,15 +182,83 @@ func (p *mockBuiltinDouble) vectorized() bool {
 }
 
 func (p *mockBuiltinDouble) vecEval(input *chunk.Chunk, result *chunk.Column) error {
-	if err := p.args[0].VecEval(p.ctx, input, result); err != nil {
-		return err
+	var buf *chunk.Column
+	switch p.evalType {
+	case types.ETInt, types.ETReal, types.ETDecimal, types.ETDuration, types.ETDatetime:
+		if err := p.args[0].VecEval(p.ctx, input, result); err != nil {
+			return err
+		}
+	default:
+		var err error
+		if buf, err = p.baseBuiltinFunc.get(p.evalType, input.NumRows()); err != nil {
+			return err
+		}
+		if err := p.args[0].VecEval(p.ctx, input, buf); err != nil {
+			return err
+		}
 	}
+
 	switch p.evalType {
 	case types.ETInt:
 		i64s := result.Int64s()
 		for i := range i64s {
 			i64s[i] *= 2
 		}
+	case types.ETReal:
+		f64s := result.Float64s()
+		for i := range f64s {
+			f64s[i] *= 2
+		}
+	case types.ETDecimal:
+		ds := result.Decimals()
+		for i := range ds {
+			r := new(types.MyDecimal)
+			if err := types.DecimalAdd(&ds[i], &ds[i], r); err != nil {
+				return err
+			}
+			ds[i] = *r
+		}
+	case types.ETDuration:
+		ds := result.GoDurations()
+		for i := range ds {
+			ds[i] *= 2
+		}
+	case types.ETDatetime:
+		ts := result.Times()
+		for i := range ts {
+			d, err := ts[i].ConvertToDuration()
+			if err != nil {
+				return err
+			}
+			if ts[i], err = ts[i].Add(p.ctx.GetSessionVars().StmtCtx, d); err != nil {
+				return err
+			}
+		}
+	case types.ETJson:
+		result.ReserveString(input.NumRows())
+		for i := 0; i < input.NumRows(); i++ {
+			j := buf.GetJSON(i)
+			path, err := json.ParseJSONPathExpr("$.key")
+			if err != nil {
+				return err
+			}
+			ret, ok := j.Extract([]json.PathExpression{path})
+			if !ok {
+				return errors.Errorf("path not found")
+			}
+			if err := j.UnmarshalJSON([]byte(fmt.Sprintf(`{"key":%v}`, 2*ret.GetInt64()))); err != nil {
+				return err
+			}
+			result.AppendJSON(j)
+		}
+		p.baseBuiltinFunc.put(buf)
+	case types.ETString:
+		result.ReserveString(input.NumRows())
+		for i := 0; i < input.NumRows(); i++ {
+			str := buf.GetString(i)
+			result.AppendString(str + str)
+		}
+		p.baseBuiltinFunc.put(buf)
 	}
 	return nil
 }
