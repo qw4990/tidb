@@ -136,7 +136,7 @@ func evalOneVec(ctx sessionctx.Context, expr Expression, input *chunk.Chunk, out
 			n := input.NumRows()
 			buf := chunk.NewColumn(ft, n)
 			buf.ReserveSet(n)
-			for i := 0; i < n; i ++ {
+			for i := 0; i < n; i++ {
 				if result.IsNull(i) {
 					buf.AppendNull()
 				} else {
