@@ -79,19 +79,71 @@ func evalOneVec(ctx sessionctx.Context, expr Expression, input *chunk.Chunk, out
 	switch et {
 	case types.ETInt:
 		if ft.Tp == mysql.TypeBit {
-			panic("TODO")
+			i64s := result.Int64s()
+			buf := chunk.NewColumn(ft, input.NumRows())
+			buf.ReserveBytes(input.NumRows())
+			uintBuf := make([]byte, 8)
+			for i := range i64s {
+				if result.IsNull(i) {
+					buf.AppendNull()
+				} else {
+					buf.AppendBytes(strconv.AppendUint(uintBuf[:0], uint64(i64s[i]), 10))
+				}
+			}
+			result = buf
 		} else if mysql.HasUnsignedFlag(ft.Flag) {
-			panic("TODO")
+			i64s := result.Int64s()
+			buf := chunk.NewColumn(ft, input.NumRows())
+			buf.ResizeUint64(input.NumRows())
+			for i := range i64s {
+				if result.IsNull(i) {
+					buf.AppendNull()
+				} else {
+					buf.AppendUint64(uint64(i64s[i]))
+				}
+			}
+			result = buf
 		}
 	case types.ETReal:
 		if ft.Tp == mysql.TypeFloat {
-			panic("TODO")
+			f64s := result.Float64s()
+			buf := chunk.NewColumn(ft, input.NumRows())
+			buf.ResizeFloat32(input.NumRows())
+			f32s := buf.Float32s()
+			for i := range f64s {
+				if result.IsNull(i) {
+					buf.AppendNull()
+				} else {
+					f32s[i] = float32(f64s[i])
+				}
+			}
+			result = buf
 		}
 	case types.ETString:
 		if ft.Tp == mysql.TypeEnum {
-			panic("TODO")
+			n := input.NumRows()
+			buf := chunk.NewColumn(ft, n)
+			buf.ReserveEnum(n)
+			for i := 0; i < n; i++ {
+				if result.IsNull(i) {
+					buf.AppendNull()
+				} else {
+					buf.AppendEnum(types.Enum{Value: 0, Name: result.GetString(i)})
+				}
+			}
+			result = buf
 		} else if ft.Tp == mysql.TypeSet {
-			panic("TODO")
+			n := input.NumRows()
+			buf := chunk.NewColumn(ft, n)
+			buf.ReserveSet(n)
+			for i := 0; i < n; i ++ {
+				if result.IsNull(i) {
+					buf.AppendNull()
+				} else {
+					buf.AppendSet(types.Set{Value: 0, Name: result.GetString(i)})
+				}
+			}
+			result = buf
 		}
 	}
 
