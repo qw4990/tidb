@@ -605,7 +605,7 @@ func (c *Chunk) Column(colIdx int) *Column {
 
 // SetColumn ...
 func (c *Chunk) SetColumn(colIdx int, col *Column) {
-	for colIdx <= len(c.columns) {
+	for len(c.columns) <= colIdx {
 		c.columns = append(c.columns, nil)
 	}
 	c.columns[colIdx] = col
