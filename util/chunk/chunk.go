@@ -603,6 +603,14 @@ func (c *Chunk) Column(colIdx int) *Column {
 	return c.columns[colIdx]
 }
 
+// SetColumn ...
+func (c *Chunk) SetColumn(colIdx int, col *Column) {
+	for colIdx <= len(c.columns) {
+		c.columns = append(c.columns, nil)
+	}
+	c.columns[colIdx] = col
+}
+
 // Sel returns Sel of this Chunk.
 func (c *Chunk) Sel() []int {
 	return c.sel

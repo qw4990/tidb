@@ -64,6 +64,41 @@ func VectorizedExecute(ctx sessionctx.Context, exprs []Expression, iterator *chu
 	return nil
 }
 
+func evalOneVec(ctx sessionctx.Context, expr Expression, input *chunk.Chunk, output *chunk.Chunk, colID int) error {
+	ft := expr.GetType()
+	et := ft.EvalType()
+	result, err := newBuffer(et, input.NumRows())
+	if err != nil {
+		return err
+	}
+	if err := expr.VecEval(ctx, input, result); err != nil {
+		return err
+	}
+
+	// adjust the results according to the return type of this expression
+	switch et {
+	case types.ETInt:
+		if ft.Tp == mysql.TypeBit {
+			panic("TODO")
+		} else if mysql.HasUnsignedFlag(ft.Flag) {
+			panic("TODO")
+		}
+	case types.ETReal:
+		if ft.Tp == mysql.TypeFloat {
+			panic("TODO")
+		}
+	case types.ETString:
+		if ft.Tp == mysql.TypeEnum {
+			panic("TODO")
+		} else if ft.Tp == mysql.TypeSet {
+			panic("TODO")
+		}
+	}
+
+	output.SetColumn(colID, result)
+	return nil
+}
+
 func evalOneColumn(ctx sessionctx.Context, expr Expression, iterator *chunk.Iterator4Chunk, output *chunk.Chunk, colID int) (err error) {
 	switch fieldType, evalType := expr.GetType(), expr.GetType().EvalType(); evalType {
 	case types.ETInt:
