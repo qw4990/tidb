@@ -22,6 +22,8 @@ import (
 	"github.com/pingcap/tidb/util/hack"
 )
 
+var mockChunk = &Chunk{numVirtualRows: 1}
+
 // Row represents a row of data, can be used to access values.
 type Row struct {
 	c   *Chunk
@@ -30,6 +32,9 @@ type Row struct {
 
 // Chunk returns the Chunk which the row belongs to.
 func (r Row) Chunk() *Chunk {
+	if r.c == nil {
+		return mockChunk
+	}
 	return r.c
 }
 
