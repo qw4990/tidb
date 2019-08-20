@@ -22,7 +22,9 @@
 package expression
 
 import (
+	"fmt"
 	"math"
+	"reflect"
 	"strconv"
 	"strings"
 
@@ -120,14 +122,14 @@ func (c *castAsIntFunctionClass) getFunction(ctx sessionctx.Context, args []Expr
 	bf := newBaseBuiltinCastFunc(newBaseBuiltinFunc(ctx, args), ctx.Value(inUnionCastContext) != nil)
 	bf.tp = c.tp
 	if args[0].GetType().Hybrid() || IsBinaryLiteral(args[0]) {
-		// in this case, regard the type of args[0] as Int
-		newArgs := make([]Expression, 0, len(args))
-		for _, arg := range args {
-			newArgs = append(newArgs, arg.Clone())
-		}
-		*newArgs[0].GetType() = *c.tp
-		bf := newBaseBuiltinCastFunc(newBaseBuiltinFunc(ctx, newArgs), ctx.Value(inUnionCastContext) != nil)
-		bf.tp = c.tp
+		//// in this case, regard the type of args[0] as Int
+		//newArgs := make([]Expression, 0, len(args))
+		//for _, arg := range args {
+		//	newArgs = append(newArgs, arg.Clone())
+		//}
+		//*newArgs[0].GetType() = *c.tp
+		//bf := newBaseBuiltinCastFunc(newBaseBuiltinFunc(ctx, newArgs), ctx.Value(inUnionCastContext) != nil)
+		//bf.tp = c.tp
 
 		sig = &builtinCastIntAsIntSig{bf}
 		sig.setPbCode(tipb.ScalarFuncSig_CastIntAsInt)
@@ -449,6 +451,7 @@ func (b *builtinCastIntAsIntSig) vectorized() bool {
 }
 
 func (b *builtinCastIntAsIntSig) vecEval(input *chunk.Chunk, result *chunk.Column) error {
+	fmt.Println("_------------->>>>>>> ", reflect.TypeOf(b.args[0]))
 	if err := b.args[0].VecEval(b.ctx, input, result); err != nil {
 		return err
 	}

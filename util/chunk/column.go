@@ -24,6 +24,10 @@ import (
 	"github.com/pingcap/tidb/util/hack"
 )
 
+func (c *Column) DATALEN() int {
+	return len(c.data)
+}
+
 // AppendDuration appends a duration value into this Column.
 func (c *Column) AppendDuration(dur types.Duration) {
 	c.AppendInt64(int64(dur.Duration))

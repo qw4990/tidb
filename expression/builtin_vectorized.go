@@ -14,6 +14,8 @@
 package expression
 
 import (
+	"fmt"
+	"reflect"
 	"sync"
 
 	"github.com/pingcap/errors"
@@ -142,6 +144,9 @@ func (c *vecRowConverter) evalInt(row chunk.Row) (val int64, isNull bool, err er
 	if err = c.vecEvalRow(types.ETInt, row); err != nil {
 		return
 	}
+
+	fmt.Println(">>>>>>>>> ", c.buf.DATALEN(), reflect.TypeOf(c.builtinFunc))
+
 	return c.buf.GetInt64(0), c.buf.IsNull(0), nil
 }
 
