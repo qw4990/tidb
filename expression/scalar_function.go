@@ -140,9 +140,10 @@ func ScalarFuncs2Exprs(funcs []*ScalarFunction) []Expression {
 
 // Clone implements Expression interface.
 func (sf *ScalarFunction) Clone() Expression {
+	retType := *sf.RetType
 	return &ScalarFunction{
 		FuncName: sf.FuncName,
-		RetType:  sf.RetType,
+		RetType:  &retType,
 		Function: sf.Function.Clone(),
 		hashcode: sf.hashcode,
 	}
