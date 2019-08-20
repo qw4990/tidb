@@ -121,7 +121,14 @@ func (c *castAsIntFunctionClass) getFunction(ctx sessionctx.Context, args []Expr
 	bf.tp = c.tp
 	if args[0].GetType().Hybrid() || IsBinaryLiteral(args[0]) {
 		// in this case, regard the type of args[0] as Int
-		*args[0].GetType() = *c.tp
+		newArgs := make([]Expression, 0, len(args))
+		for _, arg := range args {
+			newArgs = append(newArgs, arg.Clone())
+		}
+		*newArgs[0].GetType() = *c.tp
+		bf := newBaseBuiltinCastFunc(newBaseBuiltinFunc(ctx, newArgs), ctx.Value(inUnionCastContext) != nil)
+		bf.tp = c.tp
+
 		sig = &builtinCastIntAsIntSig{bf}
 		sig.setPbCode(tipb.ScalarFuncSig_CastIntAsInt)
 		return sig, nil

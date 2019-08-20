@@ -305,6 +305,8 @@ func (col *Column) EvalJSON(ctx sessionctx.Context, row chunk.Row) (json.BinaryJ
 // Clone implements Expression interface.
 func (col *Column) Clone() Expression {
 	newCol := *col
+	retType := *col.RetType
+	newCol.RetType = &retType
 	return &newCol
 }
 
