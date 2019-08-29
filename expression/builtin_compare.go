@@ -1710,6 +1710,10 @@ func (b *builtinGTIntSig) vecEvalInt(input *chunk.Chunk, result *chunk.Column) e
 	return nil
 }
 
+func (b *builtinGTIntSig) vectorized() bool {
+	return true
+}
+
 type builtinGTRealSig struct {
 	baseBuiltinFunc
 }

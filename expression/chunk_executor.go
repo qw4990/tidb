@@ -321,25 +321,25 @@ func executeToString(ctx sessionctx.Context, expr Expression, fieldType *types.F
 	return nil
 }
 
+// IsValidVecExprFilters checks if these filters are valid to evaluate them in a vectorized manner.
+func IsValidVecExprFilters(ctx sessionctx.Context, filters []Expression) bool {
+	if !ctx.GetSessionVars().EnableVectorizedExpression {
+		return false
+	}
+	for _, filter := range filters {
+		// TODO: only support Int expressions now, and we will introduce EvalBool/VecEvalBool methods
+		// to expressions later to solve this problem.
+		if !filter.Vectorized() || filter.GetType().EvalType() != types.ETInt {
+			return false
+		}
+	}
+	return true
+}
+
 // VectorizedFilter applies a list of filters to a Chunk and
 // returns a bool slice, which indicates whether a row is passed the filters.
 // Filters is executed vectorized.
 func VectorizedFilter(ctx sessionctx.Context, filters []Expression, iterator *chunk.Iterator4Chunk, selected []bool) ([]bool, error) {
-	allVectorized := true
-	for _, filter := range filters {
-		if !ctx.GetSessionVars().EnableVectorizedExpression ||
-			!filter.Vectorized() ||
-			filter.GetType().EvalType() != types.ETInt {
-			// TODO: only support Int expressions now, we will introduce EvalBool/VecEvalBool methods to
-			// expressions later to solve this problem.
-			allVectorized = false
-			break
-		}
-	}
-	if allVectorized {
-		return vectorizedExprFilter(ctx, filters, iterator.Chunk(), selected)
-	}
-
 	selected = selected[:0]
 	for i, numRows := 0, iterator.Len(); i < numRows; i++ {
 		selected = append(selected, true)
@@ -372,14 +372,14 @@ func VectorizedFilter(ctx sessionctx.Context, filters []Expression, iterator *ch
 	return selected, nil
 }
 
-func vectorizedExprFilter(ctx sessionctx.Context, filters []Expression, input *chunk.Chunk, selected []bool) ([]bool, error) {
-	// TODO: recycle all sel slices and Columns here.
+// VectorizedExprFilter applies these filters in a vectorized manner to a Chunk.
+func VectorizedExprFilter(ctx sessionctx.Context, filters []Expression, input *chunk.Chunk, selected []bool) ([]bool, error) {
 	n := input.NumRows()
 	sel := make([]int, n)
 	for i := range sel {
 		sel[i] = i
 	}
-	result, err := newBuffer(types.ETInt, n)
+	result, err := newBuffer(types.ETInt, n) // TODO: recycle all sel slices and Columns here.
 	if err != nil {
 		return nil, err
 	}
