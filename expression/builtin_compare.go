@@ -1658,6 +1658,58 @@ func (b *builtinGTIntSig) evalInt(row chunk.Row) (val int64, isNull bool, err er
 	return resOfGT(CompareInt(b.ctx, b.args[0], b.args[1], row, row))
 }
 
+func (b *builtinGTIntSig) vecEvalInt(input *chunk.Chunk, result *chunk.Column) error {
+	n := input.NumRows()
+	resultRight, err := b.get(types.ETInt, n)
+	if err != nil {
+		return err
+	}
+	defer b.put(resultRight)
+	if err := b.args[0].VecEvalInt(b.ctx, input, result); err != nil {
+		return err
+	}
+	if err := b.args[1].VecEvalInt(b.ctx, input, resultRight); err != nil {
+		return err
+	}
+
+	isUnsigned0 := mysql.HasUnsignedFlag(b.args[0].GetType().Flag)
+	i64s0 := result.Int64s()
+	isUnsigned1 := mysql.HasUnsignedFlag(b.args[1].GetType().Flag)
+	i64s1 := resultRight.Int64s()
+	for i := 0; i < n; i ++ {
+		null0, null1 := result.IsNull(i), resultRight.IsNull(i)
+		if null0 || null1 {
+			i64s0[i] = compareNull(null0, null1)
+			result.SetNull(i, true)
+			continue
+		}
+
+		var res int
+		arg0, arg1 := i64s0[i], i64s1[i]
+		switch {
+		case isUnsigned0 && isUnsigned1:
+			res = types.CompareUint64(uint64(arg0), uint64(arg1))
+		case isUnsigned0 && !isUnsigned1:
+			if arg1 < 0 || uint64(arg0) > math.MaxInt64 {
+				res = 1
+			} else {
+				res = types.CompareInt64(arg0, arg1)
+			}
+		case !isUnsigned0 && isUnsigned1:
+			if arg0 < 0 || uint64(arg1) > math.MaxInt64 {
+				res = -1
+			} else {
+				res = types.CompareInt64(arg0, arg1)
+			}
+		case !isUnsigned0 && !isUnsigned1:
+			res = types.CompareInt64(arg0, arg1)
+		}
+		i64s0[i] = int64(res)
+	}
+
+	return nil
+}
+
 type builtinGTRealSig struct {
 	baseBuiltinFunc
 }
