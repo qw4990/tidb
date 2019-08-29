@@ -201,6 +201,7 @@ type vecExprBenchCase struct {
 
 var vecExprBenchCases = []vecExprBenchCase{
 	{ast.Cast, types.ETInt, []types.EvalType{types.ETInt}},
+	{ast.GT, types.ETInt, []types.EvalType{types.ETInt, types.ETInt}},
 }
 
 func fillColumn(eType types.EvalType, chk *chunk.Chunk, colIdx int) {
@@ -313,7 +314,6 @@ func BenchmarkVectorizedExpression(b *testing.B) {
 
 func TestVectorizedExpressionSel(t *testing.T) {
 	ctx := mock.NewContext()
-	ctx.GetSessionVars().EnableVectorizedExpression = true
 	for _, testCase := range vecExprBenchCases {
 		expr, input, _ := genVecExprBenchCase(ctx, testCase)
 		filters := []Expression{expr}
@@ -337,5 +337,39 @@ func TestVectorizedExpressionSel(t *testing.T) {
 }
 
 func BenchmarkVectorizedExpressionSel(b *testing.B) {
+	ctx := mock.NewContext()
+	for _, testCase := range vecExprBenchCases {
+		expr, input, _ := genVecExprBenchCase(ctx, testCase)
+		filters := []Expression{expr}
+		if !IsValidVecExprFilters(ctx, filters) {
+			continue
+		}
+		exprName := expr.String()
+		if sf, ok := expr.(*ScalarFunction); ok {
+			exprName = fmt.Sprintf("%v", reflect.TypeOf(sf.Function))
+			tmp := strings.Split(exprName, ".")
+			exprName = tmp[len(tmp)-1]
+		}
 
+		b.Run(exprName+"-VecSel", func(b *testing.B) {
+			b.ResetTimer()
+			sel := make([]bool, 0, 1024)
+			for i := 0; i < b.N; i++ {
+				if _, err := VectorizedExprFilter(ctx, filters, input, sel); err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+
+		b.Run(exprName+"NonVecSel", func(b *testing.B) {
+			b.ResetTimer()
+			sel := make([]bool, 0, 1024)
+			it := chunk.NewIterator4Chunk(input)
+			for i := 0; i < b.N; i++ {
+				if _, err := VectorizedFilter(ctx, filters, it, sel); err != nil {
+					b.Fatal()
+				}
+			}
+		})
+	}
 }
