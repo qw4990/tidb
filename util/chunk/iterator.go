@@ -110,6 +110,11 @@ type Iterator4Chunk struct {
 	numRows int32
 }
 
+// Chunk returns the Chunk this iterator belongs to.
+func (it *Iterator4Chunk) Chunk() *Chunk {
+	return it.chk
+}
+
 // Begin implements the Iterator interface.
 func (it *Iterator4Chunk) Begin() Row {
 	it.numRows = int32(it.chk.NumRows())

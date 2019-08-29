@@ -325,6 +325,16 @@ func executeToString(ctx sessionctx.Context, expr Expression, fieldType *types.F
 // returns a bool slice, which indicates whether a row is passed the filters.
 // Filters is executed vectorized.
 func VectorizedFilter(ctx sessionctx.Context, filters []Expression, iterator *chunk.Iterator4Chunk, selected []bool) ([]bool, error) {
+	allVectorized := true
+	for _, filter := range filters {
+		if !ctx.GetSessionVars().EnableVectorizedExpression || !filter.Vectorized() {
+			allVectorized = false
+		}
+	}
+	if allVectorized {
+		return vectorizedExprFilter(ctx, filters, iterator.Chunk(), selected)
+	}
+
 	selected = selected[:0]
 	for i, numRows := 0, iterator.Len(); i < numRows; i++ {
 		selected = append(selected, true)
@@ -353,6 +363,48 @@ func VectorizedFilter(ctx sessionctx.Context, filters []Expression, iterator *ch
 				selected[row.Idx()] = selected[row.Idx()] && bVal
 			}
 		}
+	}
+	return selected, nil
+}
+
+func vectorizedExprFilter(ctx sessionctx.Context, filters []Expression, input *chunk.Chunk, selected []bool) ([]bool, error) {
+	// TODO: recycle all sel slices and Columns here.
+	n := input.NumRows()
+	sel := make([]int, n)
+	for i := range sel {
+		sel[i] = i
+	}
+	result, err := newBuffer(types.ETInt, n)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, filter := range filters {
+		isIntType := filter.GetType().EvalType() == types.ETInt
+		if isIntType {
+			if err := filter.VecEvalInt(ctx, input, result); err != nil {
+				return nil, err
+			}
+			i64s := result.Int64s()
+			for i, j := 0, 0; j < len(i64s); j++ {
+				if !result.IsNull(j) && i64s[j] != 0 {
+					sel[i] = sel[j]
+					i++
+				}
+			}
+		} else {
+
+		}
+		input.SetSel(sel)
+	}
+
+	input.SetSel(nil)
+	selected = selected[:0]
+	for i := 0; i < len(sel); i++ {
+		selected = append(selected, false)
+	}
+	for _, s := range sel {
+		selected[s] = true
 	}
 	return selected, nil
 }
