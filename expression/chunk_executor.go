@@ -327,8 +327,13 @@ func executeToString(ctx sessionctx.Context, expr Expression, fieldType *types.F
 func VectorizedFilter(ctx sessionctx.Context, filters []Expression, iterator *chunk.Iterator4Chunk, selected []bool) ([]bool, error) {
 	allVectorized := true
 	for _, filter := range filters {
-		if !ctx.GetSessionVars().EnableVectorizedExpression || !filter.Vectorized() {
+		if !ctx.GetSessionVars().EnableVectorizedExpression ||
+			!filter.Vectorized() ||
+			filter.GetType().EvalType() != types.ETInt {
+			// TODO: only support Int expressions now, we will introduce EvalBool/VecEvalBool methods to
+			// expressions later to solve this problem.
 			allVectorized = false
+			break
 		}
 	}
 	if allVectorized {
@@ -380,20 +385,15 @@ func vectorizedExprFilter(ctx sessionctx.Context, filters []Expression, input *c
 	}
 
 	for _, filter := range filters {
-		isIntType := filter.GetType().EvalType() == types.ETInt
-		if isIntType {
-			if err := filter.VecEvalInt(ctx, input, result); err != nil {
-				return nil, err
+		if err := filter.VecEvalInt(ctx, input, result); err != nil {
+			return nil, err
+		}
+		i64s := result.Int64s()
+		for i, j := 0, 0; j < len(i64s); j++ {
+			if !result.IsNull(j) && i64s[j] != 0 {
+				sel[i] = sel[j]
+				i++
 			}
-			i64s := result.Int64s()
-			for i, j := 0, 0; j < len(i64s); j++ {
-				if !result.IsNull(j) && i64s[j] != 0 {
-					sel[i] = sel[j]
-					i++
-				}
-			}
-		} else {
-
 		}
 		input.SetSel(sel)
 	}
