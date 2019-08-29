@@ -310,3 +310,32 @@ func BenchmarkVectorizedExpression(b *testing.B) {
 		})
 	}
 }
+
+func TestVectorizedExpressionSel(t *testing.T) {
+	ctx := mock.NewContext()
+	ctx.GetSessionVars().EnableVectorizedExpression = true
+	for _, testCase := range vecExprBenchCases {
+		expr, input, _ := genVecExprBenchCase(ctx, testCase)
+		filters := []Expression{expr}
+		if !IsValidVecExprFilters(ctx, filters) {
+			continue
+		}
+		sel1, err := VectorizedExprFilter(ctx, filters, input, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		it := chunk.NewIterator4Chunk(input)
+		sel2, err := VectorizedFilter(ctx, filters, it, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(sel1, sel2) {
+			t.Fatal(fmt.Sprintf("invalid test case=%v", testCase))
+		}
+	}
+}
+
+func BenchmarkVectorizedExpressionSel(b *testing.B) {
+
+}
