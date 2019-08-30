@@ -14,6 +14,8 @@
 package expression
 
 import (
+	"fmt"
+	"reflect"
 	"strconv"
 	"unsafe"
 
@@ -66,8 +68,14 @@ func VectorizedExecute(ctx sessionctx.Context, exprs []Expression, iterator *chu
 }
 
 func evalOneVec(ctx sessionctx.Context, expr Expression, input *chunk.Chunk, output *chunk.Chunk, colIdx int) error {
+	//debug.PrintStack()
 	ft := expr.GetType()
 	result := output.Column(colIdx)
+	fmt.Println(">>>>>>>>>>>>>>>>>> ???????? ", expr, reflect.TypeOf(expr), ft.EvalType(), input.NumRows())
+	fmt.Println("####> ", output.NumRows())
+	defer func() {
+		fmt.Println("###< ", output.NumRows())
+	}()
 	switch ft.EvalType() {
 	case types.ETInt:
 		if err := expr.VecEvalInt(ctx, input, result); err != nil {

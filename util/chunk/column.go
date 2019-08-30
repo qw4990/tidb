@@ -65,6 +65,10 @@ type Column struct {
 	elemBuf    []byte
 }
 
+func (c *Column) Len() int {
+	return c.length
+}
+
 // NewColumn creates a new column with the specific length and capacity.
 func NewColumn(ft *types.FieldType, cap int) *Column {
 	return newColumn(getFixedLen(ft), cap)

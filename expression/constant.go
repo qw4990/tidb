@@ -162,7 +162,10 @@ func (c *Constant) VecEvalTime(ctx sessionctx.Context, input *chunk.Chunk, resul
 // VecEvalDuration evaluates this expression in a vectorized manner.
 func (c *Constant) VecEvalDuration(ctx sessionctx.Context, input *chunk.Chunk, result *chunk.Column) error {
 	if c.DeferredExpr == nil {
-		return genVecFromConstExpr(ctx, c, types.ETDecimal, input, result)
+		fmt.Println("######################((( ", result.Len())
+		err := genVecFromConstExpr(ctx, c, types.ETDuration, input, result)
+		fmt.Println("-------->>>>>>>>> ", input.NumRows(), result.Len(), result.GetDuration(0, 0))
+		return err
 	}
 	return c.DeferredExpr.VecEvalDuration(ctx, input, result)
 }
