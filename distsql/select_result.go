@@ -16,6 +16,7 @@ package distsql
 import (
 	"context"
 	"fmt"
+	"github.com/pingcap/tidb/util/execdetails"
 	"time"
 
 	"github.com/pingcap/errors"
@@ -107,7 +108,7 @@ func (r *selectResult) fetchResp(ctx context.Context) error {
 		for _, warning := range r.selectResp.Warnings {
 			sc.AppendWarning(terror.ClassTiKV.New(terror.ErrCode(warning.Code), warning.Msg))
 		}
-		r.updateCopRuntimeStats(resultSubset.GetExecDetails().CalleeAddress, resultSubset.RespTime())
+		r.updateCopRuntimeStats(resultSubset.GetExecDetails(), resultSubset.RespTime())
 		r.feedback.Update(resultSubset.GetStartKey(), r.selectResp.OutputCounts)
 		r.partialCount++
 		sc.MergeExecDetails(resultSubset.GetExecDetails(), nil)
@@ -206,7 +207,8 @@ func (r *selectResult) readFromChunk(ctx context.Context, chk *chunk.Chunk) erro
 	return nil
 }
 
-func (r *selectResult) updateCopRuntimeStats(callee string, respTime time.Duration) {
+func (r *selectResult) updateCopRuntimeStats(detail *execdetails.ExecDetails, respTime time.Duration) {
+	callee := detail.CalleeAddress
 	if r.ctx.GetSessionVars().StmtCtx.RuntimeStatsColl == nil || callee == "" {
 		return
 	}
@@ -218,7 +220,7 @@ func (r *selectResult) updateCopRuntimeStats(callee string, respTime time.Durati
 		return
 	}
 
-	r.ctx.GetSessionVars().StmtCtx.RuntimeStatsColl.RecordOneReaderStats(r.rootPlanID.String(), respTime)
+	r.ctx.GetSessionVars().StmtCtx.RuntimeStatsColl.RecordOneReaderStats(r.rootPlanID.String(), respTime, detail)
 	for i, detail := range r.selectResp.GetExecutionSummaries() {
 		if detail != nil && detail.TimeProcessedNs != nil &&
 			detail.NumProducedRows != nil && detail.NumIterations != nil {
