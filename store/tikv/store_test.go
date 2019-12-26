@@ -46,19 +46,6 @@ func (s *testStoreSuite) TearDownTest(c *C) {
 	c.Assert(s.store.Close(), IsNil)
 }
 
-func (s *testStoreSuite) TestParsePath(c *C) {
-	etcdAddrs, disableGC, err := parsePath("tikv://node1:2379,node2:2379")
-	c.Assert(err, IsNil)
-	c.Assert(etcdAddrs, DeepEquals, []string{"node1:2379", "node2:2379"})
-	c.Assert(disableGC, IsFalse)
-
-	_, _, err = parsePath("tikv://node1:2379")
-	c.Assert(err, IsNil)
-	_, disableGC, err = parsePath("tikv://node1:2379?disableGC=true")
-	c.Assert(err, IsNil)
-	c.Assert(disableGC, IsTrue)
-}
-
 func (s *testStoreSuite) TestOracle(c *C) {
 	o := &mockoracle.MockOracle{}
 	s.store.oracle = o

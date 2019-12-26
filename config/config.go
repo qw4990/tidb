@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"net/url"
 	"os"
 	"reflect"
 	"strings"
@@ -33,6 +34,7 @@ import (
 	"github.com/pingcap/tidb/util/logutil"
 	tracing "github.com/uber/jaeger-client-go/config"
 	"go.uber.org/atomic"
+	"go.uber.org/zap"
 )
 
 // Config number limitations
@@ -134,6 +136,16 @@ func (b nullableBool) MarshalJSON() ([]byte, error) {
 	default:
 		return json.Marshal(nil)
 	}
+}
+
+func (b nullableBool) MarshalText() ([]byte, error) {
+	if !b.IsValid {
+		return []byte(""), nil
+	}
+	if b.IsTrue {
+		return []byte("true"), nil
+	}
+	return []byte("false"), nil
 }
 
 func (b *nullableBool) UnmarshalText(text []byte) error {
@@ -547,7 +559,7 @@ var defaultConf = Config{
 	},
 	StmtSummary: StmtSummary{
 		Enable:          false,
-		MaxStmtCount:    100,
+		MaxStmtCount:    200,
 		MaxSQLLength:    4096,
 		RefreshInterval: 1800,
 		HistorySize:     24,
@@ -751,6 +763,9 @@ func (c *Config) Valid() error {
 	if c.AlterPrimaryKey && c.Experimental.AllowAutoRandom {
 		return fmt.Errorf("allow-auto-random is unavailable when alter-primary-key is enabled")
 	}
+	if c.PreparedPlanCache.Capacity < 1 {
+		return fmt.Errorf("capacity in [prepared-plan-cache] should be at least 1")
+	}
 	return nil
 }
 
@@ -809,3 +824,28 @@ const (
 	OOMActionCancel = "cancel"
 	OOMActionLog    = "log"
 )
+
+// ParsePath parses this path.
+func ParsePath(path string) (etcdAddrs []string, disableGC bool, err error) {
+	var u *url.URL
+	u, err = url.Parse(path)
+	if err != nil {
+		err = errors.Trace(err)
+		return
+	}
+	if strings.ToLower(u.Scheme) != "tikv" {
+		err = errors.Errorf("Uri scheme expected[tikv] but found [%s]", u.Scheme)
+		logutil.BgLogger().Error("parsePath error", zap.Error(err))
+		return
+	}
+	switch strings.ToLower(u.Query().Get("disableGC")) {
+	case "true":
+		disableGC = true
+	case "false", "":
+	default:
+		err = errors.New("disableGC flag should be true/false")
+		return
+	}
+	etcdAddrs = strings.Split(u.Host, ",")
+	return
+}
