@@ -16,7 +16,6 @@ package codec
 import (
 	"bytes"
 	"encoding/binary"
-	"fmt"
 	"hash"
 	"io"
 	"time"
@@ -1081,92 +1080,200 @@ func appendFloatToChunk(val float64, chk *chunk.Chunk, colIdx int, ft *types.Fie
 	}
 }
 
-// HashGroupKey encodes each row of this column and append encoded data into buf.
-// Only use in the aggregate executor.
-func HashGroupKey(sc *stmtctx.StatementContext, n int, col *chunk.Column, buf [][]byte, ft *types.FieldType) ([][]byte, error) {
-	var err error
-	switch ft.EvalType() {
-	case types.ETInt:
-		i64s := col.Int64s()
-		for i := 0; i < n; i++ {
-			if col.IsNull(i) {
-				buf[i] = append(buf[i], NilFlag)
+
+// HashChunkSelected writes the encoded value of selected row's column, which of index `colIdx`, to h.
+// sel indicates which rows are selected. If it is nil, all rows are selected.
+func HashChunkSelectedXXX(sc *stmtctx.StatementContext, rows int, h []hash.Hash64, column *chunk.Column, tp *types.FieldType, buf []byte) (err error) {
+	var b []byte
+	switch tp.Tp {
+	case mysql.TypeTiny, mysql.TypeShort, mysql.TypeInt24, mysql.TypeLong, mysql.TypeLonglong, mysql.TypeYear:
+		i64s := column.Int64s()
+		for i, v := range i64s {
+			if column.IsNull(i) {
+				buf[0], b = NilFlag, nil
 			} else {
-				buf[i] = encodeSignedInt(buf[i], i64s[i], false)
-			}
-		}
-	case types.ETReal:
-		f64s := col.Float64s()
-		for i := 0; i < n; i++ {
-			if col.IsNull(i) {
-				buf[i] = append(buf[i], NilFlag)
-			} else {
-				buf[i] = append(buf[i], floatFlag)
-				buf[i] = EncodeFloat(buf[i], f64s[i])
-			}
-		}
-	case types.ETDecimal:
-		ds := col.Decimals()
-		for i := 0; i < n; i++ {
-			if col.IsNull(i) {
-				buf[i] = append(buf[i], NilFlag)
-			} else {
-				buf[i] = append(buf[i], decimalFlag)
-				buf[i], err = EncodeDecimal(buf[i], &ds[i], ft.Flen, ft.Decimal)
-				if terror.ErrorEqual(err, types.ErrTruncated) {
-					err = sc.HandleTruncate(err)
-				} else if terror.ErrorEqual(err, types.ErrOverflow) {
-					err = sc.HandleOverflow(err, err)
+				buf[0] = varintFlag
+				if mysql.HasUnsignedFlag(tp.Flag) && v < 0 {
+					buf[0] = uvarintFlag
 				}
+				b = column.GetRaw(i)
+			}
+
+			// As the golang doc described, `Hash.Write` never returns an error.
+			// See https://golang.org/pkg/hash/#Hash
+			_, _ = h[i].Write(buf)
+			_, _ = h[i].Write(b)
+		}
+	case mysql.TypeFloat:
+		f32s := column.Float32s()
+		for i, f := range f32s {
+			if column.IsNull(i) {
+				buf[0], b = NilFlag, nil
+			} else {
+				buf[0] = floatFlag
+				d := float64(f)
+				b = (*[sizeFloat64]byte)(unsafe.Pointer(&d))[:]
+			}
+
+			// As the golang doc described, `Hash.Write` never returns an error.
+			// See https://golang.org/pkg/hash/#Hash
+			_, _ = h[i].Write(buf)
+			_, _ = h[i].Write(b)
+		}
+	case mysql.TypeDouble:
+		f64s := column.Float64s()
+		for i, f := range f64s {
+			if column.IsNull(i) {
+				buf[0], b = NilFlag, nil
+			} else {
+				buf[0] = floatFlag
+				b = (*[sizeFloat64]byte)(unsafe.Pointer(&f))[:]
+			}
+
+			// As the golang doc described, `Hash.Write` never returns an error.
+			// See https://golang.org/pkg/hash/#Hash
+			_, _ = h[i].Write(buf)
+			_, _ = h[i].Write(b)
+		}
+	case mysql.TypeVarchar, mysql.TypeVarString, mysql.TypeString, mysql.TypeBlob, mysql.TypeTinyBlob, mysql.TypeMediumBlob, mysql.TypeLongBlob:
+		for i := 0; i < rows; i++ {
+			if column.IsNull(i) {
+				buf[0], b = NilFlag, nil
+			} else {
+				buf[0] = compactBytesFlag
+				b = column.GetBytes(i)
+			}
+
+			// As the golang doc described, `Hash.Write` never returns an error.
+			// See https://golang.org/pkg/hash/#Hash
+			_, _ = h[i].Write(buf)
+			_, _ = h[i].Write(b)
+		}
+	case mysql.TypeDate, mysql.TypeDatetime, mysql.TypeTimestamp:
+		ts := column.Times()
+		for i, t := range ts {
+			if column.IsNull(i) {
+				buf[0], b = NilFlag, nil
+			} else {
+				buf[0] = uintFlag
+				// Encoding timestamp need to consider timezone.
+				// If it's not in UTC, transform to UTC first.
+				if t.Type() == mysql.TypeTimestamp && sc.TimeZone != time.UTC {
+					err = t.ConvertTimeZone(sc.TimeZone, time.UTC)
+					if err != nil {
+						return
+					}
+				}
+				var v uint64
+				v, err = t.ToPackedUint()
 				if err != nil {
-					return nil, err
+					return
 				}
+				b = (*[sizeUint64]byte)(unsafe.Pointer(&v))[:]
 			}
+
+			// As the golang doc described, `Hash.Write` never returns an error.
+			// See https://golang.org/pkg/hash/#Hash
+			_, _ = h[i].Write(buf)
+			_, _ = h[i].Write(b)
 		}
-	case types.ETDatetime, types.ETTimestamp:
-		ts := col.Times()
-		for i := 0; i < n; i++ {
-			if col.IsNull(i) {
-				buf[i] = append(buf[i], NilFlag)
+	case mysql.TypeDuration:
+		for i := 0; i < rows; i++ {
+			if column.IsNull(i) {
+				buf[0], b = NilFlag, nil
 			} else {
-				buf[i] = append(buf[i], uintFlag)
-				buf[i], err = EncodeMySQLTime(sc, ts[i], mysql.TypeUnspecified, buf[i])
+				buf[0] = durationFlag
+				// duration may have negative value, so we cannot use String to encode directly.
+				b = column.GetRaw(i)
+			}
+
+			// As the golang doc described, `Hash.Write` never returns an error.
+			// See https://golang.org/pkg/hash/#Hash
+			_, _ = h[i].Write(buf)
+			_, _ = h[i].Write(b)
+		}
+	case mysql.TypeNewDecimal:
+		ds := column.Decimals()
+		for i, d := range ds {
+			if column.IsNull(i) {
+				buf[0], b = NilFlag, nil
+			} else {
+				buf[0] = decimalFlag
+				// If hash is true, we only consider the original value of this decimal and ignore it's precision.
+				b, err = d.ToHashKey()
 				if err != nil {
-					return nil, err
+					return
 				}
 			}
+
+			// As the golang doc described, `Hash.Write` never returns an error.
+			// See https://golang.org/pkg/hash/#Hash
+			_, _ = h[i].Write(buf)
+			_, _ = h[i].Write(b)
 		}
-	case types.ETDuration:
-		ds := col.GoDurations()
-		for i := 0; i < n; i++ {
-			if col.IsNull(i) {
-				buf[i] = append(buf[i], NilFlag)
+	case mysql.TypeEnum:
+		for i := 0; i < rows; i++ {
+			if column.IsNull(i) {
+				buf[0], b = NilFlag, nil
 			} else {
-				buf[i] = append(buf[i], durationFlag)
-				buf[i] = EncodeInt(buf[i], int64(ds[i]))
+				buf[0] = uvarintFlag
+				v := uint64(column.GetEnum(i).ToNumber())
+				b = (*[sizeUint64]byte)(unsafe.Pointer(&v))[:]
 			}
+
+			// As the golang doc described, `Hash.Write` never returns an error.
+			// See https://golang.org/pkg/hash/#Hash
+			_, _ = h[i].Write(buf)
+			_, _ = h[i].Write(b)
 		}
-	case types.ETJson:
-		for i := 0; i < n; i++ {
-			if col.IsNull(i) {
-				buf[i] = append(buf[i], NilFlag)
+	case mysql.TypeSet:
+		for i := 0; i < rows; i++ {
+			if column.IsNull(i) {
+				buf[0], b = NilFlag, nil
 			} else {
-				buf[i] = append(buf[i], jsonFlag)
-				j := col.GetJSON(i)
-				buf[i] = append(buf[i], j.TypeCode)
-				buf[i] = append(buf[i], j.Value...)
+				buf[0] = uvarintFlag
+				v := uint64(column.GetSet(i).ToNumber())
+				b = (*[sizeUint64]byte)(unsafe.Pointer(&v))[:]
 			}
+
+			// As the golang doc described, `Hash.Write` never returns an error.
+			// See https://golang.org/pkg/hash/#Hash
+			_, _ = h[i].Write(buf)
+			_, _ = h[i].Write(b)
 		}
-	case types.ETString:
-		for i := 0; i < n; i++ {
-			if col.IsNull(i) {
-				buf[i] = append(buf[i], NilFlag)
+	case mysql.TypeBit:
+		for i := 0; i < rows; i++ {
+			if column.IsNull(i) {
+				buf[0], b = NilFlag, nil
 			} else {
-				buf[i] = encodeBytes(buf[i], col.GetBytes(i), false)
+				// We don't need to handle errors here since the literal is ensured to be able to store in uint64 in convertToMysqlBit.
+				buf[0] = uvarintFlag
+				v, err1 := types.BinaryLiteral(column.GetBytes(i)).ToInt(sc)
+				terror.Log(errors.Trace(err1))
+				b = (*[sizeUint64]byte)(unsafe.Pointer(&v))[:]
 			}
+
+			// As the golang doc described, `Hash.Write` never returns an error.
+			// See https://golang.org/pkg/hash/#Hash
+			_, _ = h[i].Write(buf)
+			_, _ = h[i].Write(b)
+		}
+	case mysql.TypeJSON:
+		for i := 0; i < rows; i++ {
+			if column.IsNull(i) {
+				buf[0], b = NilFlag, nil
+			} else {
+				buf[0] = jsonFlag
+				b = column.GetBytes(i)
+			}
+
+			// As the golang doc described, `Hash.Write` never returns an error..
+			// See https://golang.org/pkg/hash/#Hash
+			_, _ = h[i].Write(buf)
+			_, _ = h[i].Write(b)
 		}
 	default:
-		return nil, errors.New(fmt.Sprintf("invalid eval type %v", ft.EvalType()))
+		return errors.Errorf("unsupport column type for encode %d", tp.Tp)
 	}
-	return buf, nil
+	return
 }
