@@ -650,6 +650,9 @@ func (s *builtinArithmeticDivideDecimalSig) evalDecimal(row chunk.Row) (*types.M
 	} else if err == types.ErrTruncated {
 		sc := s.ctx.GetSessionVars().StmtCtx
 		err = sc.HandleTruncate(errTruncatedWrongValue.GenWithStackByArgs("DECIMAL", c))
+	} else if err == types.ErrTruncated {
+		sc := s.ctx.GetSessionVars().StmtCtx
+		err = sc.HandleTruncate(errTruncatedWrongValue.GenWithStackByArgs("DECIMAL", c))
 	} else if err == nil {
 		_, frac := c.PrecisionAndFrac()
 		if frac < s.baseBuiltinFunc.tp.Decimal {
