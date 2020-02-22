@@ -92,12 +92,22 @@ func newBaseBuiltinFunc(ctx sessionctx.Context, args []Expression) baseBuiltinFu
 // newBaseBuiltinFuncWithTp creates a built-in function signature with specified types of arguments and the return type of the function.
 // argTps indicates the types of the args, retType indicates the return type of the built-in function.
 // Every built-in function needs determined argTps and retType when we create it.
-func newBaseBuiltinFuncWithTp(ctx sessionctx.Context, args []Expression, retType types.EvalType, argTps ...types.EvalType) (bf baseBuiltinFunc) {
+func newBaseBuiltinFuncWithTp(ctx sessionctx.Context, args []Expression, retType types.EvalType, argTps ...types.EvalType) (bf baseBuiltinFunc, err error) {
 	if len(args) != len(argTps) {
 		panic("unexpected length of args and argTps")
 	}
 	if ctx == nil {
 		panic("ctx should not be nil")
+	}
+	var derivedCharset, derivedCollate string
+	var derivedFlen int
+	if retType == types.ETString {
+		// derive collation information for string function, and we must do it
+		// before doing implicit cast.
+		derivedCharset, derivedCollate, derivedFlen, err = DeriveCollationFromExprs(args...)
+		if err != nil {
+			return baseBuiltinFunc{}, err
+		}
 	}
 	for i := range args {
 		switch argTps[i] {
@@ -108,6 +118,7 @@ func newBaseBuiltinFuncWithTp(ctx sessionctx.Context, args []Expression, retType
 		case types.ETDecimal:
 			args[i] = WrapWithCastAsDecimal(ctx, args[i])
 		case types.ETString:
+			// TODO: if the charset of args[i] is not derivedCharset, convert it
 			args[i] = WrapWithCastAsString(ctx, args[i])
 		case types.ETDatetime:
 			args[i] = WrapWithCastAsTime(ctx, args[i], types.NewFieldType(mysql.TypeDatetime))
@@ -145,8 +156,10 @@ func newBaseBuiltinFuncWithTp(ctx sessionctx.Context, args []Expression, retType
 	case types.ETString:
 		fieldType = &types.FieldType{
 			Tp:      mysql.TypeVarString,
-			Flen:    0,
 			Decimal: types.UnspecifiedLength,
+			Charset: derivedCharset,
+			Collate: derivedCollate,
+			Flen:    derivedFlen,
 		}
 	case types.ETDatetime:
 		fieldType = &types.FieldType{
@@ -181,8 +194,6 @@ func newBaseBuiltinFuncWithTp(ctx sessionctx.Context, args []Expression, retType
 	}
 	if mysql.HasBinaryFlag(fieldType.Flag) && fieldType.Tp != mysql.TypeJSON {
 		fieldType.Charset, fieldType.Collate = charset.CharsetBin, charset.CollationBin
-	} else {
-		fieldType.Charset, fieldType.Collate = charset.GetDefaultCharsetAndCollate()
 	}
 	return baseBuiltinFunc{
 		bufAllocator:           newLocalSliceBuffer(len(args)),
@@ -192,7 +203,7 @@ func newBaseBuiltinFuncWithTp(ctx sessionctx.Context, args []Expression, retType
 		args: args,
 		ctx:  ctx,
 		tp:   fieldType,
-	}
+	}, nil
 }
 
 func (b *baseBuiltinFunc) getArgs() []Expression {

@@ -125,7 +125,10 @@ func (c *absFunctionClass) getFunction(ctx sessionctx.Context, args []Expression
 	if argTp != types.ETInt && argTp != types.ETDecimal {
 		argTp = types.ETReal
 	}
-	bf := newBaseBuiltinFuncWithTp(ctx, args, argTp, argTp)
+	bf, err := newBaseBuiltinFuncWithTp(ctx, args, argTp, argTp)
+	if err != nil {
+		return nil, err
+	}
 	if mysql.HasUnsignedFlag(argFieldTp.Flag) {
 		bf.tp.Flag |= mysql.UnsignedFlag
 	}
@@ -259,7 +262,10 @@ func (c *roundFunctionClass) getFunction(ctx sessionctx.Context, args []Expressi
 	if len(args) > 1 {
 		argTps = append(argTps, types.ETInt)
 	}
-	bf := newBaseBuiltinFuncWithTp(ctx, args, argTp, argTps...)
+	bf, err := newBaseBuiltinFuncWithTp(ctx, args, argTp, argTps...)
+	if err != nil {
+		return nil, err
+	}
 	argFieldTp := args[0].GetType()
 	if mysql.HasUnsignedFlag(argFieldTp.Flag) {
 		bf.tp.Flag |= mysql.UnsignedFlag
@@ -466,7 +472,10 @@ func (c *ceilFunctionClass) getFunction(ctx sessionctx.Context, args []Expressio
 	}
 
 	retTp, argTp := getEvalTp4FloorAndCeil(args[0])
-	bf := newBaseBuiltinFuncWithTp(ctx, args, retTp, argTp)
+	bf, err := newBaseBuiltinFuncWithTp(ctx, args, retTp, argTp)
+	if err != nil {
+		return nil, err
+	}
 	setFlag4FloorAndCeil(bf.tp, args[0])
 	argFieldTp := args[0].GetType()
 	bf.tp.Flen, bf.tp.Decimal = argFieldTp.Flen, 0
@@ -653,7 +662,10 @@ func (c *floorFunctionClass) getFunction(ctx sessionctx.Context, args []Expressi
 	}
 
 	retTp, argTp := getEvalTp4FloorAndCeil(args[0])
-	bf := newBaseBuiltinFuncWithTp(ctx, args, retTp, argTp)
+	bf, err := newBaseBuiltinFuncWithTp(ctx, args, retTp, argTp)
+	if err != nil {
+		return nil, err
+	}
 	setFlag4FloorAndCeil(bf.tp, args[0])
 	bf.tp.Flen, bf.tp.Decimal = args[0].GetType().Flen, 0
 	switch argTp {
@@ -812,12 +824,16 @@ func (c *logFunctionClass) getFunction(ctx sessionctx.Context, args []Expression
 		sig     builtinFunc
 		bf      baseBuiltinFunc
 		argsLen = len(args)
+		err     error
 	)
 
 	if argsLen == 1 {
-		bf = newBaseBuiltinFuncWithTp(ctx, args, types.ETReal, types.ETReal)
+		bf, err = newBaseBuiltinFuncWithTp(ctx, args, types.ETReal, types.ETReal)
 	} else {
-		bf = newBaseBuiltinFuncWithTp(ctx, args, types.ETReal, types.ETReal, types.ETReal)
+		bf, err = newBaseBuiltinFuncWithTp(ctx, args, types.ETReal, types.ETReal, types.ETReal)
+	}
+	if err != nil {
+		return nil, err
 	}
 
 	if argsLen == 1 {
@@ -892,7 +908,10 @@ func (c *log2FunctionClass) getFunction(ctx sessionctx.Context, args []Expressio
 	if err := c.verifyArgs(args); err != nil {
 		return nil, err
 	}
-	bf := newBaseBuiltinFuncWithTp(ctx, args, types.ETReal, types.ETReal)
+	bf, err := newBaseBuiltinFuncWithTp(ctx, args, types.ETReal, types.ETReal)
+	if err != nil {
+		return nil, err
+	}
 	sig := &builtinLog2Sig{bf}
 	sig.setPbCode(tipb.ScalarFuncSig_Log2)
 	return sig, nil
@@ -929,7 +948,10 @@ func (c *log10FunctionClass) getFunction(ctx sessionctx.Context, args []Expressi
 	if err := c.verifyArgs(args); err != nil {
 		return nil, err
 	}
-	bf := newBaseBuiltinFuncWithTp(ctx, args, types.ETReal, types.ETReal)
+	bf, err := newBaseBuiltinFuncWithTp(ctx, args, types.ETReal, types.ETReal)
+	if err != nil {
+		return nil, err
+	}
 	sig := &builtinLog10Sig{bf}
 	sig.setPbCode(tipb.ScalarFuncSig_Log10)
 	return sig, nil
@@ -971,7 +993,10 @@ func (c *randFunctionClass) getFunction(ctx sessionctx.Context, args []Expressio
 	if len(args) > 0 {
 		argTps = []types.EvalType{types.ETInt}
 	}
-	bf := newBaseBuiltinFuncWithTp(ctx, args, types.ETReal, argTps...)
+	bf, err := newBaseBuiltinFuncWithTp(ctx, args, types.ETReal, argTps...)
+	if err != nil {
+		return nil, err
+	}
 	bt := bf
 	if len(args) == 0 {
 		sig = &builtinRandSig{bt, &sync.Mutex{}, NewWithTime()}
@@ -1057,7 +1082,10 @@ func (c *powFunctionClass) getFunction(ctx sessionctx.Context, args []Expression
 	if err := c.verifyArgs(args); err != nil {
 		return nil, err
 	}
-	bf := newBaseBuiltinFuncWithTp(ctx, args, types.ETReal, types.ETReal, types.ETReal)
+	bf, err := newBaseBuiltinFuncWithTp(ctx, args, types.ETReal, types.ETReal, types.ETReal)
+	if err != nil {
+		return nil, err
+	}
 	sig := &builtinPowSig{bf}
 	sig.setPbCode(tipb.ScalarFuncSig_Pow)
 	return sig, nil
@@ -1104,7 +1132,10 @@ func (c *convFunctionClass) getFunction(ctx sessionctx.Context, args []Expressio
 		return nil, err
 	}
 
-	bf := newBaseBuiltinFuncWithTp(ctx, args, types.ETString, types.ETString, types.ETInt, types.ETInt)
+	bf, err := newBaseBuiltinFuncWithTp(ctx, args, types.ETString, types.ETString, types.ETInt, types.ETInt)
+	if err != nil {
+		return nil, err
+	}
 	bf.tp.Flen = 64
 	sig := &builtinConvSig{bf}
 	sig.setPbCode(tipb.ScalarFuncSig_Conv)
@@ -1211,7 +1242,10 @@ func (c *crc32FunctionClass) getFunction(ctx sessionctx.Context, args []Expressi
 	if err := c.verifyArgs(args); err != nil {
 		return nil, err
 	}
-	bf := newBaseBuiltinFuncWithTp(ctx, args, types.ETInt, types.ETString)
+	bf, err := newBaseBuiltinFuncWithTp(ctx, args, types.ETInt, types.ETString)
+	if err != nil {
+		return nil, err
+	}
 	bf.tp.Flen = 10
 	bf.tp.Flag |= mysql.UnsignedFlag
 	sig := &builtinCRC32Sig{bf}
@@ -1248,7 +1282,10 @@ func (c *signFunctionClass) getFunction(ctx sessionctx.Context, args []Expressio
 	if err := c.verifyArgs(args); err != nil {
 		return nil, err
 	}
-	bf := newBaseBuiltinFuncWithTp(ctx, args, types.ETInt, types.ETReal)
+	bf, err := newBaseBuiltinFuncWithTp(ctx, args, types.ETInt, types.ETReal)
+	if err != nil {
+		return nil, err
+	}
 	sig := &builtinSignSig{bf}
 	sig.setPbCode(tipb.ScalarFuncSig_Sign)
 	return sig, nil
@@ -1288,7 +1325,10 @@ func (c *sqrtFunctionClass) getFunction(ctx sessionctx.Context, args []Expressio
 	if err := c.verifyArgs(args); err != nil {
 		return nil, err
 	}
-	bf := newBaseBuiltinFuncWithTp(ctx, args, types.ETReal, types.ETReal)
+	bf, err := newBaseBuiltinFuncWithTp(ctx, args, types.ETReal, types.ETReal)
+	if err != nil {
+		return nil, err
+	}
 	sig := &builtinSqrtSig{bf}
 	sig.setPbCode(tipb.ScalarFuncSig_Sqrt)
 	return sig, nil
@@ -1325,7 +1365,10 @@ func (c *acosFunctionClass) getFunction(ctx sessionctx.Context, args []Expressio
 	if err := c.verifyArgs(args); err != nil {
 		return nil, err
 	}
-	bf := newBaseBuiltinFuncWithTp(ctx, args, types.ETReal, types.ETReal)
+	bf, err := newBaseBuiltinFuncWithTp(ctx, args, types.ETReal, types.ETReal)
+	if err != nil {
+		return nil, err
+	}
 	sig := &builtinAcosSig{bf}
 	sig.setPbCode(tipb.ScalarFuncSig_Acos)
 	return sig, nil
@@ -1363,7 +1406,10 @@ func (c *asinFunctionClass) getFunction(ctx sessionctx.Context, args []Expressio
 	if err := c.verifyArgs(args); err != nil {
 		return nil, err
 	}
-	bf := newBaseBuiltinFuncWithTp(ctx, args, types.ETReal, types.ETReal)
+	bf, err := newBaseBuiltinFuncWithTp(ctx, args, types.ETReal, types.ETReal)
+	if err != nil {
+		return nil, err
+	}
 	sig := &builtinAsinSig{bf}
 	sig.setPbCode(tipb.ScalarFuncSig_Asin)
 	return sig, nil
@@ -1406,12 +1452,16 @@ func (c *atanFunctionClass) getFunction(ctx sessionctx.Context, args []Expressio
 		sig     builtinFunc
 		bf      baseBuiltinFunc
 		argsLen = len(args)
+		err     error
 	)
 
 	if argsLen == 1 {
-		bf = newBaseBuiltinFuncWithTp(ctx, args, types.ETReal, types.ETReal)
+		bf, err = newBaseBuiltinFuncWithTp(ctx, args, types.ETReal, types.ETReal)
 	} else {
-		bf = newBaseBuiltinFuncWithTp(ctx, args, types.ETReal, types.ETReal, types.ETReal)
+		bf, err = newBaseBuiltinFuncWithTp(ctx, args, types.ETReal, types.ETReal, types.ETReal)
+	}
+	if err != nil {
+		return nil, err
 	}
 
 	if argsLen == 1 {
@@ -1480,7 +1530,10 @@ func (c *cosFunctionClass) getFunction(ctx sessionctx.Context, args []Expression
 	if err := c.verifyArgs(args); err != nil {
 		return nil, err
 	}
-	bf := newBaseBuiltinFuncWithTp(ctx, args, types.ETReal, types.ETReal)
+	bf, err := newBaseBuiltinFuncWithTp(ctx, args, types.ETReal, types.ETReal)
+	if err != nil {
+		return nil, err
+	}
 	sig := &builtinCosSig{bf}
 	sig.setPbCode(tipb.ScalarFuncSig_Cos)
 	return sig, nil
@@ -1514,7 +1567,10 @@ func (c *cotFunctionClass) getFunction(ctx sessionctx.Context, args []Expression
 	if err := c.verifyArgs(args); err != nil {
 		return nil, err
 	}
-	bf := newBaseBuiltinFuncWithTp(ctx, args, types.ETReal, types.ETReal)
+	bf, err := newBaseBuiltinFuncWithTp(ctx, args, types.ETReal, types.ETReal)
+	if err != nil {
+		return nil, err
+	}
 	sig := &builtinCotSig{bf}
 	sig.setPbCode(tipb.ScalarFuncSig_Cot)
 	return sig, nil
@@ -1556,7 +1612,10 @@ func (c *degreesFunctionClass) getFunction(ctx sessionctx.Context, args []Expres
 	if err := c.verifyArgs(args); err != nil {
 		return nil, err
 	}
-	bf := newBaseBuiltinFuncWithTp(ctx, args, types.ETReal, types.ETReal)
+	bf, err := newBaseBuiltinFuncWithTp(ctx, args, types.ETReal, types.ETReal)
+	if err != nil {
+		return nil, err
+	}
 	sig := &builtinDegreesSig{bf}
 	sig.setPbCode(tipb.ScalarFuncSig_Degrees)
 	return sig, nil
@@ -1591,7 +1650,10 @@ func (c *expFunctionClass) getFunction(ctx sessionctx.Context, args []Expression
 	if err := c.verifyArgs(args); err != nil {
 		return nil, err
 	}
-	bf := newBaseBuiltinFuncWithTp(ctx, args, types.ETReal, types.ETReal)
+	bf, err := newBaseBuiltinFuncWithTp(ctx, args, types.ETReal, types.ETReal)
+	if err != nil {
+		return nil, err
+	}
 	sig := &builtinExpSig{bf}
 	sig.setPbCode(tipb.ScalarFuncSig_Exp)
 	return sig, nil
@@ -1633,9 +1695,12 @@ func (c *piFunctionClass) getFunction(ctx sessionctx.Context, args []Expression)
 	var (
 		bf  baseBuiltinFunc
 		sig builtinFunc
+		err error
 	)
 
-	bf = newBaseBuiltinFuncWithTp(ctx, args, types.ETReal)
+	if bf, err = newBaseBuiltinFuncWithTp(ctx, args, types.ETReal); err != nil {
+		return nil, err
+	}
 	bf.tp.Decimal = 6
 	bf.tp.Flen = 8
 	sig = &builtinPISig{bf}
@@ -1667,7 +1732,10 @@ func (c *radiansFunctionClass) getFunction(ctx sessionctx.Context, args []Expres
 	if err := c.verifyArgs(args); err != nil {
 		return nil, err
 	}
-	bf := newBaseBuiltinFuncWithTp(ctx, args, types.ETReal, types.ETReal)
+	bf, err := newBaseBuiltinFuncWithTp(ctx, args, types.ETReal, types.ETReal)
+	if err != nil {
+		return nil, err
+	}
 	sig := &builtinRadiansSig{bf}
 	sig.setPbCode(tipb.ScalarFuncSig_Radians)
 	return sig, nil
@@ -1701,7 +1769,10 @@ func (c *sinFunctionClass) getFunction(ctx sessionctx.Context, args []Expression
 	if err := c.verifyArgs(args); err != nil {
 		return nil, err
 	}
-	bf := newBaseBuiltinFuncWithTp(ctx, args, types.ETReal, types.ETReal)
+	bf, err := newBaseBuiltinFuncWithTp(ctx, args, types.ETReal, types.ETReal)
+	if err != nil {
+		return nil, err
+	}
 	sig := &builtinSinSig{bf}
 	sig.setPbCode(tipb.ScalarFuncSig_Sin)
 	return sig, nil
@@ -1735,7 +1806,10 @@ func (c *tanFunctionClass) getFunction(ctx sessionctx.Context, args []Expression
 	if err := c.verifyArgs(args); err != nil {
 		return nil, err
 	}
-	bf := newBaseBuiltinFuncWithTp(ctx, args, types.ETReal, types.ETReal)
+	bf, err := newBaseBuiltinFuncWithTp(ctx, args, types.ETReal, types.ETReal)
+	if err != nil {
+		return nil, err
+	}
 	sig := &builtinTanSig{bf}
 	sig.setPbCode(tipb.ScalarFuncSig_Tan)
 	return sig, nil
@@ -1775,7 +1849,10 @@ func (c *truncateFunctionClass) getFunction(ctx sessionctx.Context, args []Expre
 		argTp = types.ETReal
 	}
 
-	bf := newBaseBuiltinFuncWithTp(ctx, args, argTp, argTp, types.ETInt)
+	bf, err := newBaseBuiltinFuncWithTp(ctx, args, argTp, argTp, types.ETInt)
+	if err != nil {
+		return nil, err
+	}
 
 	bf.tp.Decimal = calculateDecimal4RoundAndTruncate(ctx, args, argTp)
 	bf.tp.Flen = args[0].GetType().Flen - args[0].GetType().Decimal + bf.tp.Decimal
