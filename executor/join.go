@@ -16,6 +16,7 @@ package executor
 import (
 	"context"
 	"fmt"
+	"github.com/pingcap/tidb/types"
 	"sync"
 	"sync/atomic"
 
@@ -49,6 +50,8 @@ type HashJoinExec struct {
 	outerFilter       expression.CNFExprs
 	probeKeys         []*expression.Column
 	buildKeys         []*expression.Column
+	probeTypes        []*types.FieldType
+	buildTypes        []*types.FieldType
 
 	// concurrency is the number of partition, build and join workers.
 	concurrency   uint
@@ -432,7 +435,7 @@ func (e *HashJoinExec) runJoinWorker(workerID uint, probeKeyColIdx []int) {
 		dest: e.probeResultChs[workerID],
 	}
 	hCtx := &hashContext{
-		allTypes:  retTypes(e.probeSideExec),
+		allTypes:  e.probeTypes,
 		keyColIdx: probeKeyColIdx,
 	}
 	for ok := true; ok; {
@@ -696,9 +699,8 @@ func (e *HashJoinExec) buildHashTableForList(buildSideResultCh <-chan *chunk.Chu
 	for i := range e.buildKeys {
 		buildKeyColIdx[i] = e.buildKeys[i].Index
 	}
-	allTypes := e.buildSideExec.base().retFieldTypes
 	hCtx := &hashContext{
-		allTypes:  allTypes,
+		allTypes:  e.buildTypes,
 		keyColIdx: buildKeyColIdx,
 	}
 	var err error
