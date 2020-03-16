@@ -166,6 +166,8 @@ func (b *executorBuilder) build(p plannercore.Plan) Executor {
 		return b.buildSimple(v)
 	case *plannercore.Set:
 		return b.buildSet(v)
+	case *plannercore.SetConfig:
+		return b.buildSetConfig(v)
 	case *plannercore.PhysicalSort:
 		return b.buildSort(v)
 	case *plannercore.PhysicalTopN:
@@ -686,6 +688,16 @@ func (b *executorBuilder) buildSet(v *plannercore.Set) Executor {
 		vars:         v.VarAssigns,
 	}
 	return e
+}
+
+func (b *executorBuilder) buildSetConfig(v *plannercore.SetConfig) Executor {
+	return &SetConfigExec{
+		baseExecutor: newBaseExecutor(b.ctx, v.Schema(), v.ExplainID()),
+		Type:         v.Type,
+		Instance:     v.Instance,
+		Name:         v.Name,
+		Value:        v.Value,
+	}
 }
 
 func (b *executorBuilder) buildInsert(v *plannercore.Insert) Executor {

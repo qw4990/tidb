@@ -18,6 +18,7 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"fmt"
+	pd "github.com/pingcap/pd/v4/client"
 	"io/ioutil"
 	"net/url"
 	"os"
@@ -651,6 +652,14 @@ func NewConfig() *Config {
 // Other parts of the system can read the global configuration use this function.
 func GetGlobalConfig() *Config {
 	return globalConfHandler.GetConfig()
+}
+
+// GetPDConfigClient returns the pd config client used by the pd config handler,
+func GetPDConfigClient() (pd.ConfigClient, error) {
+	if pdHandler, ok := globalConfHandler.(*pdConfHandler); ok {
+		return pdHandler.pdConfCli, nil
+	}
+	return nil, errors.New("can't get pd config client since in local mode")
 }
 
 // StoreGlobalConfig stores a new config to the globalConf. It mostly uses in the test to avoid some data races.

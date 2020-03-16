@@ -121,6 +121,7 @@ var _ = Suite(&testMemTableReaderSuite{})
 var _ = SerialSuites(&testFlushSuite{})
 var _ = SerialSuites(&testAutoRandomSuite{&baseTestSuite{}})
 var _ = SerialSuites(&testClusterTableSuite{})
+var _ = SerialSuites(&testClusterConfig{&baseTestSuite{}})
 
 type testSuite struct{ *baseTestSuite }
 type testSuiteP1 struct{ *baseTestSuite }

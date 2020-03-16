@@ -50,6 +50,10 @@ func (mc *mockPDConfigClient) Create(ctx context.Context, v *configpb.Version, c
 	return mc.status, mc.version, mc.confContent.Load().(string), mc.err
 }
 
+func (mc *mockPDConfigClient) GetAll(ctx context.Context) (*configpb.Status, []*configpb.LocalConfig, error) {
+	return nil, nil, nil
+}
+
 func (mc *mockPDConfigClient) Get(ctx context.Context, v *configpb.Version, component, componentID string) (*configpb.Status, *configpb.Version, string, error) {
 	return mc.status, mc.version, mc.confContent.Load().(string), mc.err
 }

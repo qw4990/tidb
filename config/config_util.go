@@ -22,6 +22,7 @@ import (
 	"reflect"
 	"time"
 
+	"github.com/BurntSushi/toml"
 	"github.com/pingcap/errors"
 )
 
@@ -111,4 +112,41 @@ func atomicWriteConfig(c *Config, confPath string) (err error) {
 		return errors.Trace(err)
 	}
 	return errors.Trace(os.Rename(tmpConfPath, confPath))
+}
+
+// ConfItem represents a config item in the whole config, for example 'log.level'.
+type ConfItem struct {
+	Name  string
+	Value string
+}
+
+// DecodeTomlConfig decodes all config items from this config.
+func DecodeTomlConfig(conf string) ([]ConfItem, error) {
+	m := make(map[string]interface{})
+	if _, err := toml.Decode(conf, &m); err != nil {
+		return nil, err
+	}
+
+	var walk func(prefix string, m map[string]interface{}) []ConfItem
+	walk = func(prefix string, m map[string]interface{}) []ConfItem {
+		items := make([]ConfItem, 0, len(m))
+		for k, v := range m {
+			if subm, ok := v.(map[string]interface{}); ok {
+				subPrefix := k
+				if prefix != "" {
+					subPrefix = prefix + "." + k
+				}
+				items = append(items, walk(subPrefix, subm)...)
+				continue
+			}
+			p := k
+			if prefix != "" {
+				p = prefix + "." + k
+			}
+			items = append(items, ConfItem{p, fmt.Sprintf("%v", v)})
+		}
+		return items
+	}
+
+	return walk("", m), nil
 }

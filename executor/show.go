@@ -18,6 +18,7 @@ import (
 	"context"
 	gjson "encoding/json"
 	"fmt"
+	"github.com/pingcap/kvproto/pkg/configpb"
 	"sort"
 	"strconv"
 	"strings"
@@ -125,6 +126,8 @@ func (e *ShowExec) fetchAll(ctx context.Context) error {
 		return e.fetchShowCollation()
 	case ast.ShowColumns:
 		return e.fetchShowColumns(ctx)
+	case ast.ShowConfig:
+		return e.fetchShowClusterConfigs(ctx)
 	case ast.ShowCreateTable:
 		return e.fetchShowCreateTable()
 	case ast.ShowCreateSequence:
@@ -939,6 +942,33 @@ func (e *ShowExec) fetchShowCreateSequence() error {
 	var buf bytes.Buffer
 	ConstructResultOfShowCreateSequence(e.ctx, tableInfo, &buf)
 	e.appendRow([]interface{}{tableInfo.Name.O, buf.String()})
+	return nil
+}
+
+func (e *ShowExec) fetchShowClusterConfigs(ctx context.Context) error {
+	pdCli, err := GetPDConfigClientFunc()
+	if err != nil {
+		return err
+	}
+	stat, configs, err := pdCli.GetAll(ctx)
+	if err != nil {
+		return err
+	}
+	if stat.GetCode() != configpb.StatusCode_OK {
+		return errors.Errorf("pd error, errcode=%v, error=%v", stat.GetCode(), stat.GetMessage())
+	}
+	for _, conf := range configs {
+		typ := conf.GetComponent()
+		instance := conf.GetComponentId()
+		confData := conf.GetConfig()
+		items, err := config.DecodeTomlConfig(confData)
+		if err != nil {
+			return err
+		}
+		for _, item := range items {
+			e.appendRow([]interface{}{typ, instance, item.Name, item.Value})
+		}
+	}
 	return nil
 }
 

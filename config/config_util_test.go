@@ -119,3 +119,31 @@ func (s *testConfigSuite) TestAtomicWriteConfig(c *C) {
 	c.Assert(dconf.Performance.MaxProcs, Equals, uint(432))
 	c.Assert(dconf.Performance.PseudoEstimateRatio, Equals, 54.3)
 }
+
+func (s *testConfigSuite) TestDecodeConfigItems(c *C) {
+		conf := `
+host = "0.0.0.0"
+advertise-address = ""
+[log]
+level = "info"
+format = "text"
+enable-slow-log = true
+slow-query-file = "tidb-slow.log"
+[isolation-read]
+engines = ["tikv", "tiflash", "tidb"]
+	`
+	items, err := DecodeTomlConfig(conf)
+	c.Assert(err, IsNil)
+	//c.Assert(len(items), Equals, 7)
+	m := make(map[string]string)
+	for _, x := range items {
+		m[x.Name] = x.Value
+	}
+	c.Assert(m["host"], Equals, "0.0.0.0")
+	c.Assert(m["advertise-address"], Equals, "")
+	c.Assert(m["log.level"], Equals, "info")
+	c.Assert(m["log.format"], Equals, "text")
+	c.Assert(m["log.enable-slow-log"], Equals, "true")
+	c.Assert(m["log.slow-query-file"], Equals, "tidb-slow.log")
+	c.Assert(m["isolation-read.engines"], Equals, "[tikv tiflash tidb]")
+}

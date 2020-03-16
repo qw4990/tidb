@@ -16,7 +16,6 @@ package executor
 import (
 	"context"
 	"crypto/tls"
-
 	. "github.com/pingcap/check"
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/parser/auth"

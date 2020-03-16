@@ -439,6 +439,8 @@ func (b *PlanBuilder) Build(ctx context.Context, node ast.Node) (Plan, error) {
 		return b.buildDo(ctx, x)
 	case *ast.SetStmt:
 		return b.buildSet(ctx, x)
+	case *ast.SetConfigStmt:
+		return b.buildSetConfig(ctx, x)
 	case *ast.AnalyzeTableStmt:
 		return b.buildAnalyze(x)
 	case *ast.BinlogStmt, *ast.FlushStmt, *ast.UseStmt,
@@ -508,6 +510,13 @@ func (b *PlanBuilder) buildDo(ctx context.Context, v *ast.DoStmt) (Plan, error) 
 	proj.SetSchema(schema)
 	proj.CalculateNoDelay = true
 	return proj, nil
+}
+
+func (b *PlanBuilder) buildSetConfig(ctx context.Context, v *ast.SetConfigStmt) (Plan, error) {
+	mockTablePlan := LogicalTableDual{}.Init(b.ctx, b.getSelectOffset())
+	expr, _, err := b.rewrite(ctx, v.Value, mockTablePlan, nil, true)
+	expr = expression.WrapWithCastAsString(b.ctx, expr)
+	return &SetConfig{Name: v.Name, Type: v.Type, Instance: v.Instance, Value: expr}, err
 }
 
 func (b *PlanBuilder) buildSet(ctx context.Context, v *ast.SetStmt) (Plan, error) {
@@ -2858,6 +2867,8 @@ func buildShowSchema(s *ast.ShowStmt, isView bool, isSequence bool) (schema *exp
 		return buildTableRegionsSchema()
 	case ast.ShowEngines:
 		names = []string{"Engine", "Support", "Comment", "Transactions", "XA", "Savepoints"}
+	case ast.ShowConfig:
+		names = []string{"Type", "Instance", "Name", "Value"}
 	case ast.ShowDatabases:
 		names = []string{"Database"}
 	case ast.ShowOpenTables:

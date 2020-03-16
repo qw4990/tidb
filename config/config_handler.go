@@ -72,7 +72,8 @@ func (cch *constantConfHandler) SetConfig(conf *Config) error {
 }
 
 var (
-	unspecifiedVersion = new(configpb.Version)
+	// UnspecifiedVersion represents an unspecified version for the pd config manager.
+	UnspecifiedVersion = new(configpb.Version)
 )
 
 const (
@@ -123,7 +124,7 @@ func newPDConfHandler(confPath string, localConf *Config, reloadFunc ConfReloadF
 	}
 	ch := &pdConfHandler{
 		id:         id,
-		version:    unspecifiedVersion,
+		version:    UnspecifiedVersion,
 		interval:   pdConfHandlerRefreshInterval,
 		exit:       make(chan struct{}),
 		pdConfCli:  pdCli,
