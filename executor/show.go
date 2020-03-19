@@ -18,7 +18,6 @@ import (
 	"context"
 	gjson "encoding/json"
 	"fmt"
-	"github.com/pingcap/kvproto/pkg/configpb"
 	"sort"
 	"strconv"
 	"strings"
@@ -26,6 +25,7 @@ import (
 
 	"github.com/cznic/mathutil"
 	"github.com/pingcap/errors"
+	"github.com/pingcap/kvproto/pkg/configpb"
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/parser/auth"

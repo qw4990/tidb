@@ -1,3 +1,5 @@
+// Copyright 2020 PingCAP, Inc.
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -13,7 +15,6 @@ package executor
 
 import (
 	"context"
-	"github.com/pingcap/tidb/expression"
 	"net"
 	"strings"
 
@@ -22,19 +23,19 @@ import (
 	"github.com/pingcap/parser/mysql"
 	pd "github.com/pingcap/pd/v4/client"
 	"github.com/pingcap/tidb/config"
+	"github.com/pingcap/tidb/expression"
 	"github.com/pingcap/tidb/planner/core"
 	"github.com/pingcap/tidb/privilege"
 	"github.com/pingcap/tidb/util/chunk"
 )
 
 var (
-	// hack this function for test
+	// GetPDConfigClientFunc is used for testing
 	GetPDConfigClientFunc = config.GetPDConfigClient
 )
 
 type SetConfigExec struct {
 	baseExecutor
-
 	Type     string
 	Instance string
 	Name     string
@@ -47,7 +48,6 @@ func (s *SetConfigExec) Open(ctx context.Context) error {
 	if checker != nil && !checker.RequestVerification(s.ctx.GetSessionVars().ActiveRoles, "", "", "", mysql.SuperPriv) {
 		return core.ErrSpecificAccessDenied.GenWithStackByArgs("SET CONFIG")
 	}
-
 	if s.Type != "" {
 		s.Type = strings.ToLower(s.Type)
 		if s.Type != "tikv" && s.Type != "tidb" && s.Type != "pd" {
@@ -60,9 +60,7 @@ func (s *SetConfigExec) Open(ctx context.Context) error {
 			return errors.Errorf("invalid instance %v", s.Instance)
 		}
 	}
-	// TODO: check if the config item is valid
 	s.Name = strings.ToLower(s.Name)
-
 	pdCli, err := GetPDConfigClientFunc()
 	s.pdCli = pdCli
 	return err
