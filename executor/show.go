@@ -552,6 +552,7 @@ func (e *ShowExec) fetchShowIndex() error {
 			"BTREE",          // Index_type
 			"",               // Comment
 			"",               // Index_comment
+			"YES",            // Index_visible
 			"NULL",           // Expression
 		})
 	}
@@ -565,14 +566,22 @@ func (e *ShowExec) fetchShowIndex() error {
 			if idx.Meta().Unique {
 				nonUniq = 0
 			}
+
 			var subPart interface{}
 			if col.Length != types.UnspecifiedLength {
 				subPart = col.Length
 			}
+
 			nullVal := "YES"
 			if idx.Meta().Name.O == mysql.PrimaryKeyName {
 				nullVal = ""
 			}
+
+			visible := "YES"
+			if idx.Meta().Invisible {
+				visible = "NO"
+			}
+
 			colName := col.Name.O
 			expression := "NULL"
 			tblCol := tb.Meta().Columns[col.Offset]
@@ -580,6 +589,7 @@ func (e *ShowExec) fetchShowIndex() error {
 				colName = "NULL"
 				expression = fmt.Sprintf("(%s)", tblCol.GeneratedExprString)
 			}
+
 			e.appendRow([]interface{}{
 				tb.Meta().Name.O,       // Table
 				nonUniq,                // Non_unique
@@ -594,6 +604,7 @@ func (e *ShowExec) fetchShowIndex() error {
 				idx.Meta().Tp.String(), // Index_type
 				"",                     // Comment
 				idx.Meta().Comment,     // Index_comment
+				visible,                // Index_visible
 				expression,             // Expression
 			})
 		}
@@ -855,6 +866,9 @@ func ConstructResultOfShowCreateTable(ctx sessionctx.Context, tableInfo *model.T
 			cols = append(cols, colInfo)
 		}
 		fmt.Fprintf(buf, "(%s)", strings.Join(cols, ","))
+		if idxInfo.Invisible {
+			fmt.Fprintf(buf, ` /*!80000 INVISIBLE */`)
+		}
 		if i != len(publicIndices)-1 {
 			buf.WriteString(",\n")
 		}
