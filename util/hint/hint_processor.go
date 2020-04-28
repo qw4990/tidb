@@ -358,5 +358,5 @@ func HintDebug(ctx context.Context, format string, args ...interface{}) {
 		ctx = context.Background()
 	}
 	_, fn, line, _ := runtime.Caller(1)
-	logutil.Logger(ctx).Warn(fmt.Sprintf("DEBUG [%v:%v]", fn, line) + fmt.Sprintf(format, args...))
+	logutil.Logger(ctx).Warn(fmt.Sprintf("DEBUG [%v:%v] ", fn, line) + fmt.Sprintf(format, args...))
 }
