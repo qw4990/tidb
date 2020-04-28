@@ -16,6 +16,7 @@ package executor
 import (
 	"context"
 	"fmt"
+	"github.com/pingcap/tidb/util/hint"
 	"math"
 	"strconv"
 	"strings"
@@ -319,6 +320,7 @@ func (a *ExecStmt) Exec(ctx context.Context) (_ sqlexec.RecordSet, err error) {
 		}()
 	}
 
+	hint.HintDebug(ctx, "hasMemQuota=%v, setTo=%v", sctx.GetSessionVars().StmtCtx.HasMemQuotaHint, sctx.GetSessionVars().StmtCtx.MemQuotaQuery)
 	if sctx.GetSessionVars().StmtCtx.HasMemQuotaHint {
 		sctx.GetSessionVars().StmtCtx.MemTracker.SetBytesLimit(sctx.GetSessionVars().StmtCtx.MemQuotaQuery)
 	}

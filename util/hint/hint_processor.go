@@ -14,7 +14,9 @@
 package hint
 
 import (
+	"context"
 	"fmt"
+	"runtime"
 	"strconv"
 	"strings"
 
@@ -348,4 +350,13 @@ func GenerateQBName(nodeType NodeType, blockOffset int) model.CIStr {
 		return model.NewCIStr(defaultUpdateBlockName)
 	}
 	return model.NewCIStr(fmt.Sprintf("%s%d", defaultSelectBlockPrefix, blockOffset))
+}
+
+// HintDebug ...
+func HintDebug(ctx context.Context, format string, args ...interface{}) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	_, fn, line, _ := runtime.Caller(1)
+	logutil.Logger(ctx).Warn(fmt.Sprintf("DEBUG [%v:%v]", fn, line) + fmt.Sprintf(format, args...))
 }

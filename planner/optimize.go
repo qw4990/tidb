@@ -328,6 +328,9 @@ func handleStmtHints(hints []*ast.TableOptimizerHint) (stmtHints stmtctx.StmtHin
 			maxExecutionTime = hint
 		}
 	}
+
+	hint.HintDebug(nil, "memHintCnt=%v", memoryQuotaHintCnt)
+
 	// Handle MEMORY_QUOTA
 	if memoryQuotaHintCnt != 0 {
 		if memoryQuotaHintCnt > 1 {
@@ -346,6 +349,8 @@ func handleStmtHints(hints []*ast.TableOptimizerHint) (stmtHints stmtctx.StmtHin
 				warns = append(warns, warn)
 			}
 		}
+
+		hint.HintDebug(nil, "hasMemQuotaHint=%v, memQuotaHint=%v, memQuotaHint2=%v", stmtHints.HasMemQuotaHint, stmtHints.MemQuotaQuery, memoryQuotaHint.HintData)
 	}
 	// Handle USE_TOJA
 	if useToJAHintCnt != 0 {
