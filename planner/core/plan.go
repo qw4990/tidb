@@ -99,7 +99,7 @@ func optimizeByShuffle(pp PhysicalPlan, tsk task, ctx sessionctx.Context) task {
 }
 
 func optimizeByShuffle4StreamAgg(pp *PhysicalStreamAgg, ctx sessionctx.Context) *PhysicalShuffle {
-	concurrency := 4
+	concurrency := 16 // TODO: support using hint to control concurrency
 	sort, ok := pp.Children()[0].(*PhysicalSort)
 	if !ok {
 		// TODO
