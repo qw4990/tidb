@@ -14,6 +14,7 @@
 package aggfuncs
 
 import (
+	"github.com/pingcap/errors"
 	"unsafe"
 
 	"github.com/pingcap/tidb/expression"
@@ -133,6 +134,60 @@ type AggFunc interface {
 	// partial result and then calculates the final result and append that
 	// final result to the chunk provided.
 	AppendFinalResult2Chunk(sctx sessionctx.Context, pr PartialResult, chk *chunk.Chunk) error
+}
+
+type PartialResultMemoryTracker interface {
+	MemoryUsage(result PartialResult) (int64, error)
+}
+
+type PartialResultCoder interface {
+	LoadFrom([]byte) (PartialResult, []byte, error)
+	DumpTo(PartialResult, []byte) ([]byte, error)
+}
+
+func EncodePartialResult(aggFuncs []AggFunc, prs []PartialResult) (data []byte, err error) {
+	for i, agg := range aggFuncs {
+		dAgg, ok := agg.(PartialResultCoder)
+		if !ok {
+			return nil, errors.Errorf("%v doesn't support to spill", dAgg)
+		}
+		if data, err = dAgg.DumpTo(prs[i], data); err != nil {
+			return
+		}
+	}
+	return
+}
+
+func DecodePartialResult(aggFuncs []AggFunc, data []byte) (prs []PartialResult, err error) {
+	prs = make([]PartialResult, len(aggFuncs))
+	for i, agg := range aggFuncs {
+		dAgg, ok := agg.(PartialResultCoder)
+		if !ok {
+			return nil, errors.Errorf("%v doesn't support to spill", dAgg)
+		}
+		if prs[i], data, err = dAgg.LoadFrom(data); err != nil {
+			return nil, err
+		}
+	}
+	return
+}
+
+func PartialResultsMemory(aggFuncs []AggFunc, prs []PartialResult) (mem int64, err error) {
+	if prs == nil {
+		return 0, nil
+	}
+	for i, agg := range aggFuncs {
+		mAgg, ok := agg.(PartialResultMemoryTracker)
+		if !ok {
+			continue
+		}
+		m, err := mAgg.MemoryUsage(prs[i])
+		if err != nil {
+			return 0, err
+		}
+		mem += m
+	}
+	return
 }
 
 type baseAggFunc struct {
