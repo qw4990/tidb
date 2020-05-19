@@ -204,15 +204,6 @@ func (d *HashAggIntermData) getPartialResultBatch(sc *stmtctx.StatementContext, 
 	return prs, d.groupKeys[keyStart:d.cursor], reachEnd, nil
 }
 
-func (d *HashAggIntermData) putPartialResultBatch(sc *stmtctx.StatementContext, keys []string, prs [][]aggfuncs.PartialResult, aggFuncs []aggfuncs.AggFunc) error {
-	for i, key := range keys {
-		if err := d.partialResultMap.Put(aggFuncs, key, prs[i]); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // Close implements the Executor Close interface.
 func (e *HashAggExec) Close() error {
 	if e.isUnparallelExec {
@@ -408,7 +399,7 @@ func (w *HashAggPartialWorker) updatePartialResult(ctx sessionctx.Context, sc *s
 		return err
 	}
 
-	partialResults, err := w.getPartialResult(sc, w.groupKey, w.partialResultsMap)
+	partialResults, err := w.getPartialResult(w.groupKey, w.partialResultsMap)
 	if err != nil {
 		return err
 	}
@@ -422,7 +413,7 @@ func (w *HashAggPartialWorker) updatePartialResult(ctx sessionctx.Context, sc *s
 			}
 		}
 	}
-	return nil
+	return w.putPartialResult(w.groupKey, partialResults, w.partialResultsMap)
 }
 
 // shuffleIntermData shuffles the intermediate data of partial workers to corresponded final workers.
@@ -489,7 +480,7 @@ func getGroupKey(ctx sessionctx.Context, input *chunk.Chunk, groupKey [][]byte, 
 	return groupKey, nil
 }
 
-func (w baseHashAggWorker) getPartialResult(sc *stmtctx.StatementContext, groupKey [][]byte, table HashAggResultTable) ([][]aggfuncs.PartialResult, error) {
+func (w baseHashAggWorker) getPartialResult(groupKey [][]byte, table HashAggResultTable) ([][]aggfuncs.PartialResult, error) {
 	n := len(groupKey)
 	partialResults := make([][]aggfuncs.PartialResult, n)
 	for i := 0; i < n; i++ {
@@ -510,6 +501,15 @@ func (w baseHashAggWorker) getPartialResult(sc *stmtctx.StatementContext, groupK
 		}
 	}
 	return partialResults, nil
+}
+
+func (w baseHashAggWorker) putPartialResult(keys [][]byte, prs [][]aggfuncs.PartialResult, table HashAggResultTable) error {
+	for i, key := range keys {
+		if err := table.Put(w.aggFuncs, string(key), prs[i]); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (w *HashAggFinalWorker) getPartialInput() (input *HashAggIntermData, ok bool) {
@@ -550,7 +550,7 @@ func (w *HashAggFinalWorker) consumeIntermData(sctx sessionctx.Context) (err err
 			for i := 0; i < groupKeysLen; i++ {
 				w.groupKeys = append(w.groupKeys, []byte(groupKeys[i]))
 			}
-			finalPartialResults, err := w.getPartialResult(sc, w.groupKeys, w.partialResultMap)
+			finalPartialResults, err := w.getPartialResult(w.groupKeys, w.partialResultMap)
 			if err != nil {
 				return err
 			}
@@ -565,7 +565,7 @@ func (w *HashAggFinalWorker) consumeIntermData(sctx sessionctx.Context) (err err
 					}
 				}
 			}
-			if err := input.putPartialResultBatch(sc, groupKeys, intermDataBuffer, w.aggFuncs); err != nil {
+			if err := w.putPartialResult(w.groupKeys, finalPartialResults, w.partialResultMap); err != nil {
 				return err
 			}
 		}
@@ -581,7 +581,7 @@ func (w *HashAggFinalWorker) getFinalResult(sctx sessionctx.Context) error {
 	for groupKey := range w.groupSet {
 		w.groupKeys = append(w.groupKeys, []byte(groupKey))
 	}
-	partialResults, err := w.getPartialResult(sctx.GetSessionVars().StmtCtx, w.groupKeys, w.partialResultMap)
+	partialResults, err := w.getPartialResult(w.groupKeys, w.partialResultMap)
 	if err != nil {
 		return err
 	}
