@@ -122,6 +122,8 @@ func (t *hashAggResultTableImpl) spill(aggFuncs []aggfuncs.AggFunc) (err error) 
 		return
 	}
 	for key, prs := range t.memResult {
+		mem := aggfuncs.PartialResultsMemory(aggFuncs, prs)
+		t.memTracker.Consume(mem + int64(len(key)))
 		val, err := aggfuncs.EncodePartialResult(aggFuncs, prs)
 		if err != nil {
 			return err
