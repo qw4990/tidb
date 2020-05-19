@@ -42,7 +42,6 @@ func TestPRCoder(t *testing.T) {
 		panic(err)
 	}
 	sdp2 := (*partialResult4SumDecimal)(pr2)
-
 	if !reflect.DeepEqual(sdp2, sdp) {
 		panic(nil)
 	}

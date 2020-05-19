@@ -1,12 +1,11 @@
 package aggfuncs
 
 import (
-	"fmt"
-	"github.com/pingcap/tidb/types"
-	"github.com/pingcap/tidb/util/codec"
 	"unsafe"
 
 	"github.com/pingcap/errors"
+	"github.com/pingcap/tidb/types"
+	"github.com/pingcap/tidb/util/codec"
 )
 
 type PartialResultMemoryTracker interface {
@@ -64,7 +63,7 @@ func (e *sum4Decimal) LoadFrom(buf []byte) (PartialResult, []byte, error) {
 
 func (e *sum4Decimal) DumpTo(pr PartialResult, buf []byte) ([]byte, error) {
 	var err error
-	p := new(partialResult4SumDecimal)
+	p := (*partialResult4SumDecimal)(pr)
 	buf = codec.EncodeInt(buf, p.notNullRowCount)
 	prec, frac := p.val.PrecisionAndFrac()
 	if buf, err = codec.EncodeDecimal(buf, &p.val, prec, frac); err != nil {
