@@ -34,7 +34,7 @@ type HashAggResultTable interface {
 type hashAggResultTableImpl struct {
 	// dm disk-based map
 	sync.RWMutex
-	spilled    bool
+	state      int // 0: memory, 1: should spill, 2: spilled, 3: ignore spill
 	memResult  map[string][]aggfuncs.PartialResult
 	diskResult *leveldb.DB
 	memTracker *memory.Tracker
@@ -50,7 +50,7 @@ func NewHashAggResultTable(memTracker *memory.Tracker) HashAggResultTable {
 func (t *hashAggResultTableImpl) Get(aggFuncs []aggfuncs.AggFunc, key string) ([]aggfuncs.PartialResult, bool, error) {
 	t.RLock()
 	defer t.RUnlock()
-	if !t.spilled {
+	if t.state != 2 {
 		prs, ok := t.memResult[key]
 		return prs, ok, nil
 	}
@@ -67,7 +67,7 @@ func (t *hashAggResultTableImpl) Get(aggFuncs []aggfuncs.AggFunc, key string) ([
 func (t *hashAggResultTableImpl) Put(aggFuncs []aggfuncs.AggFunc, key string, prs []aggfuncs.PartialResult) error {
 	t.Lock()
 	defer t.Unlock()
-	if !t.spilled {
+	if t.state != 2 {
 		oldPrs := t.memResult[key]
 		oldMem := aggfuncs.PartialResultsMemory(aggFuncs, oldPrs)
 		newMem := aggfuncs.PartialResultsMemory(aggFuncs, prs)
@@ -76,7 +76,7 @@ func (t *hashAggResultTableImpl) Put(aggFuncs []aggfuncs.AggFunc, key string, pr
 		if delta != 0 {
 			t.memTracker.Consume(delta)
 		}
-		if t.spilled {
+		if t.state == 1 {
 			return t.spill(aggFuncs)
 		}
 		return nil
@@ -90,7 +90,7 @@ func (t *hashAggResultTableImpl) Put(aggFuncs []aggfuncs.AggFunc, key string, pr
 }
 
 func (t *hashAggResultTableImpl) Foreach(aggFuncs []aggfuncs.AggFunc, callback func(key string, results []aggfuncs.PartialResult)) error {
-	if !t.spilled {
+	if t.state != 2 {
 		for key, prs := range t.memResult {
 			callback(key, prs)
 		}
@@ -109,6 +109,9 @@ func (t *hashAggResultTableImpl) Foreach(aggFuncs []aggfuncs.AggFunc, callback f
 }
 
 func (t *hashAggResultTableImpl) spill(aggFuncs []aggfuncs.AggFunc) (err error) {
+	if !aggfuncs.SupportDisk(aggFuncs) {
+		t.state = 3
+	}
 	dir := config.GetGlobalConfig().TempStoragePath
 	tmpFile, err := ioutil.TempFile(config.GetGlobalConfig().TempStoragePath, t.memTracker.Label().String())
 	if err != nil {
@@ -128,5 +131,6 @@ func (t *hashAggResultTableImpl) spill(aggFuncs []aggfuncs.AggFunc) (err error) 
 		}
 	}
 	t.memResult = nil
+	t.state = 2
 	return nil
 }

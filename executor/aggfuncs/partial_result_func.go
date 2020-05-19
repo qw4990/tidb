@@ -46,6 +46,23 @@ func (e *sum4Float64) DumpTo(pr PartialResult, buf []byte) ([]byte, error) {
 	return buf, nil
 }
 
+func (e *sum4Decimal) MemoryUsage(result PartialResult) int64 {
+	return int64(unsafe.Sizeof(partialResult4SumDecimal{}))
+}
+
+func (e *sum4Decimal) LoadFrom(buf []byte) (PartialResult, []byte, error) {
+	p := new(partialResult4SumDecimal)
+	buffer := bytes.NewBuffer(buf)
+	n, err := fmt.Fscan(buffer, &p.val, &p.notNullRowCount)
+	return PartialResult(p), buf[n:], err
+}
+
+func (e *sum4Decimal) DumpTo(pr PartialResult, buf []byte) ([]byte, error) {
+	p := (*partialResult4SumDecimal)(pr)
+	buf = append(buf, []byte(fmt.Sprint(&p.val, &p.notNullRowCount))...)
+	return buf, nil
+}
+
 func SupportDisk(aggFuncs []AggFunc) bool {
 	for _, agg := range aggFuncs {
 		if _, ok := agg.(PartialResultCoder); !ok {
