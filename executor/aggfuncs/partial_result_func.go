@@ -14,6 +14,8 @@
 package aggfuncs
 
 import (
+	"bytes"
+	"fmt"
 	"github.com/pingcap/errors"
 	"unsafe"
 )
@@ -23,17 +25,35 @@ type PartialResultMemoryTracker interface {
 }
 
 type PartialResultCoder interface {
-	LoadFrom([]byte) (PartialResult, []byte)
-	DumpTo(PartialResult, []byte) []byte
+	LoadFrom([]byte) (PartialResult, []byte, error)
+	DumpTo(PartialResult, []byte) ([]byte, error)
 }
 
 func (e *sum4Float64) MemoryUsage(result PartialResult) int64 {
 	return int64(unsafe.Sizeof(partialResult4SumFloat64{}))
 }
 
-func (e *sum4Float64) LoadFrom([]byte) (PartialResult, []byte) {}
+func (e *sum4Float64) LoadFrom(buf []byte) (PartialResult, []byte, error) {
+	p := new(partialResult4SumFloat64)
+	buffer := bytes.NewBuffer(buf)
+	n, err := fmt.Fscan(buffer, &p.val, &p.notNullRowCount)
+	return PartialResult(p), buf[n:], err
+}
 
-func (e *sum4Float64) DumpTo(PartialResult, []byte) []byte {}
+func (e *sum4Float64) DumpTo(pr PartialResult, buf []byte) ([]byte, error) {
+	p := (*partialResult4SumFloat64)(pr)
+	buf = append(buf, []byte(fmt.Sprint(&p.val, &p.notNullRowCount))...)
+	return buf, nil
+}
+
+func SupportDisk(aggFuncs []AggFunc) bool {
+	for _, agg := range aggFuncs {
+		if _, ok := agg.(PartialResultCoder); !ok {
+			return false
+		}
+	}
+	return true
+}
 
 func EncodePartialResult(aggFuncs []AggFunc, prs []PartialResult) (data []byte, err error) {
 	for i, agg := range aggFuncs {
@@ -56,26 +76,22 @@ func DecodePartialResult(aggFuncs []AggFunc, data []byte) (prs []PartialResult, 
 			return nil, errors.Errorf("%v doesn't support to spill", dAgg)
 		}
 		if prs[i], data, err = dAgg.LoadFrom(data); err != nil {
-			return nil, err
+			return
 		}
 	}
 	return
 }
 
-func PartialResultsMemory(aggFuncs []AggFunc, prs []PartialResult) (mem int64, err error) {
+func PartialResultsMemory(aggFuncs []AggFunc, prs []PartialResult) (mem int64) {
 	if prs == nil {
-		return 0, nil
+		return 0
 	}
 	for i, agg := range aggFuncs {
 		mAgg, ok := agg.(PartialResultMemoryTracker)
 		if !ok {
 			continue
 		}
-		m, err := mAgg.MemoryUsage(prs[i])
-		if err != nil {
-			return 0, err
-		}
-		mem += m
+		mem += mAgg.MemoryUsage(prs[i])
 	}
 	return
 }

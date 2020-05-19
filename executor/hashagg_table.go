@@ -69,14 +69,8 @@ func (t *hashAggResultTableImpl) Put(aggFuncs []aggfuncs.AggFunc, key string, pr
 	defer t.Unlock()
 	if !t.spilled {
 		oldPrs := t.memResult[key]
-		oldMem, err := aggfuncs.PartialResultsMemory(aggFuncs, oldPrs)
-		if err != nil {
-			return err
-		}
-		newMem, err := aggfuncs.PartialResultsMemory(aggFuncs, prs)
-		if err != nil {
-			return err
-		}
+		oldMem := aggfuncs.PartialResultsMemory(aggFuncs, oldPrs)
+		newMem := aggfuncs.PartialResultsMemory(aggFuncs, prs)
 		t.memResult[key] = prs
 		delta := newMem - oldMem
 		if delta != 0 {
