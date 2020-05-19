@@ -63,11 +63,14 @@ func (t *hashAggResultTableImpl) Put(aggFuncs []aggfuncs.AggFunc, key string, pr
 	t.Lock()
 	defer t.Unlock()
 	if t.state != 2 {
-		oldPrs := t.memResult[key]
+		oldPrs, ok := t.memResult[key]
 		oldMem := aggfuncs.PartialResultsMemory(aggFuncs, oldPrs)
 		newMem := aggfuncs.PartialResultsMemory(aggFuncs, prs)
 		t.memResult[key] = prs
 		delta := newMem - oldMem
+		if !ok {
+			delta += int64(len(key))
+		}
 		if delta != 0 && t.state == 0 {
 			t.memTracker.Consume(delta)
 		}
