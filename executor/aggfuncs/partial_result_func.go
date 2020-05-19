@@ -1,8 +1,9 @@
 package aggfuncs
 
 import (
-	"bytes"
 	"fmt"
+	"github.com/pingcap/tidb/types"
+	"github.com/pingcap/tidb/util/codec"
 	"unsafe"
 
 	"github.com/pingcap/errors"
@@ -17,37 +18,58 @@ type PartialResultCoder interface {
 	DumpTo(PartialResult, []byte) ([]byte, error)
 }
 
+const partialResult4SumFloat64Size = int64(unsafe.Sizeof(partialResult4SumFloat64{}))
+
 func (e *sum4Float64) MemoryUsage(result PartialResult) int64 {
-	return int64(unsafe.Sizeof(partialResult4SumFloat64{}))
+	return partialResult4SumFloat64Size
 }
 
 func (e *sum4Float64) LoadFrom(buf []byte) (PartialResult, []byte, error) {
 	p := new(partialResult4SumFloat64)
-	buffer := bytes.NewBuffer(buf)
-	n, err := fmt.Fscan(buffer, &p.val, &p.notNullRowCount)
-	return PartialResult(p), buf[n:], err
+	var err error
+	buf, p.val, err = codec.DecodeFloat(buf)
+	if err != nil {
+		return nil, nil, err
+	}
+	buf, p.notNullRowCount, err = codec.DecodeInt(buf)
+	return PartialResult(p), buf, err
 }
 
 func (e *sum4Float64) DumpTo(pr PartialResult, buf []byte) ([]byte, error) {
 	p := (*partialResult4SumFloat64)(pr)
-	buf = append(buf, []byte(fmt.Sprint(&p.val, &p.notNullRowCount))...)
+	buf = codec.EncodeFloat(buf, p.val)
+	buf = codec.EncodeInt(buf, p.notNullRowCount)
 	return buf, nil
 }
 
+const partialResult4SumDecimalSize = int64(unsafe.Sizeof(partialResult4SumDecimal{}))
+
 func (e *sum4Decimal) MemoryUsage(result PartialResult) int64 {
-	return int64(unsafe.Sizeof(partialResult4SumDecimal{}))
+	return partialResult4SumDecimalSize
 }
 
 func (e *sum4Decimal) LoadFrom(buf []byte) (PartialResult, []byte, error) {
+	var err error
+	var d *types.MyDecimal
 	p := new(partialResult4SumDecimal)
-	buffer := bytes.NewBuffer(buf)
-	n, err := fmt.Fscan(buffer, &p.val, &p.notNullRowCount)
-	return PartialResult(p), buf[n:], err
+	if buf, p.notNullRowCount, err = codec.DecodeInt(buf); err != nil {
+		return nil, nil, err
+	}
+	if buf, d, _, _, err = codec.DecodeDecimal(buf); err != nil {
+		return nil, nil, err
+	}
+	p.val = *d
+	return PartialResult(p), buf, err
 }
 
 func (e *sum4Decimal) DumpTo(pr PartialResult, buf []byte) ([]byte, error) {
-	p := (*partialResult4SumDecimal)(pr)
-	buf = append(buf, []byte(fmt.Sprint(&p.val, &p.notNullRowCount))...)
+	var err error
+	p := new(partialResult4SumDecimal)
+	buf = codec.EncodeInt(buf, p.notNullRowCount)
+	prec, frac := p.val.PrecisionAndFrac()
+	if buf, err = codec.EncodeDecimal(buf, &p.val, prec, frac); err != nil {
+		return nil, err
+	}
 	return buf, nil
 }
 
