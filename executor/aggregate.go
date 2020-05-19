@@ -17,6 +17,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/pingcap/tidb/config"
 	"sync"
 
 	"github.com/cznic/mathutil"
@@ -281,7 +282,7 @@ func (e *HashAggExec) Open(ctx context.Context) error {
 
 func (e *HashAggExec) initForUnparallelExec() {
 	e.groupSet = set.NewStringSet()
-	e.partialResultMap = NewHashAggResultTable(e.memTracker)
+	e.partialResultMap = NewHashAggResultTable(e.ctx, config.GetGlobalConfig().OOMUseTmpStorage, e.memTracker)
 	e.groupKeyBuffer = make([][]byte, 0, 8)
 	e.childResult = newFirstChunk(e.children[0])
 	e.memTracker.Consume(e.childResult.MemoryUsage())
@@ -316,7 +317,7 @@ func (e *HashAggExec) initForParallelExec(ctx sessionctx.Context) {
 			outputChs:         e.partialOutputChs,
 			giveBackCh:        e.inputCh,
 			globalOutputCh:    e.finalOutputCh,
-			partialResultsMap: NewHashAggResultTable(e.memTracker),
+			partialResultsMap: NewHashAggResultTable(e.ctx, config.GetGlobalConfig().OOMUseTmpStorage, e.memTracker),
 			groupByItems:      e.GroupByItems,
 			chk:               newFirstChunk(e.children[0]),
 			groupKey:          make([][]byte, 0, 8),
@@ -337,7 +338,7 @@ func (e *HashAggExec) initForParallelExec(ctx sessionctx.Context) {
 	for i := 0; i < finalConcurrency; i++ {
 		e.finalWorkers[i] = HashAggFinalWorker{
 			baseHashAggWorker:   newBaseHashAggWorker(e.ctx, e.finishCh, e.FinalAggFuncs, e.maxChunkSize),
-			partialResultMap:    NewHashAggResultTable(e.memTracker),
+			partialResultMap:    NewHashAggResultTable(e.ctx, config.GetGlobalConfig().OOMUseTmpStorage, e.memTracker),
 			groupSet:            set.NewStringSet(),
 			inputCh:             e.partialOutputChs[i],
 			outputCh:            e.finalOutputCh,

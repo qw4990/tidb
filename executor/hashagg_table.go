@@ -14,9 +14,12 @@
 package executor
 
 import (
+	"github.com/pingcap/tidb/sessionctx"
+	"github.com/pingcap/tidb/util/logutil"
 	"io/ioutil"
 	"path"
 	"sync"
+	"sync/atomic"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/goleveldb/leveldb"
@@ -40,11 +43,16 @@ type hashAggResultTableImpl struct {
 	memTracker *memory.Tracker
 }
 
-func NewHashAggResultTable(memTracker *memory.Tracker) HashAggResultTable {
-	return &hashAggResultTableImpl{
+func NewHashAggResultTable(ctx sessionctx.Context, useTmpStorage bool, memTracker *memory.Tracker) HashAggResultTable {
+	t := &hashAggResultTableImpl{
 		memResult:  make(map[string][]aggfuncs.PartialResult),
 		memTracker: memTracker,
 	}
+	if useTmpStorage {
+		oomAction := newHashAggTableImplAction(t)
+		ctx.GetSessionVars().StmtCtx.MemTracker.FallbackOldAndSetNewAction(oomAction)
+	}
+	return t
 }
 
 func (t *hashAggResultTableImpl) Get(aggFuncs []aggfuncs.AggFunc, key string) ([]aggfuncs.PartialResult, bool, error) {
@@ -73,7 +81,7 @@ func (t *hashAggResultTableImpl) Put(aggFuncs []aggfuncs.AggFunc, key string, pr
 		newMem := aggfuncs.PartialResultsMemory(aggFuncs, prs)
 		t.memResult[key] = prs
 		delta := newMem - oldMem
-		if delta != 0 {
+		if delta != 0 && t.state == 0 {
 			t.memTracker.Consume(delta)
 		}
 		if t.state == 1 {
@@ -90,6 +98,8 @@ func (t *hashAggResultTableImpl) Put(aggFuncs []aggfuncs.AggFunc, key string, pr
 }
 
 func (t *hashAggResultTableImpl) Foreach(aggFuncs []aggfuncs.AggFunc, callback func(key string, results []aggfuncs.PartialResult)) error {
+	t.RLock()
+	defer t.RUnlock()
 	if t.state != 2 {
 		for key, prs := range t.memResult {
 			callback(key, prs)
@@ -133,4 +143,35 @@ func (t *hashAggResultTableImpl) spill(aggFuncs []aggfuncs.AggFunc) (err error) 
 	t.memResult = nil
 	t.state = 2
 	return nil
+}
+
+func (t *hashAggResultTableImpl) oomAction() {
+	t.Lock()
+	defer t.Unlock()
+	t.state = 1
+	logutil.BgLogger().Info("Spill hash-agg result table to disk.")
+}
+
+type hashAggTableImplAction struct {
+	t    *hashAggResultTableImpl
+	done uint32
+	next memory.ActionOnExceed
+}
+
+func newHashAggTableImplAction(t *hashAggResultTableImpl) *hashAggTableImplAction {
+	return &hashAggTableImplAction{t: t}
+}
+
+func (act *hashAggTableImplAction) Action(t *memory.Tracker) {
+	if !atomic.CompareAndSwapUint32(&act.done, 0, 1) {
+		act.next.Action(t)
+		return
+	}
+	act.t.oomAction()
+}
+
+func (act *hashAggTableImplAction) SetLogHook(hook func(uint64)) {}
+
+func (act *hashAggTableImplAction) SetFallback(a memory.ActionOnExceed) {
+	act.next = a
 }
