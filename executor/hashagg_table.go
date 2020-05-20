@@ -12,6 +12,7 @@ import (
 	"io/ioutil"
 	"path"
 	"sync"
+	"sync/atomic"
 )
 
 type HashAggResultTable interface {
@@ -148,14 +149,15 @@ func (t *hashAggResultTableImpl) oomAction() {
 	defer t.Unlock()
 	t.state = 1
 	logutil.BgLogger().Info("Spill hash-agg result table to disk.")
-	if err := t.spill() ; err != nil {
+	if err := t.spill(); err != nil {
 		panic(err)
 	}
 }
 
 type hashAggTableImplAction struct {
 	t    *hashAggResultTableImpl
-	once sync.Once
+	next memory.ActionOnExceed
+	done uint64
 }
 
 func newHashAggTableImplAction(t *hashAggResultTableImpl) *hashAggTableImplAction {
@@ -163,11 +165,15 @@ func newHashAggTableImplAction(t *hashAggResultTableImpl) *hashAggTableImplActio
 }
 
 func (act *hashAggTableImplAction) Action(t *memory.Tracker) {
-	act.once.Do(act.t.oomAction)
+	if atomic.CompareAndSwapUint64(&act.done, 0, 1) {
+		act.t.oomAction()
+		return
+	}
+	act.next.Action(t)
 }
 
 func (act *hashAggTableImplAction) SetLogHook(hook func(uint64)) {}
 
 func (act *hashAggTableImplAction) SetFallback(a memory.ActionOnExceed) {
-	// Ignore next
+	act.next = a
 }
