@@ -63,12 +63,12 @@ func (t *hashAggResultTableImpl) Get(key string) ([]aggfuncs.PartialResult, bool
 
 func (t *hashAggResultTableImpl) Put(key string, prs []aggfuncs.PartialResult) error {
 	t.Lock()
-	defer t.Unlock()
 	if t.state != 2 {
 		oldPrs, ok := t.memResult[key]
 		oldMem := aggfuncs.PartialResultsMemory(t.aggFuncs, oldPrs)
 		newMem := aggfuncs.PartialResultsMemory(t.aggFuncs, prs)
 		t.memResult[key] = prs
+		t.Unlock()
 		delta := newMem - oldMem
 		if !ok {
 			delta += int64(len(key))
@@ -79,6 +79,7 @@ func (t *hashAggResultTableImpl) Put(key string, prs []aggfuncs.PartialResult) e
 		return nil
 	}
 
+	defer t.Unlock()
 	val, err := aggfuncs.EncodePartialResult(t.aggFuncs, prs)
 	if err != nil {
 		return err
