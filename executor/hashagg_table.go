@@ -31,7 +31,7 @@ type hashAggResultTableImpl struct {
 	memTracker *memory.Tracker
 }
 
-func NewHashAggResultTable(ctx sessionctx.Context, useTmpStorage bool, memTracker *memory.Tracker) HashAggResultTable {
+func NewHashAggResultTable(ctx sessionctx.Context, useTmpStorage bool, memTracker *memory.Tracker) *hashAggResultTableImpl {
 	t := &hashAggResultTableImpl{
 		memResult:  make(map[string][]aggfuncs.PartialResult),
 		memTracker: memTracker,
