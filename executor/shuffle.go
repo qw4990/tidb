@@ -62,12 +62,12 @@ import (
 //          |          |      +-----------------+-----+
 //          |          |                              |
 //          |      +---+------------+------------+----+-----------+
-//          |      |              Partition Splitter              |
-//          |      +--------------+-+------------+-+--------------+
-//          |                             ^
-//          |                             |
-//          |             +---------------v-----------------+
-//          +---------->  |    fetch data from DataSource   |
+//          |+---> |              Partition Splitter              |
+//                 +--------------+-+------------+-+--------------+
+//                                        ^
+//                                        |
+//                        +---------------v-----------------+
+//                        |    fetch data from DataSource   |
 //                        +---------------------------------+
 //
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -109,7 +109,7 @@ func (e *ShuffleExec) Open(ctx context.Context) error {
 		w.finishCh = e.finishCh
 
 		w.inputCh = make(chan *chunk.Chunk, 1)
-		w.inputHolderCh = make(chan *chunk.Chunk, 1)
+		w.inputHolderCh = make(chan *chunk.Chunk, e.concurrency)
 		w.outputCh = e.outputCh
 		w.outputHolderCh = make(chan *chunk.Chunk, 1)
 
@@ -117,7 +117,9 @@ func (e *ShuffleExec) Open(ctx context.Context) error {
 			return err
 		}
 
-		w.inputHolderCh <- newFirstChunk(e.dataSource)
+		for i := 0; i < e.concurrency; i++ {
+			w.inputHolderCh <- newFirstChunk(e.dataSource)
+		}
 		w.outputHolderCh <- newFirstChunk(e)
 	}
 
@@ -210,33 +212,12 @@ func recoveryShuffleExec(output chan *shuffleOutput, r interface{}) {
 	logutil.BgLogger().Error("shuffle panicked", zap.Error(err), zap.Stack("stack"))
 }
 
-func (e *ShuffleExec) fetchDataAndSplit(ctx context.Context) {
-	var (
-		err           error
-		workerIndices []int
-	)
+func (e *ShuffleExec) split(input <-chan *chunk.Chunk, giveBack chan<- *chunk.Chunk, wg *sync.WaitGroup) {
+	defer wg.Done()
+	var err error
+	var workerIndices []int
 	results := make([]*chunk.Chunk, len(e.workers))
-	chk := newFirstChunk(e.dataSource)
-
-	defer func() {
-		if r := recover(); r != nil {
-			recoveryShuffleExec(e.outputCh, r)
-		}
-		for _, w := range e.workers {
-			close(w.inputCh)
-		}
-	}()
-
-	for {
-		err = Next(ctx, e.dataSource, chk)
-		if err != nil {
-			e.outputCh <- &shuffleOutput{err: err}
-			return
-		}
-		if chk.NumRows() == 0 {
-			break
-		}
-
+	for chk := range input {
 		workerIndices, err = e.splitter.split(e.ctx, chk, workerIndices)
 		if err != nil {
 			e.outputCh <- &shuffleOutput{err: err}
@@ -261,11 +242,64 @@ func (e *ShuffleExec) fetchDataAndSplit(ctx context.Context) {
 				results[workerIdx] = nil
 			}
 		}
+		giveBack <- chk
 	}
 	for i, w := range e.workers {
 		if results[i] != nil {
 			w.inputCh <- results[i]
 			results[i] = nil
+		}
+	}
+}
+
+func (e *ShuffleExec) fetchDataAndSplit(ctx context.Context) {
+	var (
+		err error
+	)
+	chkCh := make(chan *chunk.Chunk, e.concurrency)
+	splitInput := make(chan *chunk.Chunk, e.concurrency)
+
+	splitWg := &sync.WaitGroup{}
+	defer func() {
+		if r := recover(); r != nil {
+			recoveryShuffleExec(e.outputCh, r)
+		}
+		close(splitInput)
+		splitWg.Wait()
+		for _, w := range e.workers {
+			close(w.inputCh)
+		}
+	}()
+
+	for i := 0; i < e.concurrency; i++ {
+		chk := newFirstChunk(e.dataSource)
+		chkCh <- chk
+
+		splitWg.Add(1)
+		go e.split(splitInput, chkCh, splitWg)
+	}
+
+	for {
+		var chk *chunk.Chunk
+		select {
+		case chk = <-chkCh:
+		case <-e.finishCh:
+			break
+		}
+
+		err = Next(ctx, e.dataSource, chk)
+		if err != nil {
+			e.outputCh <- &shuffleOutput{err: err}
+			return
+		}
+		if chk.NumRows() == 0 {
+			break
+		}
+
+		select {
+		case splitInput <- chk:
+		case <-e.finishCh:
+			break
 		}
 	}
 }
