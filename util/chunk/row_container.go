@@ -17,6 +17,7 @@ import (
 	"errors"
 	"sync"
 	"sync/atomic"
+	"fmt"
 
 	"github.com/pingcap/tidb/types"
 	"github.com/pingcap/tidb/util/disk"
@@ -64,6 +65,12 @@ func (c *RowContainer) spillToDisk() (err error) {
 	N := c.records.NumChunks()
 	c.recordsInDisk = NewListInDisk(c.records.FieldTypes())
 	c.recordsInDisk.diskTracker.AttachTo(c.diskTracker)
+	if N > 0 {
+		logutil.BgLogger().Info(fmt.Sprint("spillToDisk ", N, c.records.NumRowsOfChunk(0)))
+	} else {
+		logutil.BgLogger().Info(fmt.Sprint("spillToDisk ", N))
+	}
+
 	for i := 0; i < N; i++ {
 		chk := c.records.GetChunk(i)
 		err = c.recordsInDisk.Add(chk)
@@ -212,6 +219,7 @@ type SpillDiskAction struct {
 	c              *RowContainer
 	fallbackAction memory.ActionOnExceed
 	m              sync.Mutex
+	count int
 }
 
 // Action sends a signal to trigger spillToDisk method of RowContainer
@@ -224,10 +232,18 @@ func (a *SpillDiskAction) Action(t *memory.Tracker) {
 			a.fallbackAction.Action(t)
 		}
 	}
+	if a.fallbackAction != nil {
+		if fallbackSpill, ok := a.fallbackAction.(*SpillDiskAction); ok {
+			if a.count >= fallbackSpill.count && atomic.LoadUint32(&fallbackSpill.c.exceeded) == 0 {
+				fallbackSpill.Action(t)
+				return
+			}
+		}
+	}
 	a.once.Do(func() {
 		atomic.StoreUint32(&a.c.exceeded, 1)
 		logutil.BgLogger().Info("memory exceeds quota, spill to disk now.",
-			zap.Int64("consumed", t.BytesConsumed()), zap.Int64("quota", t.GetBytesLimit()))
+			zap.Int64("consumed", t.BytesConsumed()), zap.Int64("quota", t.GetBytesLimit()), zap.String("debug", t.String()))
 	})
 }
 

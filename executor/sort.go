@@ -27,6 +27,8 @@ import (
 	"github.com/pingcap/tidb/util/chunk"
 	"github.com/pingcap/tidb/util/disk"
 	"github.com/pingcap/tidb/util/memory"
+	"github.com/pingcap/tidb/util/logutil"
+
 	"github.com/pingcap/tidb/util/stringutil"
 )
 
@@ -144,6 +146,7 @@ func (e *SortExec) Next(ctx context.Context, req *chunk.Chunk) error {
 		// Check whether the one partition is spilled.
 		// If the partition is in memory, use List.GetRow() to get better performance.
 		if !e.partitionList[0].AlreadySpilled() {
+
 			rowChunks := e.partitionList[0].GetList()
 			for !req.IsFull() && e.Idx < len(e.rowPtrs) {
 				rowPtr := e.partitionRowPtrs[0][e.Idx]
@@ -267,6 +270,8 @@ func (e *SortExec) fetchRowChunks(ctx context.Context) error {
 			return err
 		}
 		if e.rowChunks.AlreadySpilled() {
+			logutil.Logger(ctx).Info(fmt.Sprint("~~~~", e.base().partNum, "spilled"))
+
 			e.rowChunks = chunk.NewRowContainer(retTypes(e), e.maxChunkSize)
 			e.rowChunks.GetMemTracker().AttachTo(e.memTracker)
 			e.rowChunks.GetMemTracker().SetLabel(rowChunksLabel)

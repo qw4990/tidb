@@ -95,6 +95,7 @@ var (
 type baseExecutor struct {
 	ctx           sessionctx.Context
 	id            fmt.Stringer
+	partNum       int
 	schema        *expression.Schema // output schema
 	initCap       int
 	maxChunkSize  int
