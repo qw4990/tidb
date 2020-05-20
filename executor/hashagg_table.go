@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/goleveldb/leveldb"
+	"github.com/pingcap/goleveldb/leveldb/opt"
 	"github.com/pingcap/tidb/config"
 	"github.com/pingcap/tidb/executor/aggfuncs"
 	"github.com/pingcap/tidb/sessionctx"
@@ -123,7 +124,9 @@ func (t *hashAggResultTableImpl) spill() (err error) {
 		return err
 	}
 	tmpPath := path.Join(dir, tmpFile.Name())
-	if t.diskResult, err = leveldb.OpenFile(tmpPath, nil); err != nil {
+	op := new(opt.Options)
+	op.BlockCacheCapacity = opt.GiB
+	if t.diskResult, err = leveldb.OpenFile(tmpPath, op); err != nil {
 		fmt.Println(">>>>>>>>>>>>>>>>>>>>>> open levelDB error ", err)
 		return
 	}
