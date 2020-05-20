@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"time"
 
 	"github.com/pingcap/tidb/config"
 	"github.com/pingcap/tidb/expression"
@@ -129,6 +130,7 @@ func (e *SortExec) Next(ctx context.Context, req *chunk.Chunk) error {
 		e.initCompareFuncs()
 		e.buildKeyColumns()
 		err := e.fetchRowChunks(ctx)
+		fmt.Println(">>>>>>>>>>>>>>>> sort finish prepare >>> ", e.base().partNum, time.Now())
 		if err != nil {
 			return err
 		}

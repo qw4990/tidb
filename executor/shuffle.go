@@ -15,7 +15,9 @@ package executor
 
 import (
 	"context"
+	"fmt"
 	"sync"
+	"time"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
@@ -279,6 +281,8 @@ func (e *ShuffleExec) fetchDataAndSplit(ctx context.Context) {
 		go e.split(splitInput, chkCh, splitWg)
 	}
 
+	cnt := 0
+	last := time.Now()
 	for {
 		var chk *chunk.Chunk
 		select {
@@ -294,6 +298,12 @@ func (e *ShuffleExec) fetchDataAndSplit(ctx context.Context) {
 		}
 		if chk.NumRows() == 0 {
 			break
+		}
+
+		cnt += chk.NumRows()
+		if time.Since(last) > time.Second*10 {
+			fmt.Println(">>>>>>>>>>>>>>>>>>>>>>>> shuffle read >>> ", cnt, time.Now())
+			last = time.Now()
 		}
 
 		select {
