@@ -228,6 +228,19 @@ func (t *Tracker) Consume(bytes int64) {
 	}
 }
 
+func (t *Tracker) ConsumeNoAction(bytes int64) {
+	for tracker := t; tracker != nil; tracker = tracker.getParent() {
+		for {
+			maxNow := atomic.LoadInt64(&tracker.maxConsumed)
+			consumed := atomic.LoadInt64(&tracker.bytesConsumed)
+			if consumed > maxNow && !atomic.CompareAndSwapInt64(&tracker.maxConsumed, maxNow, consumed) {
+				continue
+			}
+			break
+		}
+	}
+}
+
 // BytesConsumed returns the consumed memory usage value in bytes.
 func (t *Tracker) BytesConsumed() int64 {
 	return atomic.LoadInt64(&t.bytesConsumed)
