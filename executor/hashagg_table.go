@@ -165,7 +165,7 @@ func newHashAggTableImplAction(t *hashAggResultTableImpl) *hashAggTableImplActio
 
 func (act *hashAggTableImplAction) Action(t *memory.Tracker) {
 	if !atomic.CompareAndSwapUint32(&act.done, 0, 1) {
-		act.next.Action(t)
+		//act.next.Action(t)
 		return
 	}
 	act.t.oomAction()
