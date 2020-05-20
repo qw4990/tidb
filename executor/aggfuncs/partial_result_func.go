@@ -1,6 +1,7 @@
 package aggfuncs
 
 import (
+	"reflect"
 	"unsafe"
 
 	"github.com/pingcap/errors"
@@ -72,13 +73,13 @@ func (e *sum4Decimal) DumpTo(pr PartialResult, buf []byte) ([]byte, error) {
 	return buf, nil
 }
 
-func SupportDisk(aggFuncs []AggFunc) bool {
+func SupportDisk(aggFuncs []AggFunc) error {
 	for _, agg := range aggFuncs {
 		if _, ok := agg.(PartialResultCoder); !ok {
-			return false
+			return errors.Errorf("%v cannot support to spill", reflect.TypeOf(agg))
 		}
 	}
-	return true
+	return nil
 }
 
 func EncodePartialResult(aggFuncs []AggFunc, prs []PartialResult) (data []byte, err error) {

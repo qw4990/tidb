@@ -1,6 +1,7 @@
 package executor
 
 import (
+	"fmt"
 	"io/ioutil"
 	"path"
 	"sync"
@@ -109,21 +110,28 @@ func (t *hashAggResultTableImpl) Foreach(aggFuncs []aggfuncs.AggFunc, callback f
 }
 
 func (t *hashAggResultTableImpl) spill(aggFuncs []aggfuncs.AggFunc) (err error) {
-	if !aggfuncs.SupportDisk(aggFuncs) {
+	fmt.Println(">>>>>>>>>>>>>>>> try to spill")
+	if err := aggfuncs.SupportDisk(aggFuncs); err != nil {
+		fmt.Println(">>>>>>>>>>>>>>>>>>>> ignore spill state=3 ", err)
+		logutil.BgLogger().Info(err.Error())
 		t.state = 3
+		return nil
 	}
 	dir := config.GetGlobalConfig().TempStoragePath
 	tmpFile, err := ioutil.TempFile(config.GetGlobalConfig().TempStoragePath, t.memTracker.Label().String())
 	if err != nil {
+		fmt.Println(">>>>>>>>>>>>>>>> cannot spill open file error ", err)
 		return err
 	}
 	tmpPath := path.Join(dir, tmpFile.Name())
 	if t.diskResult, err = leveldb.OpenFile(tmpPath, nil); err != nil {
+		fmt.Println(">>>>>>>>>>>>>>>>>>>>>> open levelDB error ", err)
 		return
 	}
+	fmt.Println(">>>>>>>>>>>>>>>>>> spill path >> ", tmpPath)
 	for key, prs := range t.memResult {
 		mem := aggfuncs.PartialResultsMemory(aggFuncs, prs)
-		t.memTracker.Consume(mem + int64(len(key)))
+		t.memTracker.Consume(-(mem + int64(len(key))))
 		val, err := aggfuncs.EncodePartialResult(aggFuncs, prs)
 		if err != nil {
 			return err
@@ -134,6 +142,7 @@ func (t *hashAggResultTableImpl) spill(aggFuncs []aggfuncs.AggFunc) (err error) 
 	}
 	t.memResult = nil
 	t.state = 2
+	fmt.Println(">>>>>>>>>>>>>>>>>>>> spill succ")
 	return nil
 }
 
@@ -156,7 +165,7 @@ func newHashAggTableImplAction(t *hashAggResultTableImpl) *hashAggTableImplActio
 
 func (act *hashAggTableImplAction) Action(t *memory.Tracker) {
 	if !atomic.CompareAndSwapUint32(&act.done, 0, 1) {
-		//act.next.Action(t)
+		act.next.Action(t)
 		return
 	}
 	act.t.oomAction()
