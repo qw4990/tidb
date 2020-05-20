@@ -256,25 +256,7 @@ func (t *Tracker) SearchTracker(label string) *Tracker {
 // String returns the string representation of this Tracker tree.
 func (t *Tracker) String() string {
 	buffer := bytes.NewBufferString("\n")
-	t.toString("", buffer)
 	return buffer.String()
-}
-
-func (t *Tracker) toString(indent string, buffer *bytes.Buffer) {
-	fmt.Fprintf(buffer, "%s\"%s\"{\n", indent, t.label)
-	if t.bytesLimit > 0 {
-		fmt.Fprintf(buffer, "%s  \"quota\": %s\n", indent, t.BytesToString(t.bytesLimit))
-	}
-	fmt.Fprintf(buffer, "%s  \"consumed\": %s\n", indent, t.BytesToString(t.BytesConsumed()))
-
-	t.mu.Lock()
-	for i := range t.mu.children {
-		if t.mu.children[i] != nil {
-			t.mu.children[i].toString(indent+"  ", buffer)
-		}
-	}
-	t.mu.Unlock()
-	buffer.WriteString(indent + "}\n")
 }
 
 // BytesToString converts the memory consumption to a readable string.
