@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/cznic/mathutil"
 	"github.com/pingcap/errors"
@@ -654,6 +655,8 @@ func (e *HashAggExec) fetchChildData(ctx context.Context) {
 			close(e.partialInputChs[i])
 		}
 	}()
+	total := 0
+	last := time.Now()
 	for {
 		select {
 		case <-e.finishCh:
@@ -675,6 +678,13 @@ func (e *HashAggExec) fetchChildData(ctx context.Context) {
 			e.memTracker.Consume(-mSize)
 			return
 		}
+
+		total += chk.NumRows()
+		if time.Since(last) > time.Second*10 {
+			fmt.Println("------->>>>>>>>>> ", total, time.Now())
+			last = time.Now()
+		}
+
 		e.memTracker.Consume(chk.MemoryUsage() - mSize)
 		input.giveBackCh <- chk
 	}
@@ -697,6 +707,7 @@ func (e *HashAggExec) waitFinalWorkerAndCloseFinalOutput(waitGroup *sync.WaitGro
 }
 
 func (e *HashAggExec) prepare4ParallelExec(ctx context.Context) {
+	fmt.Println(">>>>>>>>>>> begin to fetch and preagg ", time.Now())
 	go e.fetchChildData(ctx)
 
 	partialWorkerWaitGroup := &sync.WaitGroup{}
@@ -706,6 +717,7 @@ func (e *HashAggExec) prepare4ParallelExec(ctx context.Context) {
 	}
 	go e.waitPartialWorkerAndCloseOutputChs(partialWorkerWaitGroup)
 
+	fmt.Println(">>>>>>>>>>>>>> begin to final agg ", time.Now())
 	finalWorkerWaitGroup := &sync.WaitGroup{}
 	finalWorkerWaitGroup.Add(len(e.finalWorkers))
 	for i := range e.finalWorkers {
