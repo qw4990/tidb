@@ -372,12 +372,12 @@ type countPartial struct {
 	baseCount
 }
 
-func (e *countPartial) UpdatePartialResult(sctx sessionctx.Context, rowsInGroup []chunk.Row, pr PartialResult) error {
+func (e *countPartial) UpdatePartialResult(sctx sessionctx.Context, rowsInGroup []chunk.Row, pr PartialResult) (int64, error) {
 	p := (*partialResult4Count)(pr)
 	for _, row := range rowsInGroup {
 		input, isNull, err := e.args[0].EvalInt(sctx, row)
 		if err != nil {
-			return err
+			return 0, err
 		}
 		if isNull {
 			continue
@@ -385,11 +385,11 @@ func (e *countPartial) UpdatePartialResult(sctx sessionctx.Context, rowsInGroup 
 
 		*p += input
 	}
-	return nil
+	return 0, nil
 }
 
-func (*countPartial) MergePartialResult(sctx sessionctx.Context, src, dst PartialResult) error {
+func (*countPartial) MergePartialResult(sctx sessionctx.Context, src, dst PartialResult) (int64, error) {
 	p1, p2 := (*partialResult4Count)(src), (*partialResult4Count)(dst)
 	*p2 += *p1
-	return nil
+	return 0, nil
 }
