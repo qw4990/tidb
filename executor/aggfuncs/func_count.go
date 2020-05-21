@@ -22,14 +22,18 @@ type baseCount struct {
 	baseAggFunc
 }
 
-type partialResult4Count = int64
+type partialResult4Count int64
+
+func (p partialResult4Count) MemoryUsage() int64 {
+	return 8
+}
 
 func (e *baseCount) AllocPartialResult() PartialResult {
 	return PartialResult(new(partialResult4Count))
 }
 
 func (e *baseCount) ResetPartialResult(pr PartialResult) {
-	p := (*partialResult4Count)(pr)
+	p := pr.(*partialResult4Count)
 	*p = 0
 }
 

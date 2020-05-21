@@ -14,8 +14,6 @@
 package aggfuncs
 
 import (
-	"unsafe"
-
 	"github.com/pingcap/tidb/expression"
 	"github.com/pingcap/tidb/sessionctx"
 	"github.com/pingcap/tidb/util/chunk"
@@ -96,7 +94,11 @@ var (
 // PartialResult represents data structure to store the partial result for the
 // aggregate functions. Here we use unsafe.Pointer to allow the partial result
 // to be any type.
-type PartialResult unsafe.Pointer
+//type PartialResult unsafe.Pointer
+
+type PartialResult interface {
+	MemoryUsage() int64
+}
 
 // AggFunc is the interface to evaluate the aggregate functions.
 type AggFunc interface {
