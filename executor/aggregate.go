@@ -787,10 +787,12 @@ func (e *HashAggExec) execute(ctx context.Context) (err error) {
 			}
 			partialResults := e.getPartialResults(groupKey)
 			for i, af := range e.PartialAggFuncs {
+				mem := partialResults[i].MemoryUsage()
 				err = af.UpdatePartialResult(e.ctx, []chunk.Row{e.childResult.GetRow(j)}, partialResults[i])
 				if err != nil {
 					return err
 				}
+				e.memTracker.Consume(partialResults[i].MemoryUsage() - mem)
 			}
 		}
 	}
