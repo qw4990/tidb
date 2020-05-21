@@ -43,6 +43,10 @@ type countOriginal4Int struct {
 	baseCount
 }
 
+func (e *countOriginal4Int) MemoryUsage(pr PartialResult) int64 {
+	return 8
+}
+
 func (e *countOriginal4Int) UpdatePartialResult(sctx sessionctx.Context, rowsInGroup []chunk.Row, pr PartialResult) error {
 	p := (*partialResult4Count)(pr)
 

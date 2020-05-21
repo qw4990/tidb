@@ -133,6 +133,8 @@ type AggFunc interface {
 	// partial result and then calculates the final result and append that
 	// final result to the chunk provided.
 	AppendFinalResult2Chunk(sctx sessionctx.Context, pr PartialResult, chk *chunk.Chunk) error
+
+	MemoryUsage(pr PartialResult) int64
 }
 
 type baseAggFunc struct {
