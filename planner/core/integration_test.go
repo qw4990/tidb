@@ -16,6 +16,7 @@ package core_test
 import (
 	"bytes"
 	"fmt"
+	"github.com/pingcap/tidb/session"
 	"strings"
 
 	. "github.com/pingcap/check"
@@ -30,6 +31,8 @@ import (
 	"github.com/pingcap/tidb/kv"
 	"github.com/pingcap/tidb/planner/core"
 	"github.com/pingcap/tidb/sessionctx/stmtctx"
+	"github.com/pingcap/tidb/store/mockstore"
+	"github.com/pingcap/tidb/store/mockstore/cluster"
 	"github.com/pingcap/tidb/table"
 	"github.com/pingcap/tidb/util/testkit"
 	"github.com/pingcap/tidb/util/testutil"
@@ -1563,4 +1566,62 @@ func (s *testIntegrationSuite) TestDeleteUsingJoin(c *C) {
 	tk.MustExec("delete t1.* from t1 join t2 using (a)")
 	tk.MustQuery("select * from t1").Check(testkit.Rows("1 1"))
 	tk.MustQuery("select * from t2").Check(testkit.Rows("2 2"))
+}
+
+func (s *testIntegrationSerialSuite) TestConsiderRegionInfo(c *C) {
+	// initialize cluster/store/dom/testkit
+	var cls cluster.Cluster
+	store, err := mockstore.NewMockStore(
+		mockstore.WithClusterInspector(func(c cluster.Cluster) {
+			mockstore.BootstrapWithSingleStore(c)
+			cls = c
+		}),
+	)
+	c.Assert(err, IsNil)
+	defer store.Close()
+	c.Assert(cls, NotNil)
+	dom, err := session.BootstrapSession(store)
+	c.Assert(err, IsNil)
+	defer dom.Close()
+	tk := testkit.NewTestKit(c, store)
+
+	// initialize the database and table
+	tk.MustExec("use test")
+	tk.MustExec("create table t (a int, b int, c int, key(a, b), key(a, b, c))")
+	for i := 0; i < 10; i++ {
+		tk.MustExec(fmt.Sprintf("insert into t values (%v, %v, %v)", i, i, i))
+	}
+	tk.MustExec("analyze table t")
+
+	sql := "explain select a, b from t where a=1 and b >1 limit 1"
+	/*
+		before splitting, the optimizer should choose the index(a, b) since it has
+		a smaller row size than index(a, b, c);
+	*/
+	rows := tk.MustQuery(sql).Rows()
+	for _, row := range rows {
+		fmt.Println(row)
+	}
+
+	/*
+		func generateIndexSplitKeyForInt(tid, idx int64, splitNum []int) [][]byte {
+			results := make([][]byte, 0, len(splitNum))
+			for _, num := range splitNum {
+				d := new(types.Datum)
+				d.SetInt64(int64(num))
+				b, err := codec.EncodeKey(nil, nil, *d)
+				if err != nil {
+					panic(err)
+				}
+				results = append(results, tablecodec.EncodeIndexSeekKey(tid, idx, b))
+			}
+			return results
+		}
+	*/
+
+	/*
+		split regions
+		index(a, b):	region1[(1, 1), ...(9, 9)]
+		index(a, b, c): region1[(1, 1)], region2[(2, 2), ...(9, 9)]
+	*/
 }
