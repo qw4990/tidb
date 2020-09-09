@@ -1595,22 +1595,17 @@ func (s *testIntegrationSerialSuite) TestConsiderRegionInfo(c *C) {
 		tk.MustExec(fmt.Sprintf("insert into t values (%v, %v, %v)", i, i, i))
 	}
 	tk.MustExec("analyze table t")
+	query := "explain select a, b from t where a=1 and b>1 limit 1"
 
-	sql := "explain select a, b from t where a=1 and b>1 limit 1"
-	/*
-		before splitting, the optimizer should choose the index(a, b) since it has
-		a smaller row size than index(a, b, c);
-	*/
-	rows := tk.MustQuery(sql).Rows()
+	// before splitting, the optimizer should choose the index(a, b) since it has
+	// a smaller row size than index(a, b, c);
+	rows := tk.MustQuery(query).Rows()
 	for _, row := range rows {
 		fmt.Println(row)
 	}
 
-	/*
-		split regions to make rows 1 to 99 of index(a, b) be in a separate region, and
-		rows 1 to 2 of index(a, b, c) be in a separate region.
-	*/
-
+	// split regions to make rows 1~99 of index(a, b) be in a separate region, and
+	// rows 1~2 of index(a, b, c) be in a separate region.
 	tbl, err := dom.InfoSchema().TableByName(model.NewCIStr("test"), model.NewCIStr("t"))
 	c.Assert(err, IsNil)
 	tid := tbl.Meta().ID
@@ -1628,6 +1623,8 @@ func (s *testIntegrationSerialSuite) TestConsiderRegionInfo(c *C) {
 	splitClusterRegionByKey(c, cls, abEnd.Next())
 	splitClusterRegionByKey(c, cls, abBegin)
 	checkClusterRegions(c, cls, abBegin, abEnd)
+
+	tk.MustExec("analyze table t")
 }
 
 func genIndexSplitKeyForInt(c *C, tid, idx int64, nums []int) kv.Key {
