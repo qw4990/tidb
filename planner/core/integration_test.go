@@ -1617,16 +1617,21 @@ func (s *testIntegrationSerialSuite) TestConsiderRegionInfo(c *C) {
 	idxAB := tbl.Meta().Indices[0].ID
 	idxABC := tbl.Meta().Indices[1].ID
 
-	idxABBegin := genIndexSplitKeyForInt(c, tid, idxAB, []int{0, 0})
-	idxABEnd := genIndexSplitKeyForInt(c, tid, idxAB, []int{9, 9})
-	splitClusterRegions(c, cls, idxABBegin, idxABEnd)
+	abBegin := genIndexSplitKeyForInt(c, tid, idxAB, []int{0, 0})
+	abEnd := genIndexSplitKeyForInt(c, tid, idxAB, []int{9, 9})
+	splitClusterRegionByKey(c, cls, abBegin)
+	splitClusterRegionByKey(c, cls, abEnd.Next())
+	splitClusterRegions(c, cls, abBegin, abEnd)
 
-	idxABCBegin := genIndexSplitKeyForInt(c, tid, idxABC, []int{0, 0, 0})
-	idxABCEnd := genIndexSplitKeyForInt(c, tid, idxABC, []int{9, 9, 9})
-	splitClusterRegions(c, cls, idxABCBegin, idxABCEnd)
+	abcBegin := genIndexSplitKeyForInt(c, tid, idxABC, []int{0, 0, 0})
+	abcEnd := genIndexSplitKeyForInt(c, tid, idxABC, []int{9, 9, 9})
+	abcBound := abcBegin.Next().Next()
+	splitClusterRegionByKey(c, cls, abcBegin)
+	splitClusterRegionByKey(c, cls, abcEnd.Next())
+	splitClusterRegionByKey(c, cls, abcBound)
 }
 
-func genIndexSplitKeyForInt(c *C, tid, idx int64, nums []int) []byte {
+func genIndexSplitKeyForInt(c *C, tid, idx int64, nums []int) kv.Key {
 	ds := make([]types.Datum, 0, len(nums))
 	for _, num := range nums {
 		d := new(types.Datum)
@@ -1638,23 +1643,17 @@ func genIndexSplitKeyForInt(c *C, tid, idx int64, nums []int) []byte {
 	return result
 }
 
-func splitClusterRegions(c *C, cls cluster.Cluster, begin, end []byte, splitKeys ...[]byte) {
-	rBegin, err := cls.GetRegionByKey(begin)
-	c.Assert(err, IsNil)
-	rEnd, err := cls.GetRegionByKey(end)
-	c.Assert(err, IsNil)
-	if rBegin.Id != rEnd.Id {
-		panic("all keys should be in the same region")
-	}
-	for _, key := range splitKeys {
-		r, err := cls.GetRegionByKey(key)
-		c.Assert(err, IsNil)
-		if r.Id != rBegin.Id {
-			panic("all keys should be in the same region")
-		}
-	}
-	for _, key := range splitKeys {
-		newRegionID, newPeerID := cls.AllocID(), cls.AllocID()
-		cls.Split(rBegin.Id, newRegionID, key, []uint64{newPeerID}, newPeerID)
-	}
+func splitClusterRegionByKey(c *C, cls cluster.Cluster, k kv.Key) {
+	r, _ := cls.GetRegionByKey(k)
+	c.Assert(r, NotNil)
+	newRegionID, newPeerID := cls.AllocID(), cls.AllocID()
+	cls.Split(r.Id, newRegionID, k, []uint64{newPeerID}, newPeerID)
+}
+
+func splitClusterRegions(c *C, cls cluster.Cluster, begin, end kv.Key) {
+	rBegin, _ := cls.GetRegionByKey(begin)
+	c.Assert(rBegin, NotNil)
+	rEnd, _ := cls.GetRegionByKey(end)
+	c.Assert(rEnd, NotNil)
+	c.Assert(rBegin.Id, Equals, rEnd.Id)
 }
