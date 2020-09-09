@@ -17,6 +17,7 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/pingcap/tidb/session"
+	"github.com/pingcap/tidb/tablecodec"
 	"github.com/pingcap/tidb/types"
 	"github.com/pingcap/tidb/util/codec"
 	"strings"
@@ -1590,12 +1591,12 @@ func (s *testIntegrationSerialSuite) TestConsiderRegionInfo(c *C) {
 	// initialize the database and table
 	tk.MustExec("use test")
 	tk.MustExec("create table t (a int, b int, c int, key(a, b), key(a, b, c))")
-	for i := 0; i <= 10; i++ {
+	for i := 0; i <= 100; i++ {
 		tk.MustExec(fmt.Sprintf("insert into t values (%v, %v, %v)", i, i, i))
 	}
 	tk.MustExec("analyze table t")
 
-	sql := "explain select a, b from t where a=1 and b >1 limit 1"
+	sql := "explain select a, b from t where a=1 and b>1 limit 1"
 	/*
 		before splitting, the optimizer should choose the index(a, b) since it has
 		a smaller row size than index(a, b, c);
@@ -1606,9 +1607,8 @@ func (s *testIntegrationSerialSuite) TestConsiderRegionInfo(c *C) {
 	}
 
 	/*
-		split regions
-		index(a, b):	region1[(1, 1), ...(9, 9)]
-		index(a, b, c): region1[(1, 1)], region2[(2, 2), ...(9, 9)]
+		split regions to make rows 1 to 99 of index(a, b) be in a separate region, and
+		rows 1 to 2 of index(a, b, c) be in a separate region.
 	*/
 
 	tbl, err := dom.InfoSchema().TableByName(model.NewCIStr("test"), model.NewCIStr("t"))
@@ -1617,18 +1617,17 @@ func (s *testIntegrationSerialSuite) TestConsiderRegionInfo(c *C) {
 	idxAB := tbl.Meta().Indices[0].ID
 	idxABC := tbl.Meta().Indices[1].ID
 
-	abcBegin := genIndexSplitKeyForInt(c, tid, idxABC, []int{0, 0, 0})
-	abcEnd := genIndexSplitKeyForInt(c, tid, idxABC, []int{9, 9, 9})
-	abcBound := abcBegin.Next().Next()
+	abcBegin := genIndexSplitKeyForInt(c, tid, idxABC, []int{1, 1, 1})
+	abcEnd := genIndexSplitKeyForInt(c, tid, idxABC, []int{3, 3, 3})
 	splitClusterRegionByKey(c, cls, abcEnd.Next())
-	splitClusterRegionByKey(c, cls, abcBound)
 	splitClusterRegionByKey(c, cls, abcBegin)
+	checkClusterRegions(c, cls, abcBegin, abcEnd)
 
-	abBegin := genIndexSplitKeyForInt(c, tid, idxAB, []int{0, 0})
-	abEnd := genIndexSplitKeyForInt(c, tid, idxAB, []int{9, 9})
+	abBegin := genIndexSplitKeyForInt(c, tid, idxAB, []int{1, 1})
+	abEnd := genIndexSplitKeyForInt(c, tid, idxAB, []int{99, 99, 99})
 	splitClusterRegionByKey(c, cls, abEnd.Next())
 	splitClusterRegionByKey(c, cls, abBegin)
-	splitClusterRegions(c, cls, abBegin, abEnd)
+	checkClusterRegions(c, cls, abBegin, abEnd)
 }
 
 func genIndexSplitKeyForInt(c *C, tid, idx int64, nums []int) kv.Key {
@@ -1640,7 +1639,7 @@ func genIndexSplitKeyForInt(c *C, tid, idx int64, nums []int) kv.Key {
 	}
 	result, err := codec.EncodeKey(nil, nil, ds...)
 	c.Assert(err, IsNil)
-	return result
+	return tablecodec.EncodeIndexSeekKey(tid, idx, result)
 }
 
 func splitClusterRegionByKey(c *C, cls cluster.Cluster, k kv.Key) {
@@ -1650,10 +1649,18 @@ func splitClusterRegionByKey(c *C, cls cluster.Cluster, k kv.Key) {
 	cls.Split(r.Id, newRegionID, k, []uint64{newPeerID}, newPeerID)
 }
 
-func splitClusterRegions(c *C, cls cluster.Cluster, begin, end kv.Key) {
-	rBegin, _ := cls.GetRegionByKey(begin)
-	c.Assert(rBegin, NotNil)
-	rEnd, _ := cls.GetRegionByKey(end)
-	c.Assert(rEnd, NotNil)
-	c.Assert(rBegin.Id, Equals, rEnd.Id)
+func checkClusterRegions(c *C, cls cluster.Cluster, regionKeys ...kv.Key) {
+	c.Assert(len(regionKeys)%2, Equals, 0)
+	var lastGroupID uint64
+	for i := 0; i < len(regionKeys); i += 2 {
+		rBegin, _ := cls.GetRegionByKey(regionKeys[i])
+		c.Assert(rBegin, NotNil)
+		rEnd, _ := cls.GetRegionByKey(regionKeys[i+1])
+		c.Assert(rEnd, NotNil)
+		c.Assert(rBegin.Id, Equals, rEnd.Id)
+		if i > 0 {
+			c.Assert(lastGroupID, Not(Equals), rBegin.Id)
+		}
+		lastGroupID = rBegin.Id
+	}
 }
