@@ -17,6 +17,8 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/pingcap/tidb/session"
+	"github.com/pingcap/tidb/types"
+	"github.com/pingcap/tidb/util/codec"
 	"strings"
 
 	. "github.com/pingcap/check"
@@ -1604,24 +1606,55 @@ func (s *testIntegrationSerialSuite) TestConsiderRegionInfo(c *C) {
 	}
 
 	/*
-		func generateIndexSplitKeyForInt(tid, idx int64, splitNum []int) [][]byte {
-			results := make([][]byte, 0, len(splitNum))
-			for _, num := range splitNum {
-				d := new(types.Datum)
-				d.SetInt64(int64(num))
-				b, err := codec.EncodeKey(nil, nil, *d)
-				if err != nil {
-					panic(err)
-				}
-				results = append(results, tablecodec.EncodeIndexSeekKey(tid, idx, b))
-			}
-			return results
-		}
-	*/
-
-	/*
 		split regions
 		index(a, b):	region1[(1, 1), ...(9, 9)]
 		index(a, b, c): region1[(1, 1)], region2[(2, 2), ...(9, 9)]
 	*/
+
+	tbl, err := dom.InfoSchema().TableByName(model.NewCIStr("test"), model.NewCIStr("t"))
+	c.Assert(err, IsNil)
+	tid := tbl.Meta().ID
+	idxAB := tbl.Meta().Indices[0].ID
+	idxABC := tbl.Meta().Indices[1].ID
+
+	idxABBegin := genIndexSplitKeyForInt(c, tid, idxAB, []int{0, 0})
+	idxABEnd := genIndexSplitKeyForInt(c, tid, idxAB, []int{9, 9})
+	splitClusterRegions(c, cls, idxABBegin, idxABEnd)
+
+	idxABCBegin := genIndexSplitKeyForInt(c, tid, idxABC, []int{0, 0, 0})
+	idxABCEnd := genIndexSplitKeyForInt(c, tid, idxABC, []int{9, 9, 9})
+	splitClusterRegions(c, cls, idxABCBegin, idxABCEnd)
+}
+
+func genIndexSplitKeyForInt(c *C, tid, idx int64, nums []int) []byte {
+	ds := make([]types.Datum, 0, len(nums))
+	for _, num := range nums {
+		d := new(types.Datum)
+		d.SetInt64(int64(num))
+		ds = append(ds, *d)
+	}
+	result, err := codec.EncodeKey(nil, nil, ds...)
+	c.Assert(err, IsNil)
+	return result
+}
+
+func splitClusterRegions(c *C, cls cluster.Cluster, begin, end []byte, splitKeys ...[]byte) {
+	rBegin, err := cls.GetRegionByKey(begin)
+	c.Assert(err, IsNil)
+	rEnd, err := cls.GetRegionByKey(end)
+	c.Assert(err, IsNil)
+	if rBegin.Id != rEnd.Id {
+		panic("all keys should be in the same region")
+	}
+	for _, key := range splitKeys {
+		r, err := cls.GetRegionByKey(key)
+		c.Assert(err, IsNil)
+		if r.Id != rBegin.Id {
+			panic("all keys should be in the same region")
+		}
+	}
+	for _, key := range splitKeys {
+		newRegionID, newPeerID := cls.AllocID(), cls.AllocID()
+		cls.Split(rBegin.Id, newRegionID, key, []uint64{newPeerID}, newPeerID)
+	}
 }
