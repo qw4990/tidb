@@ -1590,12 +1590,12 @@ func (s *testIntegrationSerialSuite) TestConsiderRegionInfo(c *C) {
 
 	// initialize the database and table
 	tk.MustExec("use test")
-	tk.MustExec("create table t (a int, b int, c int, key(a, b), key(a, b, c))")
+	tk.MustExec("create table t (a int, b int, index a(a), index ab(a, b))")
 	for i := 0; i <= 100; i++ {
-		tk.MustExec(fmt.Sprintf("insert into t values (%v, %v, %v)", i, i, i))
+		tk.MustExec(fmt.Sprintf("insert into t values (%v, %v)", i, i))
 	}
 	tk.MustExec("analyze table t")
-	query := "explain select a, b from t where a=1 and b>1 limit 1"
+	query := "explain select a from t order by a limit 1;"
 
 	// before splitting, the optimizer should choose the index(a, b) since it has
 	// a smaller row size than index(a, b, c);
@@ -1604,27 +1604,30 @@ func (s *testIntegrationSerialSuite) TestConsiderRegionInfo(c *C) {
 		fmt.Println(row)
 	}
 
-	// split regions to make rows 1~99 of index(a, b) be in a separate region, and
-	// rows 1~2 of index(a, b, c) be in a separate region.
-	tbl, err := dom.InfoSchema().TableByName(model.NewCIStr("test"), model.NewCIStr("t"))
-	c.Assert(err, IsNil)
-	tid := tbl.Meta().ID
-	idxAB := tbl.Meta().Indices[0].ID
-	idxABC := tbl.Meta().Indices[1].ID
+	/*
+		// split regions to make rows 1~99 of index(a, b) be in a separate region, and
+		// rows 1~2 of index(a, b, c) be in a separate region.
+		tbl, err := dom.InfoSchema().TableByName(model.NewCIStr("test"), model.NewCIStr("t"))
+		c.Assert(err, IsNil)
+		tid := tbl.Meta().ID
+		idxAB := tbl.Meta().Indices[0].ID
+		idxABC := tbl.Meta().Indices[1].ID
 
-	abcBegin := genIndexSplitKeyForInt(c, tid, idxABC, []int{1, 1, 1})
-	abcEnd := genIndexSplitKeyForInt(c, tid, idxABC, []int{3, 3, 3})
-	splitClusterRegionByKey(c, cls, abcEnd.Next())
-	splitClusterRegionByKey(c, cls, abcBegin)
-	checkClusterRegions(c, cls, abcBegin, abcEnd)
+		abcBegin := genIndexSplitKeyForInt(c, tid, idxABC, []int{1, 1, 1})
+		abcEnd := genIndexSplitKeyForInt(c, tid, idxABC, []int{3, 3, 3})
+		splitClusterRegionByKey(c, cls, abcEnd.Next())
+		splitClusterRegionByKey(c, cls, abcBegin)
+		checkClusterRegions(c, cls, abcBegin, abcEnd)
 
-	abBegin := genIndexSplitKeyForInt(c, tid, idxAB, []int{1, 1})
-	abEnd := genIndexSplitKeyForInt(c, tid, idxAB, []int{99, 99, 99})
-	splitClusterRegionByKey(c, cls, abEnd.Next())
-	splitClusterRegionByKey(c, cls, abBegin)
-	checkClusterRegions(c, cls, abBegin, abEnd)
+		abBegin := genIndexSplitKeyForInt(c, tid, idxAB, []int{1, 1})
+		abEnd := genIndexSplitKeyForInt(c, tid, idxAB, []int{99, 99, 99})
+		splitClusterRegionByKey(c, cls, abEnd.Next())
+		splitClusterRegionByKey(c, cls, abBegin)
+		checkClusterRegions(c, cls, abBegin, abEnd)
 
-	tk.MustExec("analyze table t")
+		tk.MustExec("analyze table t")
+
+	*/
 }
 
 func genIndexSplitKeyForInt(c *C, tid, idx int64, nums []int) kv.Key {
