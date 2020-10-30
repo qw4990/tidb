@@ -15,6 +15,7 @@ package core
 
 import (
 	"context"
+	"github.com/pingcap/tidb/planner/util"
 	"math"
 
 	"github.com/pingcap/errors"
@@ -136,15 +137,31 @@ func DoOptimize(ctx context.Context, sctx sessionctx.Context, flag uint64, logic
 	if err != nil {
 		return nil, 0, err
 	}
-	finalPlan := postOptimize(sctx, physical)
-	return finalPlan, cost, nil
+	finalPlan, err := postOptimize(sctx, physical)
+	return finalPlan, cost, err
 }
 
-func postOptimize(sctx sessionctx.Context, plan PhysicalPlan) PhysicalPlan {
+func postOptimize(sctx sessionctx.Context, plan PhysicalPlan) (PhysicalPlan, error) {
 	plan = eliminatePhysicalProjection(plan)
 	plan = injectExtraProjection(plan)
 	plan = eliminateUnionScanAndLock(sctx, plan)
-	return plan
+	return stabilizeResults(sctx, plan)
+}
+
+func stabilizeResults(sctx sessionctx.Context, plan PhysicalPlan) (PhysicalPlan, error) {
+	if !sctx.GetSessionVars().EnableStableResults {
+		return plan, nil
+	}
+	cols := plan.Schema().Columns
+	items := property.ItemsFromCols(cols, false)
+	byItems := make([]*util.ByItems, 0, len(cols))
+	for _, col := range cols {
+		byItems = append(byItems, &util.ByItems{Expr: col})
+	}
+	sortReqProp := &property.PhysicalProperty{TaskTp: property.RootTaskType, Items: items, ExpectedCnt: math.MaxFloat64}
+	sort := PhysicalSort{ByItems: byItems}.Init(sctx, plan.Stats(), 0, sortReqProp)
+	sort.SetChildren(plan)
+	return sort, sort.ResolveIndices()
 }
 
 func logicalOptimize(ctx context.Context, flag uint64, logic LogicalPlan) (LogicalPlan, error) {
