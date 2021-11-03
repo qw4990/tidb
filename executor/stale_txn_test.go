@@ -559,10 +559,13 @@ func (s *testStaleTxnSerialSuite) TestSetTransactionReadOnlyAsOf(c *C) {
 }
 
 func (s *testStaleTxnSerialSuite) TestValidateReadOnlyInStalenessTransaction(c *C) {
+	errMsg1 := ".*only support read-only statement during read-only staleness transactions.*"
+	errMsg2 := ".*select lock hasn't been supported in stale read yet.*"
 	testcases := []struct {
 		name       string
 		sql        string
 		isValidate bool
+		errMsg     string
 	}{
 		{
 			name:       "select statement",
@@ -578,6 +581,7 @@ func (s *testStaleTxnSerialSuite) TestValidateReadOnlyInStalenessTransaction(c *
 			name:       "explain analyze insert statement",
 			sql:        `explain analyze insert into t (id) values (1);`,
 			isValidate: false,
+			errMsg:     errMsg1,
 		},
 		{
 			name:       "explain analyze select statement",
@@ -588,6 +592,7 @@ func (s *testStaleTxnSerialSuite) TestValidateReadOnlyInStalenessTransaction(c *
 			name:       "execute insert statement",
 			sql:        `EXECUTE stmt1;`,
 			isValidate: false,
+			errMsg:     errMsg1,
 		},
 		{
 			name:       "execute select statement",
@@ -608,16 +613,19 @@ func (s *testStaleTxnSerialSuite) TestValidateReadOnlyInStalenessTransaction(c *
 			name:       "insert",
 			sql:        `insert into t (id) values (1);`,
 			isValidate: false,
+			errMsg:     errMsg1,
 		},
 		{
 			name:       "delete",
 			sql:        `delete from t where id =1`,
 			isValidate: false,
+			errMsg:     errMsg1,
 		},
 		{
 			name:       "update",
 			sql:        "update t set id =2 where id =1",
 			isValidate: false,
+			errMsg:     errMsg1,
 		},
 		{
 			name:       "point get",
@@ -643,41 +651,49 @@ func (s *testStaleTxnSerialSuite) TestValidateReadOnlyInStalenessTransaction(c *
 			name:       "select for update",
 			sql:        "select * from t where id = 1 for update",
 			isValidate: false,
+			errMsg:     errMsg2,
 		},
 		{
 			name:       "select lock in share mode",
 			sql:        "select * from t where id = 1 lock in share mode",
-			isValidate: true,
+			isValidate: false,
+			errMsg:     errMsg2,
 		},
 		{
 			name:       "select for update union statement",
 			sql:        "select * from t for update union select * from t;",
 			isValidate: false,
+			errMsg:     errMsg1,
 		},
 		{
 			name:       "replace statement",
 			sql:        "replace into t(id) values (1)",
 			isValidate: false,
+			errMsg:     errMsg1,
 		},
 		{
 			name:       "load data statement",
 			sql:        "LOAD DATA LOCAL INFILE '/mn/asa.csv' INTO TABLE t FIELDS TERMINATED BY x'2c' ENCLOSED BY b'100010' LINES TERMINATED BY '\r\n' IGNORE 1 LINES (id);",
 			isValidate: false,
+			errMsg:     errMsg1,
 		},
 		{
 			name:       "update multi tables",
 			sql:        "update t,t1 set t.id = 1,t1.id = 2 where t.1 = 2 and t1.id = 3;",
 			isValidate: false,
+			errMsg:     errMsg1,
 		},
 		{
 			name:       "delete multi tables",
 			sql:        "delete t from t1 where t.id = t1.id",
 			isValidate: false,
+			errMsg:     errMsg1,
 		},
 		{
 			name:       "insert select",
 			sql:        "insert into t select * from t1;",
 			isValidate: false,
+			errMsg:     errMsg1,
 		},
 	}
 	tk := testkit.NewTestKit(c, s.store)
@@ -703,7 +719,7 @@ func (s *testStaleTxnSerialSuite) TestValidateReadOnlyInStalenessTransaction(c *
 		} else {
 			err := tk.ExecToErr(testcase.sql)
 			c.Assert(err, NotNil)
-			c.Assert(err.Error(), Matches, `.*only support read-only statement during read-only staleness transactions.*`)
+			c.Assert(err.Error(), Matches, testcase.errMsg)
 		}
 		tk.MustExec("commit")
 		tk.MustExec("set transaction read only as of timestamp NOW(3);")
@@ -712,8 +728,9 @@ func (s *testStaleTxnSerialSuite) TestValidateReadOnlyInStalenessTransaction(c *
 		} else {
 			err := tk.ExecToErr(testcase.sql)
 			c.Assert(err, NotNil)
-			c.Assert(err.Error(), Matches, `.*only support read-only statement during read-only staleness transactions.*`)
+			c.Assert(err.Error(), Matches, testcase.errMsg)
 		}
+		// clean the status
 		tk.MustExec("set transaction read only as of timestamp ''")
 	}
 }
