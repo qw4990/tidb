@@ -4819,3 +4819,27 @@ func (s *testIntegrationSuite) TestIssues29711(c *C) {
 		))
 
 }
+
+func (s *testIntegrationSuite) TestRegardNULLAsPoint(c *C) {
+	tk := testkit.NewTestKit(c, s.store)
+	tk.MustExec("use test")
+
+	tk.MustExec("drop table if exists tnull")
+	tk.MustExec(`create table tnull (a int, b int, key(a, b))`)
+
+	tk.MustQuery(`select @@tidb_regard_null_as_point`).Check(testkit.Rows("1")) // the default value is true
+	tk.MustExec(`set @@session.tidb_regard_null_as_point=false`)
+	tk.MustQuery(`show warnings`).Check(testkit.Rows()) // no warning
+
+	tk.MustQuery(`explain format=brief select * from tnull where a<=>null and b=1`).Check(testkit.Rows(
+		`IndexReader 0.01 root  index:Selection`,
+		`└─Selection 0.01 cop[tikv]  eq(test.tnull.b, 1)`,
+		`  └─IndexRangeScan 10.00 cop[tikv] table:tnull, index:a(a, b) range:[NULL,NULL], keep order:false, stats:pseudo`))
+	tk.MustExec(`set @@session.tidb_regard_null_as_point=true`)
+	tk.MustQuery(`show warnings`).Check(testkit.Rows())
+	tk.MustQuery(`select @@tidb_regard_null_as_point`).Check(testkit.Rows("1"))
+	tk.MustQuery(`explain format=brief select * from tnull where a<=>null and b=1`).Check(testkit.Rows(
+		`IndexReader 0.01 root  index:Selection`,
+		`└─Selection 0.01 cop[tikv]  eq(test.tnull.b, 1)`,
+		`  └─IndexRangeScan 10.00 cop[tikv] table:tnull, index:a(a, b) range:[NULL 1,NULL 1], keep order:false, stats:pseudo`))
+}
