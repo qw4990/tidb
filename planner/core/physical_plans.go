@@ -1202,7 +1202,7 @@ func (p *PhysicalIndexScan) IsPointGetByUniqueKey(sc *stmtctx.StatementContext) 
 	return len(p.Ranges) == 1 &&
 		p.Index.Unique &&
 		len(p.Ranges[0].LowVal) == len(p.Index.Columns) &&
-		p.Ranges[0].IsPoint(sc)
+		p.Ranges[0].IsPoint(sc, false)
 }
 
 // PhysicalSelection represents a filter.

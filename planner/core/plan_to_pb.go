@@ -203,7 +203,7 @@ func (p *PhysicalTableScan) ToPB(ctx sessionctx.Context, storeType kv.StoreType)
 
 // checkCoverIndex checks whether we can pass unique info to TiKV. We should push it if and only if the length of
 // range and index are equal.
-func checkCoverIndex(idx *model.IndexInfo, ranges []*ranger.Range) bool {
+func checkCoverIndex(sctx sessionctx.Context, idx *model.IndexInfo, ranges []*ranger.Range) bool {
 	// If the index is (c1, c2) but the query range only contains c1, it is not a unique get.
 	if !idx.Unique {
 		return false
@@ -211,6 +211,18 @@ func checkCoverIndex(idx *model.IndexInfo, ranges []*ranger.Range) bool {
 	for _, rg := range ranges {
 		if len(rg.LowVal) != len(idx.Columns) {
 			return false
+		}
+
+		if sctx.GetSessionVars().RegardNULLAsPoint {
+			if !rg.LowExclude && !rg.HighExclude {
+				for i := range rg.LowVal {
+					if rg.LowVal[i].IsNull() && rg.HighVal[i].IsNull() {
+						// a unique index may have duplicated NULL rows, so we cannot set the unique attribute to true when the range has [NULL, NULL];
+						// please see https://github.com/pingcap/tidb/issues/29650 for more details.
+						return false
+					}
+				}
+			}
 		}
 	}
 	return true
@@ -332,7 +344,7 @@ func (p *PhysicalIndexScan) ToPB(ctx sessionctx.Context, _ kv.StoreType) (*tipb.
 	if p.isPartition {
 		idxExec.TableId = p.physicalTableID
 	}
-	unique := checkCoverIndex(p.Index, p.Ranges)
+	unique := checkCoverIndex(ctx, p.Index, p.Ranges)
 	idxExec.Unique = &unique
 	return &tipb.Executor{Tp: tipb.ExecType_TypeIndexScan, IdxScan: idxExec}, nil
 }

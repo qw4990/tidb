@@ -80,7 +80,8 @@ func (ran *Range) Clone() *Range {
 }
 
 // IsPoint returns if the range is a point.
-func (ran *Range) IsPoint(sc *stmtctx.StatementContext) bool {
+// The second argument indicates whether regard [NULL, NULL] as a point.
+func (ran *Range) IsPoint(sc *stmtctx.StatementContext, nullAsPoint bool) bool {
 	if len(ran.LowVal) != len(ran.HighVal) {
 		return false
 	}
@@ -98,8 +99,10 @@ func (ran *Range) IsPoint(sc *stmtctx.StatementContext) bool {
 			return false
 		}
 
-		if a.IsNull() {
-			return false
+		if a.IsNull() && b.IsNull() {
+			if !nullAsPoint {
+				return false
+			}
 		}
 	}
 	return !ran.LowExclude && !ran.HighExclude
@@ -107,30 +110,7 @@ func (ran *Range) IsPoint(sc *stmtctx.StatementContext) bool {
 
 // IsPointNullable returns if the range is a point.
 func (ran *Range) IsPointNullable(sc *stmtctx.StatementContext) bool {
-	if len(ran.LowVal) != len(ran.HighVal) {
-		return false
-	}
-	for i := range ran.LowVal {
-		a := ran.LowVal[i]
-		b := ran.HighVal[i]
-		if a.Kind() == types.KindMinNotNull || b.Kind() == types.KindMaxValue {
-			return false
-		}
-		cmp, err := a.CompareDatum(sc, &b)
-		if err != nil {
-			return false
-		}
-		if cmp != 0 {
-			return false
-		}
-
-		if a.IsNull() {
-			if !b.IsNull() {
-				return false
-			}
-		}
-	}
-	return !ran.LowExclude && !ran.HighExclude
+	return ran.IsPoint(sc, true)
 }
 
 // IsFullRange check if the range is full scan range

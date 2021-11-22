@@ -155,7 +155,7 @@ func (path *AccessPath) OnlyPointRange(sc *stmtctx.StatementContext) bool {
 	noIntervalRange := true
 	if path.IsIntHandlePath {
 		for _, ran := range path.Ranges {
-			if !ran.IsPoint(sc) {
+			if !ran.IsPoint(sc, false) {
 				noIntervalRange = false
 				break
 			}
