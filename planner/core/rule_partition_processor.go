@@ -137,7 +137,7 @@ func (s *partitionProcessor) findUsedPartitions(ctx sessionctx.Context, tbl tabl
 	ranges := detachedResult.Ranges
 	used := make([]int, 0, len(ranges))
 	for _, r := range ranges {
-		if r.IsPointNullable(ctx.GetSessionVars().StmtCtx) {
+		if r.IsPointNullable(ctx) {
 			if !r.HighVal[0].IsNull() {
 				if len(r.HighVal) != len(partIdx) {
 					used = []int{-1}
@@ -469,7 +469,7 @@ func (l *listPartitionPruner) locateColumnPartitionsByCondition(cond expression.
 			return nil, true, nil
 		}
 		var locations []tables.ListPartitionLocation
-		if r.IsPointNullable(sc) {
+		if r.IsPointNullable(l.ctx) {
 			location, err := colPrune.LocatePartition(sc, r.HighVal[0])
 			if err != nil {
 				return nil, false, err
@@ -545,7 +545,7 @@ func (l *listPartitionPruner) findUsedListPartitions(conds []expression.Expressi
 	}
 	used := make(map[int]struct{}, len(ranges))
 	for _, r := range ranges {
-		if r.IsPointNullable(l.ctx.GetSessionVars().StmtCtx) {
+		if r.IsPointNullable(l.ctx) {
 			if len(r.HighVal) != len(exprCols) && !r.HighVal[0].IsNull() {
 				// For the list partition, if the first argument is null,
 				// then the list partition expression should also be null.
