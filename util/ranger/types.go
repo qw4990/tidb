@@ -54,7 +54,7 @@ func (ran *Range) Clone() *Range {
 
 // IsPoint returns if the range is a point.
 func (ran *Range) IsPoint(sctx sessionctx.Context) bool {
-	return ran.isPoint(sctx, false)
+	return ran.isPoint(sctx, sctx.GetSessionVars().RegardNULLAsPoint)
 }
 
 func (ran *Range) isPoint(sctx sessionctx.Context, regardNullAsPoint bool) bool {
@@ -82,6 +82,11 @@ func (ran *Range) isPoint(sctx sessionctx.Context, regardNullAsPoint bool) bool 
 		}
 	}
 	return !ran.LowExclude && !ran.HighExclude
+}
+
+// IsPointNonNullable returns if the range is a point without NULL.
+func (ran *Range) IsPointNonNullable(sctx sessionctx.Context) bool {
+	return ran.isPoint(sctx, false)
 }
 
 // IsPointNullable returns if the range is a point.

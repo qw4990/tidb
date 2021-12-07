@@ -1792,6 +1792,10 @@ var defaultSysVars = []*SysVar{
 		return nil
 	}},
 	{Scope: ScopeNone, Name: TiDBAllowFunctionForExpressionIndex, ReadOnly: true, Value: collectAllowFuncName4ExpressionIndex()},
+	{Scope: ScopeGlobal | ScopeSession, Name: TiDBRegardNULLAsPoint, Value: BoolToOnOff(DefTiDBRegardNULLAsPoint), Type: TypeBool, SetSession: func(s *SessionVars, val string) error {
+		s.RegardNULLAsPoint = TiDBOptOn(val)
+		return nil
+	}},
 }
 
 func collectAllowFuncName4ExpressionIndex() string {

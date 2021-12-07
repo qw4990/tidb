@@ -586,6 +586,9 @@ const (
 
 	// TiDBEnableOrderedResultMode indicates if stabilize query results.
 	TiDBEnableOrderedResultMode = "tidb_enable_ordered_result_mode"
+
+	// TiDBRegardNULLAsPoint indicates whether regard NULL as point when optimizing
+	TiDBRegardNULLAsPoint = "tidb_regard_null_as_point"
 )
 
 // TiDB vars that have only global scope
@@ -747,6 +750,7 @@ const (
 	DefTMPTableSize                       = 16777216
 	DefTiDBEnableLocalTxn                 = false
 	DefTiDBEnableOrderedResultMode        = false
+	DefTiDBRegardNULLAsPoint              = true
 )
 
 // Process global variables.
