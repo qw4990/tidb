@@ -575,7 +575,7 @@ func (e *Execute) rebuildRange(p Plan) error {
 				}
 			}
 			if pkCol != nil {
-				ts.Ranges, err = ranger.BuildTableRange(ts.AccessCondition, sc, pkCol.RetType)
+				ts.Ranges, err = ranger.BuildTableRange(ts.AccessCondition, x.ctx, pkCol.RetType)
 				if err != nil {
 					return err
 				}
@@ -614,7 +614,7 @@ func (e *Execute) rebuildRange(p Plan) error {
 					}
 				}
 				if pkCol != nil {
-					ranges, err := ranger.BuildTableRange(x.AccessConditions, x.ctx.GetSessionVars().StmtCtx, pkCol.RetType)
+					ranges, err := ranger.BuildTableRange(x.AccessConditions, x.ctx, pkCol.RetType)
 					if err != nil {
 						return err
 					}
@@ -664,7 +664,7 @@ func (e *Execute) rebuildRange(p Plan) error {
 					}
 				}
 				if pkCol != nil {
-					ranges, err := ranger.BuildTableRange(x.AccessConditions, x.ctx.GetSessionVars().StmtCtx, pkCol.RetType)
+					ranges, err := ranger.BuildTableRange(x.AccessConditions, x.ctx, pkCol.RetType)
 					if err != nil {
 						return err
 					}
@@ -1406,10 +1406,10 @@ func IsPointGetWithPKOrUniqueKeyByAutoCommit(ctx sessionctx.Context, p Plan) (bo
 	switch v := p.(type) {
 	case *PhysicalIndexReader:
 		indexScan := v.IndexPlans[0].(*PhysicalIndexScan)
-		return indexScan.IsPointGetByUniqueKey(ctx.GetSessionVars().StmtCtx), nil
+		return indexScan.IsPointGetByUniqueKey(ctx), nil
 	case *PhysicalTableReader:
 		tableScan := v.TablePlans[0].(*PhysicalTableScan)
-		isPointRange := len(tableScan.Ranges) == 1 && tableScan.Ranges[0].IsPoint(ctx.GetSessionVars().StmtCtx)
+		isPointRange := len(tableScan.Ranges) == 1 && tableScan.Ranges[0].IsPoint(ctx)
 		if !isPointRange {
 			return false, nil
 		}

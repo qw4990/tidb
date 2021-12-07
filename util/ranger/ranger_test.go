@@ -27,7 +27,6 @@ import (
 	plannercore "github.com/pingcap/tidb/planner/core"
 	"github.com/pingcap/tidb/session"
 	"github.com/pingcap/tidb/sessionctx"
-	"github.com/pingcap/tidb/sessionctx/stmtctx"
 	"github.com/pingcap/tidb/sessionctx/variable"
 	"github.com/pingcap/tidb/store/mockstore"
 	"github.com/pingcap/tidb/types"
@@ -321,7 +320,7 @@ func (s *testRangerSuite) TestTableRange(c *C) {
 		conds, filter = ranger.DetachCondsForColumn(sctx, conds, col)
 		c.Assert(fmt.Sprintf("%s", conds), Equals, tt.accessConds, Commentf("wrong access conditions for expr: %s", tt.exprStr))
 		c.Assert(fmt.Sprintf("%s", filter), Equals, tt.filterConds, Commentf("wrong filter conditions for expr: %s", tt.exprStr))
-		result, err := ranger.BuildTableRange(conds, new(stmtctx.StatementContext), col.RetType)
+		result, err := ranger.BuildTableRange(conds, sctx, col.RetType)
 		c.Assert(err, IsNil, Commentf("failed to build table range for expr %s", tt.exprStr))
 		got := fmt.Sprintf("%v", result)
 		c.Assert(got, Equals, tt.resultStr, Commentf("different for expr %s", tt.exprStr))
@@ -1219,7 +1218,7 @@ func (s *testRangerSuite) TestColumnRange(c *C) {
 		c.Assert(col, NotNil)
 		conds = ranger.ExtractAccessConditionsForColumn(conds, col)
 		c.Assert(fmt.Sprintf("%s", conds), Equals, tt.accessConds, Commentf("wrong access conditions for expr: %s", tt.exprStr))
-		result, err := ranger.BuildColumnRange(conds, new(stmtctx.StatementContext), col.RetType, tt.length)
+		result, err := ranger.BuildColumnRange(conds, sctx, col.RetType, tt.length)
 		c.Assert(err, IsNil)
 		got := fmt.Sprintf("%v", result)
 		c.Assert(got, Equals, tt.resultStr, Commentf("different for expr %s, col: %v", tt.exprStr, col))
