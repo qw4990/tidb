@@ -1324,6 +1324,7 @@ func (s *testRangerSuite) TestCompIndexDNFMatch(c *C) {
 	c.Assert(err, IsNil)
 	testKit := testkit.NewTestKit(c, store)
 	testKit.MustExec("use test")
+	testKit.MustExec(`set @@session.tidb_regard_null_as_point=false`)
 	testKit.MustExec("drop table if exists t")
 	testKit.MustExec("create table t(a int, b int, c int, key(a,b,c));")
 	testKit.MustExec("insert into t values(1,2,2)")
