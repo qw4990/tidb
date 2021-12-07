@@ -87,7 +87,6 @@ func (ran *Range) isPoint(sctx sessionctx.Context, regardNullAsPoint bool) bool 
 // IsPointNullable returns if the range is a point.
 func (ran *Range) IsPointNullable(sctx sessionctx.Context) bool {
 	return ran.isPoint(sctx, true)
-
 }
 
 // IsFullRange check if the range is full scan range

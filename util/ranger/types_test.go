@@ -18,7 +18,6 @@ import (
 
 	. "github.com/pingcap/check"
 	"github.com/pingcap/tidb/planner/core"
-	"github.com/pingcap/tidb/sessionctx/stmtctx"
 	"github.com/pingcap/tidb/types"
 	"github.com/pingcap/tidb/util/ranger"
 )
@@ -127,7 +126,6 @@ func (s *testRangeSuite) TestRange(c *C) {
 			isPoint: false,
 		},
 	}
-	sc := new(stmtctx.StatementContext)
 	for _, t := range isPointTests {
 		c.Assert(t.ran.IsPoint(core.MockContext()), Equals, t.isPoint)
 	}
