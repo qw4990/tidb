@@ -16,6 +16,9 @@ package statistics
 
 import (
 	"bytes"
+	"fmt"
+	"github.com/pingcap/tidb/domain"
+	"github.com/pingcap/tidb/infoschema"
 	"math"
 	"math/bits"
 	"sort"
@@ -534,6 +537,22 @@ func CETraceExpr(sc *stmtctx.StatementContext, tableID int64, tp string, expr ex
 		RowCount: uint64(rowCount),
 	}
 	sc.OptimizerCETrace = append(sc.OptimizerCETrace, &rec)
+}
+
+// TrueCardExpr ...
+func TrueCardExpr(sctx sessionctx.Context, tableID int64, expr expression.Expression) (float64, error) {
+	exprStr, err := ExprToString(expr)
+	if err != nil {
+		return 0, err
+	}
+	tbl, ok := sctx.GetInfoSchema().(infoschema.InfoSchema).TableByID(tableID)
+	if !ok {
+		return 0, errors.New("cannot find the table")
+	}
+	tblName := tbl.Meta().Name.O
+
+	q := fmt.Sprintf(`SELECT COUNT(*) FROM %v WHERE %v`, tblName, exprStr)
+	return domain.GetDomain(sctx).StatsHandle().TrueCardinality(q)
 }
 
 // ExprToString prints an Expression into a string which can appear in a SQL.

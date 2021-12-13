@@ -849,6 +849,27 @@ func (h *Handle) columnStatsFromStorage(reader *statsReader, row chunk.Row, tabl
 	return nil
 }
 
+// TrueCardinality ...
+func (h *Handle) TrueCardinality(sql string) (float64, error) {
+	reader, err := h.getStatsReader(0)
+	if err != nil {
+		return 0, err
+	}
+	defer func() {
+		err1 := h.releaseStatsReader(reader)
+		if err == nil && err1 != nil {
+			err = err1
+		}
+	}()
+
+	rows, _, err := reader.read(sql)
+	if err != nil {
+		return 0, err
+	}
+	trueCard := rows[0].GetInt64(0)
+	return float64(trueCard), nil
+}
+
 // TableStatsFromStorage loads table stats info from storage.
 func (h *Handle) TableStatsFromStorage(tableInfo *model.TableInfo, physicalID int64, loadAll bool, snapshot uint64) (_ *statistics.Table, err error) {
 	reader, err := h.getStatsReader(snapshot)

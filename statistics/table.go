@@ -16,6 +16,8 @@ package statistics
 
 import (
 	"fmt"
+	"github.com/pingcap/tidb/domain"
+	"github.com/pingcap/tidb/infoschema"
 	"math"
 	"sort"
 	"strings"
@@ -411,6 +413,21 @@ func (coll *HistColl) GetRowCountByIndexRanges(sc *stmtctx.StatementContext, idx
 		CETraceRange(sc, coll.PhysicalID, colNames, indexRanges, "Index Stats", uint64(result))
 	}
 	return result, errors.Trace(err)
+}
+
+// TrueCardRange ...
+func TrueCardRange(sctx sessionctx.Context, tableID int64, colNames []string, ranges []*ranger.Range) (float64, error) {
+	exprStr, err := ranger.RangesToString(sctx.GetSessionVars().StmtCtx, ranges, colNames)
+	if err != nil {
+		return 0, err
+	}
+	tbl, ok := sctx.GetInfoSchema().(infoschema.InfoSchema).TableByID(tableID)
+	if !ok {
+		return 0, errors.New("cannot find the table")
+	}
+	tblName := tbl.Meta().Name.O
+	q := fmt.Sprintf(`SELECT COUNT(*) FROM %v WHERE %v`, tblName, exprStr)
+	return domain.GetDomain(sctx).StatsHandle().TrueCardinality(q)
 }
 
 // CETraceRange appends a list of ranges and related information into CE trace
