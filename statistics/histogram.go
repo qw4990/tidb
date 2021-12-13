@@ -17,6 +17,7 @@ package statistics
 import (
 	"bytes"
 	"fmt"
+	"github.com/pingcap/tidb/sessionctx"
 	"math"
 	"sort"
 	"strings"
@@ -1471,12 +1472,12 @@ func (idx *Index) expBackoffEstimation(sc *stmtctx.StatementContext, coll *HistC
 	return singleColumnEstResults[0] * math.Sqrt(singleColumnEstResults[1]) * math.Sqrt(math.Sqrt(singleColumnEstResults[2])) * math.Sqrt(math.Sqrt(math.Sqrt(singleColumnEstResults[3]))), true, nil
 }
 
-type countByRangeFunc = func(*stmtctx.StatementContext, int64, []*ranger.Range) (float64, error)
+type countByRangeFunc = func(sessionctx.Context, int64, []*ranger.Range) (float64, error)
 
 // newHistogramBySelectivity fulfills the content of new histogram by the given selectivity result.
 // TODO: Datum is not efficient, try to avoid using it here.
 //  Also, there're redundant calculation with Selectivity(). We need to reduce it too.
-func newHistogramBySelectivity(sc *stmtctx.StatementContext, histID int64, oldHist, newHist *Histogram, ranges []*ranger.Range, cntByRangeFunc countByRangeFunc) error {
+func newHistogramBySelectivity(sctx sessionctx.Context, histID int64, oldHist, newHist *Histogram, ranges []*ranger.Range, cntByRangeFunc countByRangeFunc) error {
 	cntPerVal := int64(oldHist.AvgCountPerNotNullValue(int64(oldHist.TotalRowCount())))
 	var totCnt int64
 	for boundIdx, ranIdx, highRangeIdx := 0, 0, 0; boundIdx < oldHist.Bounds.NumRows() && ranIdx < len(ranges); boundIdx, ranIdx = boundIdx+2, highRangeIdx {
@@ -1489,7 +1490,7 @@ func newHistogramBySelectivity(sc *stmtctx.StatementContext, histID int64, oldHi
 		if ranIdx == highRangeIdx {
 			continue
 		}
-		cnt, err := cntByRangeFunc(sc, histID, ranges[ranIdx:highRangeIdx])
+		cnt, err := cntByRangeFunc(sctx, histID, ranges[ranIdx:highRangeIdx])
 		// This should not happen.
 		if err != nil {
 			return err
