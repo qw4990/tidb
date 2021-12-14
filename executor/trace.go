@@ -99,7 +99,7 @@ func (e *TraceExec) Next(ctx context.Context, req *chunk.Chunk) error {
 }
 
 func (e *TraceExec) nextOptimizerCEPlanTrace(ctx context.Context, se sessionctx.Context, req *chunk.Chunk) error {
-	stmtCtx := se.GetSessionVars().StmtCtx
+	stmtCtx := se.GetSessionVars()
 	origin := stmtCtx.EnableOptimizerCETrace
 	stmtCtx.EnableOptimizerCETrace = true
 	defer func() {

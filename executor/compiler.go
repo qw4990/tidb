@@ -48,8 +48,8 @@ type Compiler struct {
 }
 
 func (c *Compiler) handleCERecord() {
-	fmt.Println(">>> record size >>> ", len(c.Ctx.GetSessionVars().StmtCtx.OptimizerCETrace))
-	for _, r := range c.Ctx.GetSessionVars().StmtCtx.OptimizerCETrace {
+	fmt.Println(">>> record size >>> ", len(c.Ctx.GetSessionVars().OptimizerCETrace))
+	for _, r := range c.Ctx.GetSessionVars().OptimizerCETrace {
 		fmt.Println("-->>> ", r)
 	}
 }
@@ -70,16 +70,16 @@ func (c *Compiler) Compile(ctx context.Context, stmtNode ast.StmtNode) (*ExecStm
 	}
 
 	if !c.Ctx.GetSessionVars().InRestrictedSQL {
-		c.Ctx.GetSessionVars().StmtCtx.EnableOptimizerCETrace = true
-		c.Ctx.GetSessionVars().StmtCtx.UsingTrueCE = true
+		c.Ctx.GetSessionVars().EnableOptimizerCETrace = true
+		c.Ctx.GetSessionVars().UsingTrueCE = true
 	}
 	finalPlan, names, err := planner.Optimize(ctx, c.Ctx, stmtNode, ret.InfoSchema)
 	if err != nil {
 		return nil, err
 	}
 	if !c.Ctx.GetSessionVars().InRestrictedSQL {
-		c.Ctx.GetSessionVars().StmtCtx.EnableOptimizerCETrace = false
-		c.Ctx.GetSessionVars().StmtCtx.UsingTrueCE = false
+		c.Ctx.GetSessionVars().EnableOptimizerCETrace = false
+		c.Ctx.GetSessionVars().UsingTrueCE = false
 		c.handleCERecord()
 	}
 

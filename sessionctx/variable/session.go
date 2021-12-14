@@ -19,6 +19,7 @@ import (
 	"crypto/tls"
 	"encoding/binary"
 	"fmt"
+	"github.com/pingcap/tidb/util/tracing"
 	"math"
 	"math/rand"
 	"net"
@@ -938,6 +939,12 @@ type SessionVars struct {
 
 	// RegardNULLAsPoint if regard NULL as Point
 	RegardNULLAsPoint bool
+
+	// EnableOptimizerCETrace indicate if cardinality estimation internal process needs to be traced.
+	// CE Trace is currently a submodule of the optimizer trace and is controlled by a separated option.
+	EnableOptimizerCETrace bool
+	OptimizerCETrace       []*tracing.CETraceRecord
+	UsingTrueCE            bool
 
 	// LocalTemporaryTables is *infoschema.LocalTemporaryTables, use interface to avoid circle dependency.
 	// It's nil if there is no local temporary table.

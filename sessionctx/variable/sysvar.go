@@ -1302,6 +1302,11 @@ var defaultSysVars = []*SysVar{
 		s.EnableStableResultMode = TiDBOptOn(val)
 		return nil
 	}},
+	{Scope: ScopeSession, Name: TiDBEnableCostEvalMode, Value: BoolToOnOff(false), Type: TypeBool, SetSession: func(s *SessionVars, val string) error {
+		s.EnableOptimizerCETrace = TiDBOptOn(val)
+		s.UsingTrueCE = TiDBOptOn(val)
+		return nil
+	}},
 	{Scope: ScopeGlobal | ScopeSession, Name: TiDBEnablePseudoForOutdatedStats, Value: BoolToOnOff(DefTiDBEnablePseudoForOutdatedStats), Type: TypeBool, SetSession: func(s *SessionVars, val string) error {
 		s.EnablePseudoForOutdatedStats = TiDBOptOn(val)
 		return nil
