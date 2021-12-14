@@ -354,12 +354,27 @@ func (coll *HistColl) GetRowCountByIntColumnRanges(sctx sessionctx.Context, colI
 			result = getPseudoRowCountByUnsignedIntRanges(intRanges, float64(coll.Count))
 		}
 		if sc.EnableOptimizerCETrace && ok {
+			if sc.UsingTrueCE {
+				trueCE, err := TrueCardRange(sctx, coll.PhysicalID, []string{c.Info.Name.O}, intRanges)
+				if err != nil {
+					panic(err)
+				}
+				result = trueCE
+			}
+
 			CETraceRange(sctx, coll.PhysicalID, []string{c.Info.Name.O}, intRanges, "Column Stats-Pseudo", uint64(result))
 		}
 		return result, nil
 	}
 	result, err := c.GetColumnRowCount(sctx, intRanges, coll.Count, true)
 	if sc.EnableOptimizerCETrace {
+		if sc.UsingTrueCE {
+			trueCE, err := TrueCardRange(sctx, coll.PhysicalID, []string{c.Info.Name.O}, intRanges)
+			if err != nil {
+				panic(err)
+			}
+			result = trueCE
+		}
 		CETraceRange(sctx, coll.PhysicalID, []string{c.Info.Name.O}, intRanges, "Column Stats", uint64(result))
 	}
 	return result, errors.Trace(err)
@@ -372,12 +387,26 @@ func (coll *HistColl) GetRowCountByColumnRanges(sctx sessionctx.Context, colID i
 	if !ok || c.IsInvalid(sctx, coll.Pseudo) {
 		result, err := GetPseudoRowCountByColumnRanges(sc, float64(coll.Count), colRanges, 0)
 		if err == nil && sc.EnableOptimizerCETrace && ok {
+			if sc.UsingTrueCE {
+				trueCE, err := TrueCardRange(sctx, coll.PhysicalID, []string{c.Info.Name.O}, colRanges)
+				if err != nil {
+					panic(err)
+				}
+				result = trueCE
+			}
 			CETraceRange(sctx, coll.PhysicalID, []string{c.Info.Name.O}, colRanges, "Column Stats-Pseudo", uint64(result))
 		}
 		return result, err
 	}
 	result, err := c.GetColumnRowCount(sctx, colRanges, coll.Count, false)
 	if sc.EnableOptimizerCETrace {
+		if sc.UsingTrueCE {
+			trueCE, err := TrueCardRange(sctx, coll.PhysicalID, []string{c.Info.Name.O}, colRanges)
+			if err != nil {
+				panic(err)
+			}
+			result = trueCE
+		}
 		CETraceRange(sctx, coll.PhysicalID, []string{c.Info.Name.O}, colRanges, "Column Stats", uint64(result))
 	}
 	return result, errors.Trace(err)
@@ -400,6 +429,13 @@ func (coll *HistColl) GetRowCountByIndexRanges(sctx sessionctx.Context, idxID in
 		}
 		result, err := getPseudoRowCountByIndexRanges(sc, indexRanges, float64(coll.Count), colsLen)
 		if err == nil && sc.EnableOptimizerCETrace && ok {
+			if sc.UsingTrueCE {
+				trueCE, err := TrueCardRange(sctx, coll.PhysicalID, colNames, indexRanges)
+				if err != nil {
+					panic(err)
+				}
+				result = trueCE
+			}
 			CETraceRange(sctx, coll.PhysicalID, colNames, indexRanges, "Index Stats-Pseudo", uint64(result))
 		}
 		return result, err
@@ -412,6 +448,13 @@ func (coll *HistColl) GetRowCountByIndexRanges(sctx sessionctx.Context, idxID in
 		result, err = idx.GetRowCount(sctx, coll, indexRanges, coll.Count)
 	}
 	if sc.EnableOptimizerCETrace {
+		if sc.UsingTrueCE {
+			trueCE, err := TrueCardRange(sctx, coll.PhysicalID, colNames, indexRanges)
+			if err != nil {
+				panic(err)
+			}
+			result = trueCE
+		}
 		CETraceRange(sctx, coll.PhysicalID, colNames, indexRanges, "Index Stats", uint64(result))
 	}
 	return result, errors.Trace(err)
