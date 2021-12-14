@@ -47,6 +47,13 @@ type Compiler struct {
 	Ctx sessionctx.Context
 }
 
+func (c *Compiler) handleCERecord() {
+	fmt.Println(">>> record size >>> ", len(c.Ctx.GetSessionVars().StmtCtx.OptimizerCETrace))
+	for _, r := range c.Ctx.GetSessionVars().StmtCtx.OptimizerCETrace {
+		fmt.Println("-->>> ", r)
+	}
+}
+
 // Compile compiles an ast.StmtNode to a physical plan.
 func (c *Compiler) Compile(ctx context.Context, stmtNode ast.StmtNode) (*ExecStmt, error) {
 	if span := opentracing.SpanFromContext(ctx); span != nil && span.Tracer() != nil {
@@ -62,9 +69,18 @@ func (c *Compiler) Compile(ctx context.Context, stmtNode ast.StmtNode) (*ExecStm
 		return nil, err
 	}
 
+	if !c.Ctx.GetSessionVars().InRestrictedSQL {
+		c.Ctx.GetSessionVars().StmtCtx.EnableOptimizerCETrace = true
+		c.Ctx.GetSessionVars().StmtCtx.UsingTrueCE = true
+	}
 	finalPlan, names, err := planner.Optimize(ctx, c.Ctx, stmtNode, ret.InfoSchema)
 	if err != nil {
 		return nil, err
+	}
+	if !c.Ctx.GetSessionVars().InRestrictedSQL {
+		c.Ctx.GetSessionVars().StmtCtx.EnableOptimizerCETrace = false
+		c.Ctx.GetSessionVars().StmtCtx.UsingTrueCE = false
+		c.handleCERecord()
 	}
 
 	failpoint.Inject("assertStmtCtxIsStaleness", func(val failpoint.Value) {
