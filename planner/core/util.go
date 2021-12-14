@@ -400,7 +400,7 @@ func TrueCardRange(sctx sessionctx.Context, tableID int64, colNames []string, ra
 		return 0, errors.New("cannot find the table")
 	}
 	tblName := tbl.Meta().Name.O
-	q := fmt.Sprintf(`SELECT COUNT(*) FROM %v WHERE %v`, tblName, exprStr)
+	q := fmt.Sprintf(`SELECT COUNT(*) FROM test.%v WHERE %v`, tblName, exprStr)
 	return domain.GetDomain(sctx).StatsHandle().TrueCardinality(q)
 }
 

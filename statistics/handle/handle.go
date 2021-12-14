@@ -768,7 +768,7 @@ func (h *Handle) TrueCardinality(sql string) (float64, error) {
 		return 0, err
 	}
 	trueCard := rows[0].GetInt64(0)
-	fmt.Printf("[CE] true card of `%v` is %v", sql, trueCard)
+	fmt.Printf("[CE] true card of `%v` is %v\n", sql, trueCard)
 	return float64(trueCard), nil
 }
 
