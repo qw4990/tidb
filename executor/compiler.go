@@ -69,17 +69,11 @@ func (c *Compiler) Compile(ctx context.Context, stmtNode ast.StmtNode) (*ExecStm
 		return nil, err
 	}
 
-	if !c.Ctx.GetSessionVars().InRestrictedSQL {
-		c.Ctx.GetSessionVars().EnableOptimizerCETrace = true
-		c.Ctx.GetSessionVars().UsingTrueCE = true
-	}
 	finalPlan, names, err := planner.Optimize(ctx, c.Ctx, stmtNode, ret.InfoSchema)
 	if err != nil {
 		return nil, err
 	}
-	if !c.Ctx.GetSessionVars().InRestrictedSQL {
-		c.Ctx.GetSessionVars().EnableOptimizerCETrace = false
-		c.Ctx.GetSessionVars().UsingTrueCE = false
+	if c.Ctx.GetSessionVars().EnableOptimizerCETrace {
 		c.handleCERecord()
 	}
 
