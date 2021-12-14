@@ -354,28 +354,13 @@ func (coll *HistColl) GetRowCountByIntColumnRanges(sctx sessionctx.Context, colI
 			result = getPseudoRowCountByUnsignedIntRanges(intRanges, float64(coll.Count))
 		}
 		if sc.EnableOptimizerCETrace && ok {
-			if sc.UsingTrueCE {
-				trueCE, err := TrueCardRange(sctx, coll.PhysicalID, []string{c.Info.Name.O}, intRanges)
-				if err != nil {
-					panic(err)
-				}
-				result = trueCE
-			}
-
-			CETraceRange(sctx, coll.PhysicalID, []string{c.Info.Name.O}, intRanges, "Column Stats-Pseudo", uint64(result))
+			result = CETraceRange(sctx, coll.PhysicalID, []string{c.Info.Name.O}, intRanges, "Column Stats-Pseudo", result)
 		}
 		return result, nil
 	}
 	result, err := c.GetColumnRowCount(sctx, intRanges, coll.Count, true)
 	if sc.EnableOptimizerCETrace {
-		if sc.UsingTrueCE {
-			trueCE, err := TrueCardRange(sctx, coll.PhysicalID, []string{c.Info.Name.O}, intRanges)
-			if err != nil {
-				panic(err)
-			}
-			result = trueCE
-		}
-		CETraceRange(sctx, coll.PhysicalID, []string{c.Info.Name.O}, intRanges, "Column Stats", uint64(result))
+		result = CETraceRange(sctx, coll.PhysicalID, []string{c.Info.Name.O}, intRanges, "Column Stats", result)
 	}
 	return result, errors.Trace(err)
 }
@@ -387,14 +372,7 @@ func (coll *HistColl) GetRowCountByColumnRanges(sctx sessionctx.Context, colID i
 	if !ok || c.IsInvalid(sctx, coll.Pseudo) {
 		result, err := GetPseudoRowCountByColumnRanges(sc, float64(coll.Count), colRanges, 0)
 		if err == nil && sc.EnableOptimizerCETrace && ok {
-			if sc.UsingTrueCE {
-				trueCE, err := TrueCardRange(sctx, coll.PhysicalID, []string{c.Info.Name.O}, colRanges)
-				if err != nil {
-					panic(err)
-				}
-				result = trueCE
-			}
-			CETraceRange(sctx, coll.PhysicalID, []string{c.Info.Name.O}, colRanges, "Column Stats-Pseudo", uint64(result))
+			result = CETraceRange(sctx, coll.PhysicalID, []string{c.Info.Name.O}, colRanges, "Column Stats-Pseudo", result)
 		}
 		return result, err
 	}
@@ -407,7 +385,7 @@ func (coll *HistColl) GetRowCountByColumnRanges(sctx sessionctx.Context, colID i
 			}
 			result = trueCE
 		}
-		CETraceRange(sctx, coll.PhysicalID, []string{c.Info.Name.O}, colRanges, "Column Stats", uint64(result))
+		result = CETraceRange(sctx, coll.PhysicalID, []string{c.Info.Name.O}, colRanges, "Column Stats", result)
 	}
 	return result, errors.Trace(err)
 }
@@ -436,7 +414,7 @@ func (coll *HistColl) GetRowCountByIndexRanges(sctx sessionctx.Context, idxID in
 				}
 				result = trueCE
 			}
-			CETraceRange(sctx, coll.PhysicalID, colNames, indexRanges, "Index Stats-Pseudo", uint64(result))
+			result = CETraceRange(sctx, coll.PhysicalID, colNames, indexRanges, "Index Stats-Pseudo", result)
 		}
 		return result, err
 	}
@@ -455,7 +433,7 @@ func (coll *HistColl) GetRowCountByIndexRanges(sctx sessionctx.Context, idxID in
 			}
 			result = trueCE
 		}
-		CETraceRange(sctx, coll.PhysicalID, colNames, indexRanges, "Index Stats", uint64(result))
+		result = CETraceRange(sctx, coll.PhysicalID, colNames, indexRanges, "Index Stats", result)
 	}
 	return result, errors.Trace(err)
 }
@@ -467,8 +445,18 @@ var TrueCardRange func(sctx sessionctx.Context, tableID int64, colNames []string
 var TrueCardExpr func(sctx sessionctx.Context, tableID int64, expr expression.Expression) (float64, error)
 
 // CETraceRange appends a list of ranges and related information into CE trace
-func CETraceRange(sctx sessionctx.Context, tableID int64, colNames []string, ranges []*ranger.Range, tp string, rowCount uint64) {
+func CETraceRange(sctx sessionctx.Context, tableID int64, colNames []string, ranges []*ranger.Range, tp string, rowCount float64) (calibratedRowCount float64) {
 	sc := sctx.GetSessionVars().StmtCtx
+
+	calibratedRowCount = rowCount
+	if sc.UsingTrueCE {
+		trueCE, err := TrueCardRange(sctx, tableID, colNames, ranges)
+		if err != nil {
+			panic(err)
+		}
+		calibratedRowCount = trueCE
+	}
+
 	allPoint := true
 	for _, ran := range ranges {
 		if !ran.IsPointNullable(sctx) {
@@ -493,9 +481,10 @@ func CETraceRange(sctx sessionctx.Context, tableID int64, colNames []string, ran
 		TableID:  tableID,
 		Type:     tp,
 		Expr:     expr,
-		RowCount: rowCount,
+		RowCount: uint64(calibratedRowCount),
 	}
 	sc.OptimizerCETrace = append(sc.OptimizerCETrace, &CERecord)
+	return
 }
 
 // PseudoAvgCountPerValue gets a pseudo average count if histogram not exists.
