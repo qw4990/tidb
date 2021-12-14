@@ -750,6 +750,28 @@ func (h *Handle) indexStatsFromStorage(reader *statsReader, row chunk.Row, table
 	return nil
 }
 
+// TrueCardinality ...
+func (h *Handle) TrueCardinality(sql string) (float64, error) {
+	reader, err := h.getStatsReader(0)
+	if err != nil {
+		return 0, err
+	}
+	defer func() {
+		err1 := h.releaseStatsReader(reader)
+		if err == nil && err1 != nil {
+			err = err1
+		}
+	}()
+
+	rows, _, err := reader.read(sql)
+	if err != nil {
+		return 0, err
+	}
+	trueCard := rows[0].GetInt64(0)
+	fmt.Printf("[CE] true card of `%v` is %v", sql, trueCard)
+	return float64(trueCard), nil
+}
+
 func (h *Handle) columnStatsFromStorage(reader *statsReader, row chunk.Row, table *statistics.Table, tableInfo *model.TableInfo, loadAll bool) error {
 	histID := row.GetInt64(2)
 	distinct := row.GetInt64(3)
