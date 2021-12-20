@@ -390,7 +390,7 @@ func init() {
 }
 
 // TrueCardRange ...
-func TrueCardRange(sctx sessionctx.Context, tableID int64, colNames []string, ranges []*ranger.Range) (float64, error) {
+func TrueCardRange(sctx sessionctx.Context, tableID int64, colNames []string, ranges []*ranger.Range) (int, error) {
 	exprStr, err := ranger.RangesToString(sctx.GetSessionVars().StmtCtx, ranges, colNames)
 	if err != nil {
 		return 0, err
@@ -401,11 +401,11 @@ func TrueCardRange(sctx sessionctx.Context, tableID int64, colNames []string, ra
 	}
 	tblName := tbl.Meta().Name.O
 	q := fmt.Sprintf(`SELECT COUNT(*) FROM test.%v WHERE %v`, tblName, exprStr)
-	return domain.GetDomain(sctx).StatsHandle().TrueCardinality(q)
+	return domain.GetDomain(sctx).StatsHandle().TrueCardinality(sctx, q)
 }
 
 // TrueCardExpr ...
-func TrueCardExpr(sctx sessionctx.Context, tableID int64, expr expression.Expression) (float64, error) {
+func TrueCardExpr(sctx sessionctx.Context, tableID int64, expr expression.Expression) (int, error) {
 	exprStr, err := statistics.ExprToString(expr)
 	if err != nil {
 		return 0, err
@@ -417,5 +417,5 @@ func TrueCardExpr(sctx sessionctx.Context, tableID int64, expr expression.Expres
 	tblName := tbl.Meta().Name.O
 
 	q := fmt.Sprintf(`SELECT COUNT(*) FROM test.%v WHERE %v`, tblName, exprStr)
-	return domain.GetDomain(sctx).StatsHandle().TrueCardinality(q)
+	return domain.GetDomain(sctx).StatsHandle().TrueCardinality(sctx, q)
 }

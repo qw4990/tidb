@@ -526,7 +526,7 @@ func CETraceExpr(sctx sessionctx.Context, tableID int64, tp string, expr express
 		if err != nil {
 			panic(err)
 		}
-		calibratedRowCount = trueCE
+		calibratedRowCount = float64(trueCE)
 	}
 
 	exprStr, err := ExprToString(expr)

@@ -762,8 +762,39 @@ func (h *Handle) indexStatsFromStorage(reader *statsReader, row chunk.Row, table
 	return nil
 }
 
+var (
+	trueCardCache   = make(map[string]int, 2048)
+	trueCardCacheMu sync.RWMutex
+)
+
+func hitTrueCardCache(sql string) (int, bool) {
+	trueCardCacheMu.RLock()
+	defer trueCardCacheMu.RUnlock()
+	if v, ok := trueCardCache[sql]; ok {
+		return v, true
+	}
+	return 0, false
+}
+
+func setTrueCardCache(sql string, val int) {
+	trueCardCacheMu.Lock()
+	defer trueCardCacheMu.Unlock()
+	trueCardCache[sql] = val
+}
+
 // TrueCardinality ...
-func (h *Handle) TrueCardinality(sql string) (float64, error) {
+func (h *Handle) TrueCardinality(sctx sessionctx.Context, sql string) (ret int, err error) {
+	hit := false
+	beginAt := time.Now()
+	defer func() {
+		fmt.Printf("[CE] true card of `%v` is %v, hit=%v, time=%v\n", sql, ret, hit, time.Since(beginAt))
+	}()
+
+	if v, ok := hitTrueCardCache(sql); ok {
+		hit = true
+		return v, nil
+	}
+
 	reader, err := h.getStatsReader(0)
 	if err != nil {
 		return 0, err
@@ -780,8 +811,8 @@ func (h *Handle) TrueCardinality(sql string) (float64, error) {
 		return 0, err
 	}
 	trueCard := rows[0].GetInt64(0)
-	fmt.Printf("[CE] true card of `%v` is %v\n", sql, trueCard)
-	return float64(trueCard), nil
+	setTrueCardCache(sql, int(trueCard))
+	return int(trueCard), nil
 }
 
 func (h *Handle) columnStatsFromStorage(reader *statsReader, row chunk.Row, table *statistics.Table, tableInfo *model.TableInfo, loadAll bool) error {
