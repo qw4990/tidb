@@ -48,10 +48,10 @@ type Compiler struct {
 }
 
 func (c *Compiler) handleCERecord() {
-	fmt.Println(">>> record size >>> ", len(c.Ctx.GetSessionVars().StmtCtx.OptimizerCETrace))
-	for _, r := range c.Ctx.GetSessionVars().StmtCtx.OptimizerCETrace {
-		fmt.Println("-->>> ", r)
-	}
+	//fmt.Println(">>> record size >>> ", len(c.Ctx.GetSessionVars().StmtCtx.OptimizerCETrace))
+	//for _, r := range c.Ctx.GetSessionVars().StmtCtx.OptimizerCETrace {
+	//	fmt.Println("-->>> ", r)
+	//}
 }
 
 // Compile compiles an ast.StmtNode to a physical plan.
