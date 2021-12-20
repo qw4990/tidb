@@ -762,10 +762,11 @@ func (h *Handle) indexStatsFromStorage(reader *statsReader, row chunk.Row, table
 	return nil
 }
 
-var (
-	trueCardCache   = make(map[string]int, 2048)
-	trueCardCacheMu sync.RWMutex
-)
+var trueCardCache = make(map[string]int, 2048)
+var trueCardCacheMu sync.RWMutex
+
+const fixedPrefix = "SELECT COUNT(*) FROM "
+const fixedPrefixLen = len(fixedPrefix)
 
 func hitTrueCardCache(sql string) (int, bool) {
 	trueCardCacheMu.RLock()
@@ -787,10 +788,11 @@ func (h *Handle) TrueCardinality(sctx sessionctx.Context, sql string) (ret int, 
 	hit := false
 	beginAt := time.Now()
 	defer func() {
-		fmt.Printf("[CE] true card of `%v` is %v, hit=%v, time=%v\n", sql, ret, hit, time.Since(beginAt))
+		logutil.BgLogger().Info("[TrueCE]", zap.String("sql", sql), zap.Int("true-ce", ret), zap.Bool("hit-cache", hit), zap.Duration("time-cost", time.Since(beginAt)))
 	}()
 
-	if v, ok := hitTrueCardCache(sql); ok {
+	key := sql[fixedPrefixLen:]
+	if v, ok := hitTrueCardCache(key); ok {
 		hit = true
 		return v, nil
 	}
@@ -811,7 +813,7 @@ func (h *Handle) TrueCardinality(sctx sessionctx.Context, sql string) (ret int, 
 		return 0, err
 	}
 	trueCard := rows[0].GetInt64(0)
-	setTrueCardCache(sql, int(trueCard))
+	setTrueCardCache(key, int(trueCard))
 	return int(trueCard), nil
 }
 
