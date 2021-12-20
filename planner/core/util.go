@@ -16,6 +16,10 @@ package core
 
 import (
 	"fmt"
+	"github.com/pingcap/errors"
+	"github.com/pingcap/tidb/domain"
+	"github.com/pingcap/tidb/infoschema"
+	"github.com/pingcap/tidb/statistics"
 	"sort"
 	"strings"
 
@@ -378,4 +382,40 @@ func clonePhysicalPlan(plans []PhysicalPlan) ([]PhysicalPlan, error) {
 		cloned = append(cloned, c)
 	}
 	return cloned, nil
+}
+
+func init() {
+	statistics.TrueCardRange = TrueCardRange
+	statistics.TrueCardExpr = TrueCardExpr
+}
+
+// TrueCardRange ...
+func TrueCardRange(sctx sessionctx.Context, tableID int64, colNames []string, ranges []*ranger.Range) (float64, error) {
+	exprStr, err := ranger.RangesToString(sctx.GetSessionVars().StmtCtx, ranges, colNames)
+	if err != nil {
+		return 0, err
+	}
+	tbl, ok := sctx.GetInfoSchema().(infoschema.InfoSchema).TableByID(tableID)
+	if !ok {
+		return 0, errors.New("cannot find the table")
+	}
+	tblName := tbl.Meta().Name.O
+	q := fmt.Sprintf(`SELECT COUNT(*) FROM test.%v WHERE %v`, tblName, exprStr)
+	return domain.GetDomain(sctx).StatsHandle().TrueCardinality(q)
+}
+
+// TrueCardExpr ...
+func TrueCardExpr(sctx sessionctx.Context, tableID int64, expr expression.Expression) (float64, error) {
+	exprStr, err := statistics.ExprToString(expr)
+	if err != nil {
+		return 0, err
+	}
+	tbl, ok := sctx.GetInfoSchema().(infoschema.InfoSchema).TableByID(tableID)
+	if !ok {
+		return 0, errors.New("cannot find the table")
+	}
+	tblName := tbl.Meta().Name.O
+
+	q := fmt.Sprintf(`SELECT COUNT(*) FROM test.%v WHERE %v`, tblName, exprStr)
+	return domain.GetDomain(sctx).StatsHandle().TrueCardinality(q)
 }

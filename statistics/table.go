@@ -418,6 +418,12 @@ func (coll *HistColl) GetRowCountByIndexRanges(sctx sessionctx.Context, idxID in
 	return result, errors.Trace(err)
 }
 
+// TrueCardRange ...
+var TrueCardRange func(sctx sessionctx.Context, tableID int64, colNames []string, ranges []*ranger.Range) (float64, error)
+
+// TrueCardExpr ...
+var TrueCardExpr func(sctx sessionctx.Context, tableID int64, expr expression.Expression) (float64, error)
+
 // CETraceRange appends a list of ranges and related information into CE trace
 func CETraceRange(sctx sessionctx.Context, tableID int64, colNames []string, ranges []*ranger.Range, tp string, rowCount uint64) {
 	sc := sctx.GetSessionVars().StmtCtx
