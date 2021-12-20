@@ -192,7 +192,7 @@ func (coll *HistColl) Selectivity(ctx sessionctx.Context, exprs []expression.Exp
 	if len(exprs) > 63 || (len(coll.Columns) == 0 && len(coll.Indices) == 0) {
 		ret = pseudoSelectivity(coll, exprs)
 		if sc.EnableOptimizerCETrace {
-			CETraceExpr(ctx, tableID, "Table Stats-Pseudo-Expression", expression.ComposeCNFCondition(ctx, exprs...), ret*float64(coll.Count))
+			ret = CETraceExpr(ctx, tableID, "Table Stats-Pseudo-Expression", expression.ComposeCNFCondition(ctx, exprs...), ret*float64(coll.Count)) / float64(coll.Count)
 		}
 		return ret, nil, nil
 	}
@@ -313,7 +313,7 @@ func (coll *HistColl) Selectivity(ctx sessionctx.Context, exprs []expression.Exp
 				}
 			}
 			expr := expression.ComposeCNFCondition(ctx, curExpr...)
-			CETraceExpr(ctx, tableID, "Table Stats-Expression-CNF", expr, ret*float64(coll.Count))
+			ret = CETraceExpr(ctx, tableID, "Table Stats-Expression-CNF", expr, ret*float64(coll.Count)) / float64(coll.Count)
 		}
 	}
 
@@ -371,7 +371,7 @@ func (coll *HistColl) Selectivity(ctx sessionctx.Context, exprs []expression.Exp
 				selectivity = selectivity + curSelectivity - selectivity*curSelectivity
 				if sc.EnableOptimizerCETrace {
 					// Tracing for the expression estimation results of this DNF.
-					CETraceExpr(ctx, tableID, "Table Stats-Expression-DNF", scalarCond, selectivity*float64(coll.Count))
+					selectivity = CETraceExpr(ctx, tableID, "Table Stats-Expression-DNF", scalarCond, selectivity*float64(coll.Count)) / float64(coll.Count)
 				}
 			}
 
@@ -383,7 +383,7 @@ func (coll *HistColl) Selectivity(ctx sessionctx.Context, exprs []expression.Exp
 				// Tracing for the expression estimation results after applying the DNF estimation result.
 				curExpr = append(curExpr, remainedExprs[i])
 				expr := expression.ComposeCNFCondition(ctx, curExpr...)
-				CETraceExpr(ctx, tableID, "Table Stats-Expression-CNF", expr, ret*float64(coll.Count))
+				ret = CETraceExpr(ctx, tableID, "Table Stats-Expression-CNF", expr, ret*float64(coll.Count)) / float64(coll.Count)
 			}
 		}
 	}
@@ -395,7 +395,7 @@ func (coll *HistColl) Selectivity(ctx sessionctx.Context, exprs []expression.Exp
 	if sc.EnableOptimizerCETrace {
 		// Tracing for the expression estimation results after applying the default selectivity.
 		totalExpr := expression.ComposeCNFCondition(ctx, remainedExprs...)
-		CETraceExpr(ctx, tableID, "Table Stats-Expression-CNF", totalExpr, ret*float64(coll.Count))
+		ret = CETraceExpr(ctx, tableID, "Table Stats-Expression-CNF", totalExpr, ret*float64(coll.Count)) / float64(coll.Count)
 	}
 	return ret, nodes, nil
 }
@@ -519,7 +519,16 @@ func FindPrefixOfIndexByCol(cols []*expression.Column, idxColIDs []int64, cached
 }
 
 // CETraceExpr appends an expression and related information into CE trace
-func CETraceExpr(sctx sessionctx.Context, tableID int64, tp string, expr expression.Expression, rowCount float64) {
+func CETraceExpr(sctx sessionctx.Context, tableID int64, tp string, expr expression.Expression, rowCount float64) (calibratedRowCount float64) {
+	calibratedRowCount = rowCount
+	if sctx.GetSessionVars().StmtCtx.EnableUsingTrueCE {
+		trueCE, err := TrueCardExpr(sctx, tableID, expr)
+		if err != nil {
+			panic(err)
+		}
+		calibratedRowCount = trueCE
+	}
+
 	exprStr, err := ExprToString(expr)
 	if err != nil {
 		logutil.BgLogger().Debug("[OptimizerTrace] Failed to trace CE of an expression",
@@ -530,10 +539,11 @@ func CETraceExpr(sctx sessionctx.Context, tableID int64, tp string, expr express
 		TableID:  tableID,
 		Type:     tp,
 		Expr:     exprStr,
-		RowCount: uint64(rowCount),
+		RowCount: uint64(calibratedRowCount),
 	}
 	sc := sctx.GetSessionVars().StmtCtx
 	sc.OptimizerCETrace = append(sc.OptimizerCETrace, &rec)
+	return
 }
 
 // ExprToString prints an Expression into a string which can appear in a SQL.

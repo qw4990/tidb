@@ -461,7 +461,7 @@ func CETraceRange(sctx sessionctx.Context, tableID int64, colNames []string, ran
 		TableID:  tableID,
 		Type:     tp,
 		Expr:     expr,
-		RowCount: uint64(rowCount),
+		RowCount: uint64(calibratedRowCount),
 	}
 	sc.OptimizerCETrace = append(sc.OptimizerCETrace, &CERecord)
 	return
