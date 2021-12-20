@@ -603,6 +603,9 @@ const (
 
 	// TiDBTmpTableMaxSize indicates the max memory size of temporary tables.
 	TiDBTmpTableMaxSize = "tidb_tmp_table_max_size"
+
+	// TiDBCostCalibrationMode ...
+	TiDBCostCalibrationMode = "tidb_cost_calibration_mode"
 )
 
 // TiDB vars that have only global scope

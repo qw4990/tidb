@@ -398,9 +398,9 @@ var defaultSysVars = []*SysVar{
 	}},
 	{
 		Scope: ScopeGlobal | ScopeSession, Name: TiDBOptLimitPushDownThreshold, Value: strconv.Itoa(DefOptLimitPushDownThreshold), Type: TypeUnsigned, MinValue: 0, MaxValue: math.MaxInt32, SetSession: func(s *SessionVars, val string) error {
-			s.LimitPushDownThreshold = tidbOptInt64(val, DefOptLimitPushDownThreshold)
-			return nil
-		}},
+		s.LimitPushDownThreshold = tidbOptInt64(val, DefOptLimitPushDownThreshold)
+		return nil
+	}},
 	{Scope: ScopeGlobal | ScopeSession, Name: TiDBOptCorrelationThreshold, Value: strconv.FormatFloat(DefOptCorrelationThreshold, 'f', -1, 64), Type: TypeFloat, MinValue: 0, MaxValue: 1, SetSession: func(s *SessionVars, val string) error {
 		s.CorrelationThreshold = tidbOptFloat64(val, DefOptCorrelationThreshold)
 		return nil
@@ -1295,6 +1295,14 @@ var defaultSysVars = []*SysVar{
 	{Scope: ScopeGlobal, Name: DefaultAuthPlugin, Value: mysql.AuthNativePassword, Type: TypeEnum, PossibleValues: []string{mysql.AuthNativePassword, mysql.AuthCachingSha2Password}},
 	{Scope: ScopeGlobal | ScopeSession, Name: TiDBEnableOrderedResultMode, Value: BoolToOnOff(DefTiDBEnableOrderedResultMode), Type: TypeBool, SetSession: func(s *SessionVars, val string) error {
 		s.EnableStableResultMode = TiDBOptOn(val)
+		return nil
+	}},
+	{Scope: ScopeSession, Name: TiDBCostCalibrationMode, Value: strconv.Itoa(0), Type: TypeInt, Hidden: true, MinValue: 0, MaxValue: 2, SetSession: func(s *SessionVars, v string) error {
+		val, err := strconv.ParseInt(v, 10, 64)
+		if err != nil {
+			return err
+		}
+		s.CostCalibrationMode = int(val)
 		return nil
 	}},
 	{Scope: ScopeGlobal | ScopeSession, Name: TiDBEnablePseudoForOutdatedStats, Value: BoolToOnOff(DefTiDBEnablePseudoForOutdatedStats), Type: TypeBool, SetSession: func(s *SessionVars, val string) error {

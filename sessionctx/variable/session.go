@@ -936,6 +936,9 @@ type SessionVars struct {
 	// EnableStableResultMode if stabilize query results.
 	EnableStableResultMode bool
 
+	// CostCalibrationMode ...
+	CostCalibrationMode int
+
 	// EnablePseudoForOutdatedStats if using pseudo for outdated stats
 	EnablePseudoForOutdatedStats bool
 
