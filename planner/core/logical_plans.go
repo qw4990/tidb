@@ -935,7 +935,7 @@ func (ds *DataSource) deriveIndexPathStats(path *util.AccessPath, conds []expres
 	path.IndexFilters = append(path.IndexFilters, indexFilters...)
 	// If the `CountAfterAccess` is less than `stats.RowCount`, there must be some inconsistent stats info.
 	// We prefer the `stats.RowCount` because it could use more stats info to calculate the selectivity.
-	if path.CountAfterAccess < ds.stats.RowCount && !isIm {
+	if path.CountAfterAccess < ds.stats.RowCount-1 && !isIm {
 		path.CountAfterAccess = math.Min(ds.stats.RowCount/SelectionFactor, float64(ds.statisticTable.Count))
 	}
 	if path.IndexFilters != nil {
