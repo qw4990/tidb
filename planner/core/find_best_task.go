@@ -2117,7 +2117,7 @@ func (ds *DataSource) getOriginalPhysicalTableScan(prop *property.PhysicalProper
 	rowSize := ts.tableScanRowSize(path, ds)
 	sessVars := ds.ctx.GetSessionVars()
 	cost := rowCount * rowSize * sessVars.GetScanFactor(ds.tableInfo)
-	scanCostInfo := errors.Errorf("scanCost(%v)=rowCount(%v)*rowSize(%v)*scanFac(%v)", cost, rowCount, rowSize, sessVars.GetScanFactor(ds.tableInfo))
+	scanCostInfo := errors.Errorf("tblScanCost(%v)=rowCount(%v)*rowSize(%v)*scanFac(%v)", cost, rowCount, rowSize, sessVars.GetScanFactor(ds.tableInfo))
 
 	if ts.IsGlobalRead {
 		cost += rowCount * sessVars.GetNetworkFactor(ds.tableInfo) * rowSize
@@ -2126,7 +2126,7 @@ func (ds *DataSource) getOriginalPhysicalTableScan(prop *property.PhysicalProper
 		ts.Desc = prop.SortItems[0].Desc
 		if prop.SortItems[0].Desc && prop.ExpectedCnt >= smallScanThreshold {
 			cost = rowCount * rowSize * sessVars.GetDescScanFactor(ds.tableInfo)
-			scanCostInfo = errors.Errorf("scanCost(%v)=rowCount(%v)*rowSize(%v)*descScanFac(%v)", cost, rowCount, rowSize, sessVars.GetDescScanFactor(ds.tableInfo))
+			scanCostInfo = errors.Errorf("tblScanCost(%v)=rowCount(%v)*rowSize(%v)*descScanFac(%v)", cost, rowCount, rowSize, sessVars.GetDescScanFactor(ds.tableInfo))
 		}
 		ts.KeepOrder = true
 	}
@@ -2134,7 +2134,7 @@ func (ds *DataSource) getOriginalPhysicalTableScan(prop *property.PhysicalProper
 	switch ts.StoreType {
 	case kv.TiKV:
 		cost += float64(len(ts.Ranges)) * sessVars.GetSeekFactor(ds.tableInfo)
-		seekCostInfo = errors.Errorf("seekCost(%v)=regions(%v)*seekFac(%v)", float64(len(ts.Ranges))*sessVars.GetSeekFactor(ds.tableInfo), len(ts.Ranges), sessVars.GetSeekFactor(ds.tableInfo))
+		seekCostInfo = errors.Errorf("tblSeekCost(%v)=regions(%v)*seekFac(%v)", float64(len(ts.Ranges))*sessVars.GetSeekFactor(ds.tableInfo), len(ts.Ranges), sessVars.GetSeekFactor(ds.tableInfo))
 	case kv.TiFlash:
 		cost += float64(len(ts.Ranges)) * float64(len(ts.Columns)) * sessVars.GetSeekFactor(ds.tableInfo)
 	}
@@ -2182,17 +2182,17 @@ func (ds *DataSource) getOriginalPhysicalIndexScan(prop *property.PhysicalProper
 	rowSize := is.indexScanRowSize(idx, ds, true)
 	sessVars := ds.ctx.GetSessionVars()
 	cost := rowCount * rowSize * sessVars.GetScanFactor(ds.tableInfo)
-	scanCostInfo := errors.Errorf("scanCost(%v)=rowCount(%v)*rowSize(%v)*scanFac(%v)", cost, rowCount, rowSize, sessVars.GetScanFactor(ds.tableInfo))
+	scanCostInfo := errors.Errorf("idxScanCost(%v)=rowCount(%v)*rowSize(%v)*scanFac(%v)", cost, rowCount, rowSize, sessVars.GetScanFactor(ds.tableInfo))
 	if isMatchProp {
 		is.Desc = prop.SortItems[0].Desc
 		if prop.SortItems[0].Desc && prop.ExpectedCnt >= smallScanThreshold {
 			cost = rowCount * rowSize * sessVars.GetDescScanFactor(ds.tableInfo)
-			scanCostInfo = errors.Errorf("scanCost(%v)=rowCount(%v)*rowSize(%v)*descScanFac(%v)", cost, rowCount, rowSize, sessVars.GetDescScanFactor(ds.tableInfo))
+			scanCostInfo = errors.Errorf("idxScanCost(%v)=rowCount(%v)*rowSize(%v)*descScanFac(%v)", cost, rowCount, rowSize, sessVars.GetDescScanFactor(ds.tableInfo))
 		}
 		is.KeepOrder = true
 	}
 	cost += float64(len(is.Ranges)) * sessVars.GetSeekFactor(ds.tableInfo)
-	seekCostInfo := errors.Errorf("seekCost(%v)=regions(%v)*seekFac(%v)", float64(len(is.Ranges))*sessVars.GetSeekFactor(ds.tableInfo), len(is.Ranges), sessVars.GetSeekFactor(ds.tableInfo))
+	seekCostInfo := errors.Errorf("idxSeekCost(%v)=regions(%v)*seekFac(%v)", float64(len(is.Ranges))*sessVars.GetSeekFactor(ds.tableInfo), len(is.Ranges), sessVars.GetSeekFactor(ds.tableInfo))
 
 	if sessVars.CostCalibrationMode == 2 {
 		sessVars.StmtCtx.AppendNote(scanCostInfo)

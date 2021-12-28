@@ -171,7 +171,11 @@ func (t *copTask) finishIndexPlan() {
 		tableInfo = ts.Table
 	}
 	// Network cost of transferring rows of index scan to TiDB.
-	t.cst += cnt * sessVars.GetNetworkFactor(tableInfo) * t.tblColHists.GetAvgRowSize(t.indexPlan.SCtx(), t.indexPlan.Schema().Columns, true, false)
+	idxRowSize := t.tblColHists.GetAvgRowSize(t.indexPlan.SCtx(), t.indexPlan.Schema().Columns, true, false)
+	t.cst += cnt * sessVars.GetNetworkFactor(tableInfo) * idxRowSize
+	if t.indexPlan.SCtx().GetSessionVars().CostCalibrationMode == 2 {
+		t.indexPlan.SCtx().GetSessionVars().StmtCtx.AppendNote(errors.Errorf("idxNetCost(%v)=rowCount(%v)*rowSize(%v)*netFac(%v)", cnt*sessVars.GetNetworkFactor(tableInfo)*idxRowSize, cnt, idxRowSize, sessVars.GetNetworkFactor(tableInfo)))
+	}
 	if t.tablePlan == nil {
 		return
 	}
@@ -181,6 +185,9 @@ func (t *copTask) finishIndexPlan() {
 	for p = t.indexPlan; len(p.Children()) > 0; p = p.Children()[0] {
 	}
 	rowSize := t.tblColHists.GetIndexAvgRowSize(t.indexPlan.SCtx(), t.tblCols, p.(*PhysicalIndexScan).Index.Unique)
+	if t.indexPlan.SCtx().GetSessionVars().CostCalibrationMode == 2 {
+		t.indexPlan.SCtx().GetSessionVars().StmtCtx.AppendNote(errors.Errorf("tblIOCost(%v)=rowCount(%v)*rowSize(%v)*scanFac(%v)", cnt*rowSize*sessVars.GetScanFactor(tableInfo), cnt, rowSize, sessVars.GetScanFactor(tableInfo)))
+	}
 	t.cst += cnt * rowSize * sessVars.GetScanFactor(tableInfo)
 }
 
@@ -1022,7 +1029,12 @@ func (t *copTask) convertToRootTaskImpl(ctx sessionctx.Context) *rootTask {
 	var prevSchema *expression.Schema
 	// Network cost of transferring rows of table scan to TiDB.
 	if t.tablePlan != nil {
-		t.cst += t.count() * sessVars.GetNetworkFactor(nil) * t.tblColHists.GetAvgRowSize(ctx, t.tablePlan.Schema().Columns, false, false)
+		rowSize := t.tblColHists.GetAvgRowSize(ctx, t.tablePlan.Schema().Columns, false, false)
+		t.cst += t.count() * sessVars.GetNetworkFactor(nil) * rowSize
+		if t.tablePlan.SCtx().GetSessionVars().CostCalibrationMode == 2 {
+			t.tablePlan.SCtx().GetSessionVars().StmtCtx.AppendNote(errors.Errorf("tblNetCost(%v)=rowCount(%v)*rowSize(%v)*netFac(%v)",
+				t.count()*sessVars.GetNetworkFactor(nil)*rowSize, t.count(), rowSize, sessVars.GetNetworkFactor(nil)))
+		}
 
 		tp := t.tablePlan
 		for len(tp.Children()) > 0 {
