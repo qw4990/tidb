@@ -114,6 +114,9 @@ const (
 	HintIgnorePlanCache = "ignore_plan_cache"
 	// HintLimitToCop is a hint enforce pushing limit or topn to coprocessor.
 	HintLimitToCop = "limit_to_cop"
+
+	// hints for cost calibration
+	HintNoReorder = "no_reorder"
 )
 
 const (
@@ -3398,6 +3401,8 @@ func (b *PlanBuilder) pushTableHints(hints []*ast.TableOptimizerHint, currentLev
 			timeRangeHint = hint.HintData.(ast.HintTimeRange)
 		case HintLimitToCop:
 			limitHints.preferLimitToCop = true
+		case HintNoReorder:
+			fmt.Println(">>>>>>>>>>>>>>>>>> no reorder")
 		default:
 			// ignore hints that not implemented
 		}

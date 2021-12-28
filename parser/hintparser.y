@@ -106,6 +106,9 @@ import (
 	hintLimitToCop            "LIMIT_TO_COP"
 	hintForceIndex            "FORCE_INDEX"
 
+	/* Cost Calibration */
+	hintNoReorder "NO_REORDER"
+
 	/* Other keywords */
 	hintOLAP            "OLAP"
 	hintOLTP            "OLTP"
@@ -577,6 +580,7 @@ NullaryHintName:
 |	"STREAM_AGG"
 |	"AGG_TO_COP"
 |	"LIMIT_TO_COP"
+|	"NO_REORDER"
 |	"NO_INDEX_MERGE"
 |	"READ_CONSISTENT_REPLICA"
 |	"IGNORE_PLAN_CACHE"
@@ -621,6 +625,7 @@ Identifier:
 /* TiDB hint names */
 |	"AGG_TO_COP"
 |	"LIMIT_TO_COP"
+|	"NO_REORDER"
 |	"IGNORE_PLAN_CACHE"
 |	"HASH_AGG"
 |	"IGNORE_INDEX"
