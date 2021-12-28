@@ -2822,7 +2822,9 @@ func (ls *LogicalSort) exhaustPhysicalPlans(prop *property.PhysicalProperty) ([]
 	if prop.TaskTp == property.RootTaskType {
 		if MatchItems(prop, ls.ByItems) {
 			ret := make([]PhysicalPlan, 0, 2)
-			ret = append(ret, ls.getPhysicalSort(prop))
+			if !ls.sortHints.noReorder {
+				ret = append(ret, ls.getPhysicalSort(prop))
+			}
 			ns := ls.getNominalSort(prop)
 			if ns != nil {
 				ret = append(ret, ns)

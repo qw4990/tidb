@@ -1747,6 +1747,9 @@ func (b *PlanBuilder) buildSortWithCheck(ctx context.Context, p LogicalPlan, byI
 		p = np
 		exprs = append(exprs, &util.ByItems{Expr: it, Desc: item.Desc})
 	}
+	if hint := b.TableHints(); hint != nil {
+		sort.sortHints = hint.sortHints
+	}
 	sort.ByItems = exprs
 	sort.SetChildren(p)
 	return sort, nil
@@ -3297,6 +3300,7 @@ func (b *PlanBuilder) pushTableHints(hints []*ast.TableOptimizerHint, currentLev
 		aggHints                                                                                              aggHintInfo
 		timeRangeHint                                                                                         ast.HintTimeRange
 		limitHints                                                                                            limitHintInfo
+		sortHints                                                                                             sortHintInfo
 	)
 	for _, hint := range hints {
 		// Set warning for the hint that requires the table name.
@@ -3402,7 +3406,7 @@ func (b *PlanBuilder) pushTableHints(hints []*ast.TableOptimizerHint, currentLev
 		case HintLimitToCop:
 			limitHints.preferLimitToCop = true
 		case HintNoReorder:
-			fmt.Println(">>>>>>>>>>>>>>>>>> no reorder")
+			sortHints.noReorder = true
 		default:
 			// ignore hints that not implemented
 		}
@@ -3420,6 +3424,7 @@ func (b *PlanBuilder) pushTableHints(hints []*ast.TableOptimizerHint, currentLev
 		indexMergeHintList:          indexMergeHintList,
 		timeRangeHint:               timeRangeHint,
 		limitHints:                  limitHints,
+		sortHints:                   sortHints,
 	})
 }
 

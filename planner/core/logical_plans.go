@@ -1000,7 +1000,8 @@ type LogicalPartitionUnionAll struct {
 type LogicalSort struct {
 	baseLogicalPlan
 
-	ByItems []*util.ByItems
+	ByItems   []*util.ByItems
+	sortHints sortHintInfo
 }
 
 // ExtractCorrelatedCols implements LogicalPlan interface.
