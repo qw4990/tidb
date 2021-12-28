@@ -995,7 +995,7 @@ func (ds *DataSource) convertToPartialIndexScan(prop *property.PhysicalProperty,
 	partialCost float64) {
 	idx := path.Index
 	is, partialCost, rowCount := ds.getOriginalPhysicalIndexScan(prop, path, false, false)
-	rowSize := is.indexScanRowSize(idx, ds, false)
+	rowSize, _ := is.indexScanRowSize(idx, ds, false)
 	// TODO: Consider using isCoveringIndex() to avoid another TableRead
 	indexConds := path.IndexFilters
 	sessVars := ds.ctx.GetSessionVars()
@@ -1316,7 +1316,7 @@ func (ds *DataSource) convertToIndexScan(prop *property.PhysicalProperty, candid
 	return task, nil
 }
 
-func (is *PhysicalIndexScan) indexScanRowSize(idx *model.IndexInfo, ds *DataSource, isForScan bool) float64 {
+func (is *PhysicalIndexScan) indexScanRowSize(idx *model.IndexInfo, ds *DataSource, isForScan bool) (float64, []*expression.Column) {
 	scanCols := make([]*expression.Column, 0, len(idx.Columns)+1)
 	// If `initSchema` has already appended the handle column in schema, just use schema columns, otherwise, add extra handle column.
 	if len(idx.Columns) == len(is.schema.Columns) {
@@ -1329,9 +1329,9 @@ func (is *PhysicalIndexScan) indexScanRowSize(idx *model.IndexInfo, ds *DataSour
 		scanCols = is.schema.Columns
 	}
 	if isForScan {
-		return ds.TblColHists.GetIndexAvgRowSize(is.ctx, scanCols, is.Index.Unique)
+		return ds.TblColHists.GetIndexAvgRowSize(is.ctx, scanCols, is.Index.Unique), scanCols
 	}
-	return ds.TblColHists.GetAvgRowSize(is.ctx, scanCols, true, false)
+	return ds.TblColHists.GetAvgRowSize(is.ctx, scanCols, true, false), scanCols
 }
 
 // initSchema is used to set the schema of PhysicalIndexScan. Before calling this,
@@ -2041,7 +2041,7 @@ func (ts *PhysicalTableScan) addPushedDownSelection(copTask *copTask, stats *pro
 	}
 }
 
-func (ts *PhysicalTableScan) tableScanRowSize(path *util.AccessPath, ds *DataSource) float64 {
+func (ts *PhysicalTableScan) tableScanRowSize(path *util.AccessPath, ds *DataSource) (float64, []*expression.Column) {
 	if ts.StoreType == kv.TiKV {
 		var pkCols []*expression.Column
 		if path.IsIntHandlePath {
@@ -2055,11 +2055,11 @@ func (ts *PhysicalTableScan) tableScanRowSize(path *util.AccessPath, ds *DataSou
 		if pkCols == nil {
 			pkCols = ds.Schema().Columns
 		}
-		return ds.TblColHists.GetTableAvgRowSize(ds.ctx, pkCols, ts.StoreType, true)
+		return ds.TblColHists.GetTableAvgRowSize(ds.ctx, pkCols, ts.StoreType, true), pkCols
 	} else {
 		// If `ds.handleCol` is nil, then the schema of tableScan doesn't have handle column.
 		// This logic can be ensured in column pruning.
-		return ds.TblColHists.GetTableAvgRowSize(ds.ctx, ts.Schema().Columns, ts.StoreType, ds.handleCols != nil)
+		return ds.TblColHists.GetTableAvgRowSize(ds.ctx, ts.Schema().Columns, ts.StoreType, ds.handleCols != nil), ts.Schema().Columns
 	}
 }
 
@@ -2114,10 +2114,10 @@ func (ds *DataSource) getOriginalPhysicalTableScan(prop *property.PhysicalProper
 	// we still need to assume values are uniformly distributed. For simplicity, we use uniform-assumption
 	// for all columns now, as we do in `deriveStatsByFilter`.
 	ts.stats = ds.tableStats.ScaleByExpectCnt(rowCount)
-	rowSize := ts.tableScanRowSize(path, ds)
+	rowSize, pkCols := ts.tableScanRowSize(path, ds)
 	sessVars := ds.ctx.GetSessionVars()
 	cost := rowCount * rowSize * sessVars.GetScanFactor(ds.tableInfo)
-	scanCostInfo := errors.Errorf("tblScanCost(%v)=rowCount(%v)*rowSize(%v)*scanFac(%v)", cost, rowCount, rowSize, sessVars.GetScanFactor(ds.tableInfo))
+	scanCostInfo := errors.Errorf("tblScanCost(%v)=rowCount(%v)*rowSize(%v)*scanFac(%v), pkCols=%v", cost, rowCount, rowSize, sessVars.GetScanFactor(ds.tableInfo), pkCols)
 
 	if ts.IsGlobalRead {
 		cost += rowCount * sessVars.GetNetworkFactor(ds.tableInfo) * rowSize
@@ -2126,7 +2126,7 @@ func (ds *DataSource) getOriginalPhysicalTableScan(prop *property.PhysicalProper
 		ts.Desc = prop.SortItems[0].Desc
 		if prop.SortItems[0].Desc && prop.ExpectedCnt >= smallScanThreshold {
 			cost = rowCount * rowSize * sessVars.GetDescScanFactor(ds.tableInfo)
-			scanCostInfo = errors.Errorf("tblScanCost(%v)=rowCount(%v)*rowSize(%v)*descScanFac(%v)", cost, rowCount, rowSize, sessVars.GetDescScanFactor(ds.tableInfo))
+			scanCostInfo = errors.Errorf("tblScanCost(%v)=rowCount(%v)*rowSize(%v)*descScanFac(%v), pkCols=%v", cost, rowCount, rowSize, sessVars.GetDescScanFactor(ds.tableInfo), pkCols)
 		}
 		ts.KeepOrder = true
 	}
@@ -2179,15 +2179,15 @@ func (ds *DataSource) getOriginalPhysicalIndexScan(prop *property.PhysicalProper
 		}
 	}
 	is.stats = ds.tableStats.ScaleByExpectCnt(rowCount)
-	rowSize := is.indexScanRowSize(idx, ds, true)
+	rowSize, idxCols := is.indexScanRowSize(idx, ds, true)
 	sessVars := ds.ctx.GetSessionVars()
 	cost := rowCount * rowSize * sessVars.GetScanFactor(ds.tableInfo)
-	scanCostInfo := errors.Errorf("idxScanCost(%v)=rowCount(%v)*rowSize(%v)*scanFac(%v)", cost, rowCount, rowSize, sessVars.GetScanFactor(ds.tableInfo))
+	scanCostInfo := errors.Errorf("idxScanCost(%v)=rowCount(%v)*rowSize(%v)*scanFac(%v), idxCols=%v", cost, rowCount, rowSize, sessVars.GetScanFactor(ds.tableInfo), idxCols)
 	if isMatchProp {
 		is.Desc = prop.SortItems[0].Desc
 		if prop.SortItems[0].Desc && prop.ExpectedCnt >= smallScanThreshold {
 			cost = rowCount * rowSize * sessVars.GetDescScanFactor(ds.tableInfo)
-			scanCostInfo = errors.Errorf("idxScanCost(%v)=rowCount(%v)*rowSize(%v)*descScanFac(%v)", cost, rowCount, rowSize, sessVars.GetDescScanFactor(ds.tableInfo))
+			scanCostInfo = errors.Errorf("idxScanCost(%v)=rowCount(%v)*rowSize(%v)*descScanFac(%v), idxCols=%v", cost, rowCount, rowSize, sessVars.GetDescScanFactor(ds.tableInfo), idxCols)
 		}
 		is.KeepOrder = true
 	}
