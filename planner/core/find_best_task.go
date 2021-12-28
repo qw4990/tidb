@@ -1273,6 +1273,7 @@ func (ds *DataSource) convertToIndexScan(prop *property.PhysicalProperty, candid
 		// the other hand, it may be hard to identify `StatsVersion` of `ts` in `(*copTask).finishIndexPlan`.
 		ts.stats = &property.StatsInfo{StatsVersion: ds.tableStats.StatsVersion}
 		cop.tablePlan = ts
+		_, cop.tblCols = ds.tableScanRowSize(path.StoreType)
 	}
 	cop.cst = cost
 	task = cop
@@ -2041,25 +2042,21 @@ func (ts *PhysicalTableScan) addPushedDownSelection(copTask *copTask, stats *pro
 	}
 }
 
-func (ts *PhysicalTableScan) tableScanRowSize(path *util.AccessPath, ds *DataSource) (float64, []*expression.Column) {
-	if ts.StoreType == kv.TiKV {
+func (ds *DataSource) tableScanRowSize(storeType kv.StoreType) (float64, []*expression.Column) {
+	if storeType == kv.TiKV {
 		var pkCols []*expression.Column
-		if path.IsIntHandlePath {
-			pkCol := ds.getPKIsHandleCol()
-			if pkCol != nil {
-				pkCols = append(pkCols, pkCol)
-			}
+		if ds.tableInfo.PKIsHandle {
+			pkCols = []*expression.Column{ds.getPKIsHandleCol()}
+		} else if ds.tableInfo.IsCommonHandle {
+			pkCols = ds.commonHandleCols
 		} else {
-			pkCols = path.IdxCols
+			pkCols = ds.schema.Columns
 		}
-		if pkCols == nil {
-			pkCols = ds.Schema().Columns
-		}
-		return ds.TblColHists.GetTableAvgRowSize(ds.ctx, pkCols, ts.StoreType, true), pkCols
+		return ds.TblColHists.GetTableAvgRowSize(ds.ctx, pkCols, storeType, true), pkCols
 	} else {
 		// If `ds.handleCol` is nil, then the schema of tableScan doesn't have handle column.
 		// This logic can be ensured in column pruning.
-		return ds.TblColHists.GetTableAvgRowSize(ds.ctx, ts.Schema().Columns, ts.StoreType, ds.handleCols != nil), ts.Schema().Columns
+		return ds.TblColHists.GetTableAvgRowSize(ds.ctx, ds.Schema().Columns, storeType, ds.handleCols != nil), ds.Schema().Columns
 	}
 }
 
@@ -2114,7 +2111,7 @@ func (ds *DataSource) getOriginalPhysicalTableScan(prop *property.PhysicalProper
 	// we still need to assume values are uniformly distributed. For simplicity, we use uniform-assumption
 	// for all columns now, as we do in `deriveStatsByFilter`.
 	ts.stats = ds.tableStats.ScaleByExpectCnt(rowCount)
-	rowSize, pkCols := ts.tableScanRowSize(path, ds)
+	rowSize, pkCols := ds.tableScanRowSize(path.StoreType)
 	sessVars := ds.ctx.GetSessionVars()
 	cost := rowCount * rowSize * sessVars.GetScanFactor(ds.tableInfo)
 	scanCostInfo := errors.Errorf("tblScanCost(%v)=rowCount(%v)*rowSize(%v)*scanFac(%v), pkCols=%v", cost, rowCount, rowSize, sessVars.GetScanFactor(ds.tableInfo), pkCols)
