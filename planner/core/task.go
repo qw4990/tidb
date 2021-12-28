@@ -83,6 +83,7 @@ type copTask struct {
 	// tblCols stores the original columns of DataSource before being pruned, it
 	// is used to compute average row width when computing scan cost.
 	tblCols           []*expression.Column
+	tblPKRowSize      float64
 	idxMergePartPlans []PhysicalPlan
 	// rootTaskConds stores select conditions containing virtual columns.
 	// These conditions can't push to TiKV, so we have to add a selection for rootTask
@@ -185,7 +186,7 @@ func (t *copTask) finishIndexPlan() {
 	var p PhysicalPlan
 	for p = t.indexPlan; len(p.Children()) > 0; p = p.Children()[0] {
 	}
-	rowSize := t.tblColHists.GetIndexAvgRowSize(t.indexPlan.SCtx(), t.tblCols, p.(*PhysicalIndexScan).Index.Unique)
+	rowSize := t.tblPKRowSize
 	if t.indexPlan.SCtx().GetSessionVars().CostCalibrationMode == 2 {
 		t.indexPlan.SCtx().GetSessionVars().StmtCtx.AppendNote(errors.Errorf("tblScanCost(%v)=rowCount(%v)*rowSize(%v)*scanFac(%v), tblCols=%v",
 			cnt*rowSize*sessVars.GetScanFactor(tableInfo), cnt, rowSize, sessVars.GetScanFactor(tableInfo), t.tblCols))

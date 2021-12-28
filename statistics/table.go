@@ -1012,6 +1012,31 @@ func (coll *HistColl) GetAvgRowSizeListInDisk(cols []*expression.Column) (size f
 	return size + float64(8*len(cols))
 }
 
+// GetPKAvgRowSize TODO
+func (coll *HistColl) GetPKAvgRowSize(ctx sessionctx.Context, storeType kv.StoreType, tblInfo *model.TableInfo) (size float64) {
+	// TODO: clustered index / TiFlash
+	if coll.Pseudo || len(coll.Columns) == 0 || coll.Count == 0 {
+		size = pseudoColSize
+	} else {
+		for _, col := range coll.Columns {
+			if col.IsHandle {
+				size += col.AvgColSize(coll.Count, false)
+			}
+		}
+	}
+	// Add 1 byte for each column's flag byte. See `encode` for details.
+	size += 1
+	switch storeType {
+	case kv.TiKV:
+		size += tablecodec.RecordRowKeyLen
+		// The `cols` for TiKV always contain the row_id, so prefix row size subtract its length.
+		size -= 8
+	case kv.TiFlash:
+		panic("???")
+	}
+	return
+}
+
 // GetTableAvgRowSize computes average row size for a table scan, exclude the index key-value pairs.
 func (coll *HistColl) GetTableAvgRowSize(ctx sessionctx.Context, cols []*expression.Column, storeType kv.StoreType, handleInCols bool) (size float64) {
 	size = coll.GetAvgRowSize(ctx, cols, false, true)
