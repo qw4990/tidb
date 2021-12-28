@@ -174,7 +174,8 @@ func (t *copTask) finishIndexPlan() {
 	idxRowSize := t.tblColHists.GetAvgRowSize(t.indexPlan.SCtx(), t.indexPlan.Schema().Columns, true, false)
 	t.cst += cnt * sessVars.GetNetworkFactor(tableInfo) * idxRowSize
 	if t.indexPlan.SCtx().GetSessionVars().CostCalibrationMode == 2 {
-		t.indexPlan.SCtx().GetSessionVars().StmtCtx.AppendNote(errors.Errorf("idxNetCost(%v)=rowCount(%v)*rowSize(%v)*netFac(%v)", cnt*sessVars.GetNetworkFactor(tableInfo)*idxRowSize, cnt, idxRowSize, sessVars.GetNetworkFactor(tableInfo)))
+		t.indexPlan.SCtx().GetSessionVars().StmtCtx.AppendNote(errors.Errorf("idxNetCost(%v)=rowCount(%v)*rowSize(%v)*netFac(%v), idxCols=%v",
+			cnt*sessVars.GetNetworkFactor(tableInfo)*idxRowSize, cnt, idxRowSize, sessVars.GetNetworkFactor(tableInfo), t.indexPlan.Schema().Columns))
 	}
 	if t.tablePlan == nil {
 		return
@@ -1032,8 +1033,8 @@ func (t *copTask) convertToRootTaskImpl(ctx sessionctx.Context) *rootTask {
 		rowSize := t.tblColHists.GetAvgRowSize(ctx, t.tablePlan.Schema().Columns, false, false)
 		t.cst += t.count() * sessVars.GetNetworkFactor(nil) * rowSize
 		if t.tablePlan.SCtx().GetSessionVars().CostCalibrationMode == 2 {
-			t.tablePlan.SCtx().GetSessionVars().StmtCtx.AppendNote(errors.Errorf("tblNetCost(%v)=rowCount(%v)*rowSize(%v)*netFac(%v)",
-				t.count()*sessVars.GetNetworkFactor(nil)*rowSize, t.count(), rowSize, sessVars.GetNetworkFactor(nil)))
+			t.tablePlan.SCtx().GetSessionVars().StmtCtx.AppendNote(errors.Errorf("tblNetCost(%v)=rowCount(%v)*rowSize(%v)*netFac(%v), cols=%v",
+				t.count()*sessVars.GetNetworkFactor(nil)*rowSize, t.count(), rowSize, sessVars.GetNetworkFactor(nil), t.tablePlan.Schema().Columns))
 		}
 
 		tp := t.tablePlan
