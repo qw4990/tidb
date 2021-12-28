@@ -188,8 +188,8 @@ func (t *copTask) finishIndexPlan() {
 	}
 	rowSize := t.tblPKRowSize
 	if t.indexPlan.SCtx().GetSessionVars().CostCalibrationMode == 2 {
-		t.indexPlan.SCtx().GetSessionVars().StmtCtx.AppendNote(errors.Errorf("tblScanCost(%v)=rowCount(%v)*rowSize(%v)*scanFac(%v), tblCols=%v",
-			cnt*rowSize*sessVars.GetScanFactor(tableInfo), cnt, rowSize, sessVars.GetScanFactor(tableInfo), t.tblCols))
+		t.indexPlan.SCtx().GetSessionVars().StmtCtx.AppendNote(errors.Errorf("tblScanCost(%v)=rowCount(%v)*rowSize(%v)*scanFac(%v)",
+			cnt*rowSize*sessVars.GetScanFactor(tableInfo), cnt, rowSize, sessVars.GetScanFactor(tableInfo)))
 	}
 	t.cst += cnt * rowSize * sessVars.GetScanFactor(tableInfo)
 }
