@@ -41,36 +41,21 @@ type yyhintXError struct {
 }
 
 const (
-	yyhintDefault             = 57416
+	yyhintDefault             = 57417
 	yyhintEOFCode             = 57344
 	yyhintErrCode             = 57345
-<<<<<<< HEAD
-	hintAggToCop              = 57376
-	hintBCJoin                = 57389
-	hintBCJoinPreferLocal     = 57390
-	hintBKA                   = 57354
-	hintBNL                   = 57356
-	hintDupsWeedOut           = 57412
-	hintFalse                 = 57408
-	hintFirstMatch            = 57413
-	hintForceIndex            = 57401
-	hintGB                    = 57411
-	hintHashAgg               = 57378
-	hintHashJoin              = 57358
-=======
 	hintAggToCop              = 57377
 	hintBCJoin                = 57390
 	hintBCJoinPreferLocal     = 57391
 	hintBKA                   = 57355
 	hintBNL                   = 57357
-	hintDupsWeedOut           = 57412
-	hintFalse                 = 57408
-	hintFirstMatch            = 57413
+	hintDupsWeedOut           = 57413
+	hintFalse                 = 57409
+	hintFirstMatch            = 57414
 	hintForceIndex            = 57402
-	hintGB                    = 57411
+	hintGB                    = 57412
 	hintHashAgg               = 57379
 	hintHashJoin              = 57359
->>>>>>> upstream/master
 	hintIdentifier            = 57347
 	hintIgnoreIndex           = 57380
 	hintIgnorePlanCache       = 57378
@@ -79,68 +64,16 @@ const (
 	hintInlJoin               = 57382
 	hintInlMergeJoin          = 57383
 	hintIntLit                = 57346
-<<<<<<< HEAD
-	hintJoinFixedOrder        = 57350
-	hintJoinOrder             = 57351
-	hintJoinPrefix            = 57352
-	hintJoinSuffix            = 57353
-	hintLimitToCop            = 57400
-	hintLooseScan             = 57414
-	hintMB                    = 57410
-	hintMRR                   = 57364
-	hintMaterialization       = 57415
-	hintMaxExecutionTime      = 57372
-	hintMemoryQuota           = 57383
-	hintMerge                 = 57360
-	hintNoBKA                 = 57355
-	hintNoBNL                 = 57357
-	hintNoHashJoin            = 57359
-	hintNoICP                 = 57366
-	hintNoIndexMerge          = 57363
-	hintNoMRR                 = 57365
-	hintNoMerge               = 57361
-	hintNoRangeOptimization   = 57367
-	hintNoReorder             = 57402
-	hintNoSemijoin            = 57371
-	hintNoSkipScan            = 57369
-	hintNoSwapJoinInputs      = 57384
-	hintNthPlan               = 57399
-	hintOLAP                  = 57403
-	hintOLTP                  = 57404
-	hintPartition             = 57405
-	hintQBName                = 57375
-	hintQueryType             = 57385
-	hintReadConsistentReplica = 57386
-	hintReadFromStorage       = 57387
-	hintResourceGroup         = 57374
-	hintSMJoin                = 57388
-	hintSemijoin              = 57370
-	hintSetVar                = 57373
-	hintSingleAtIdentifier    = 57348
-	hintSkipScan              = 57368
-	hintStreamAgg             = 57391
-	hintStringLit             = 57349
-	hintSwapJoinInputs        = 57392
-	hintTiFlash               = 57407
-	hintTiKV                  = 57406
-	hintTimeRange             = 57397
-	hintTrue                  = 57409
-	hintUseCascades           = 57398
-	hintUseIndex              = 57394
-	hintUseIndexMerge         = 57393
-	hintUsePlanCache          = 57395
-	hintUseToja               = 57396
-=======
 	hintInvalid               = 57348
 	hintJoinFixedOrder        = 57351
 	hintJoinOrder             = 57352
 	hintJoinPrefix            = 57353
 	hintJoinSuffix            = 57354
 	hintLimitToCop            = 57401
-	hintLooseScan             = 57414
-	hintMB                    = 57410
+	hintLooseScan             = 57415
+	hintMB                    = 57411
 	hintMRR                   = 57365
-	hintMaterialization       = 57415
+	hintMaterialization       = 57416
 	hintMaxExecutionTime      = 57373
 	hintMemoryQuota           = 57384
 	hintMerge                 = 57361
@@ -152,13 +85,14 @@ const (
 	hintNoMRR                 = 57366
 	hintNoMerge               = 57362
 	hintNoRangeOptimization   = 57368
+	hintNoReorder             = 57403
 	hintNoSemijoin            = 57372
 	hintNoSkipScan            = 57370
 	hintNoSwapJoinInputs      = 57385
 	hintNthPlan               = 57400
-	hintOLAP                  = 57403
-	hintOLTP                  = 57404
-	hintPartition             = 57405
+	hintOLAP                  = 57404
+	hintOLTP                  = 57405
+	hintPartition             = 57406
 	hintQBName                = 57376
 	hintQueryType             = 57386
 	hintReadConsistentReplica = 57387
@@ -172,16 +106,15 @@ const (
 	hintStreamAgg             = 57392
 	hintStringLit             = 57350
 	hintSwapJoinInputs        = 57393
-	hintTiFlash               = 57407
-	hintTiKV                  = 57406
+	hintTiFlash               = 57408
+	hintTiKV                  = 57407
 	hintTimeRange             = 57398
-	hintTrue                  = 57409
+	hintTrue                  = 57410
 	hintUseCascades           = 57399
 	hintUseIndex              = 57395
 	hintUseIndexMerge         = 57394
 	hintUsePlanCache          = 57396
 	hintUseToja               = 57397
->>>>>>> upstream/master
 
 	yyhintMaxDepth = 200
 	yyhintTabOfs   = -174
@@ -189,235 +122,120 @@ const (
 
 var (
 	yyhintXLAT = map[int]int{
-<<<<<<< HEAD
 		41:    0,   // ')' (131x)
-		57376: 1,   // hintAggToCop (123x)
-		57389: 2,   // hintBCJoin (123x)
-		57390: 3,   // hintBCJoinPreferLocal (123x)
-		57354: 4,   // hintBKA (123x)
-		57356: 5,   // hintBNL (123x)
-		57401: 6,   // hintForceIndex (123x)
-		57378: 7,   // hintHashAgg (123x)
-		57358: 8,   // hintHashJoin (123x)
-		57379: 9,   // hintIgnoreIndex (123x)
-		57377: 10,  // hintIgnorePlanCache (123x)
-		57362: 11,  // hintIndexMerge (123x)
-		57380: 12,  // hintInlHashJoin (123x)
-		57381: 13,  // hintInlJoin (123x)
-		57382: 14,  // hintInlMergeJoin (123x)
-		57350: 15,  // hintJoinFixedOrder (123x)
-		57351: 16,  // hintJoinOrder (123x)
-		57352: 17,  // hintJoinPrefix (123x)
-		57353: 18,  // hintJoinSuffix (123x)
-		57400: 19,  // hintLimitToCop (123x)
-		57372: 20,  // hintMaxExecutionTime (123x)
-		57383: 21,  // hintMemoryQuota (123x)
-		57360: 22,  // hintMerge (123x)
-		57364: 23,  // hintMRR (123x)
-		57355: 24,  // hintNoBKA (123x)
-		57357: 25,  // hintNoBNL (123x)
-		57359: 26,  // hintNoHashJoin (123x)
-		57366: 27,  // hintNoICP (123x)
-		57363: 28,  // hintNoIndexMerge (123x)
-		57361: 29,  // hintNoMerge (123x)
-		57365: 30,  // hintNoMRR (123x)
-		57367: 31,  // hintNoRangeOptimization (123x)
-		57402: 32,  // hintNoReorder (123x)
-		57371: 33,  // hintNoSemijoin (123x)
-		57369: 34,  // hintNoSkipScan (123x)
-		57384: 35,  // hintNoSwapJoinInputs (123x)
-		57399: 36,  // hintNthPlan (123x)
-		57375: 37,  // hintQBName (123x)
-		57385: 38,  // hintQueryType (123x)
-		57386: 39,  // hintReadConsistentReplica (123x)
-		57387: 40,  // hintReadFromStorage (123x)
-		57374: 41,  // hintResourceGroup (123x)
-		57370: 42,  // hintSemijoin (123x)
-		57373: 43,  // hintSetVar (123x)
-		57368: 44,  // hintSkipScan (123x)
-		57388: 45,  // hintSMJoin (123x)
-		57391: 46,  // hintStreamAgg (123x)
-		57392: 47,  // hintSwapJoinInputs (123x)
-		57397: 48,  // hintTimeRange (123x)
-		57398: 49,  // hintUseCascades (123x)
-		57394: 50,  // hintUseIndex (123x)
-		57393: 51,  // hintUseIndexMerge (123x)
-		57395: 52,  // hintUsePlanCache (123x)
-		57396: 53,  // hintUseToja (123x)
+		57377: 1,   // hintAggToCop (123x)
+		57390: 2,   // hintBCJoin (123x)
+		57391: 3,   // hintBCJoinPreferLocal (123x)
+		57355: 4,   // hintBKA (123x)
+		57357: 5,   // hintBNL (123x)
+		57402: 6,   // hintForceIndex (123x)
+		57379: 7,   // hintHashAgg (123x)
+		57359: 8,   // hintHashJoin (123x)
+		57380: 9,   // hintIgnoreIndex (123x)
+		57378: 10,  // hintIgnorePlanCache (123x)
+		57363: 11,  // hintIndexMerge (123x)
+		57381: 12,  // hintInlHashJoin (123x)
+		57382: 13,  // hintInlJoin (123x)
+		57383: 14,  // hintInlMergeJoin (123x)
+		57351: 15,  // hintJoinFixedOrder (123x)
+		57352: 16,  // hintJoinOrder (123x)
+		57353: 17,  // hintJoinPrefix (123x)
+		57354: 18,  // hintJoinSuffix (123x)
+		57401: 19,  // hintLimitToCop (123x)
+		57373: 20,  // hintMaxExecutionTime (123x)
+		57384: 21,  // hintMemoryQuota (123x)
+		57361: 22,  // hintMerge (123x)
+		57365: 23,  // hintMRR (123x)
+		57356: 24,  // hintNoBKA (123x)
+		57358: 25,  // hintNoBNL (123x)
+		57360: 26,  // hintNoHashJoin (123x)
+		57367: 27,  // hintNoICP (123x)
+		57364: 28,  // hintNoIndexMerge (123x)
+		57362: 29,  // hintNoMerge (123x)
+		57366: 30,  // hintNoMRR (123x)
+		57368: 31,  // hintNoRangeOptimization (123x)
+		57403: 32,  // hintNoReorder (123x)
+		57372: 33,  // hintNoSemijoin (123x)
+		57370: 34,  // hintNoSkipScan (123x)
+		57385: 35,  // hintNoSwapJoinInputs (123x)
+		57400: 36,  // hintNthPlan (123x)
+		57376: 37,  // hintQBName (123x)
+		57386: 38,  // hintQueryType (123x)
+		57387: 39,  // hintReadConsistentReplica (123x)
+		57388: 40,  // hintReadFromStorage (123x)
+		57375: 41,  // hintResourceGroup (123x)
+		57371: 42,  // hintSemijoin (123x)
+		57374: 43,  // hintSetVar (123x)
+		57369: 44,  // hintSkipScan (123x)
+		57389: 45,  // hintSMJoin (123x)
+		57392: 46,  // hintStreamAgg (123x)
+		57393: 47,  // hintSwapJoinInputs (123x)
+		57398: 48,  // hintTimeRange (123x)
+		57399: 49,  // hintUseCascades (123x)
+		57395: 50,  // hintUseIndex (123x)
+		57394: 51,  // hintUseIndexMerge (123x)
+		57396: 52,  // hintUsePlanCache (123x)
+		57397: 53,  // hintUseToja (123x)
 		44:    54,  // ',' (121x)
-		57412: 55,  // hintDupsWeedOut (101x)
-		57413: 56,  // hintFirstMatch (101x)
-		57414: 57,  // hintLooseScan (101x)
-		57415: 58,  // hintMaterialization (101x)
-		57407: 59,  // hintTiFlash (101x)
-		57406: 60,  // hintTiKV (101x)
-		57408: 61,  // hintFalse (100x)
-		57403: 62,  // hintOLAP (100x)
-		57404: 63,  // hintOLTP (100x)
-		57409: 64,  // hintTrue (100x)
-		57411: 65,  // hintGB (99x)
-		57410: 66,  // hintMB (99x)
+		57413: 55,  // hintDupsWeedOut (101x)
+		57414: 56,  // hintFirstMatch (101x)
+		57415: 57,  // hintLooseScan (101x)
+		57416: 58,  // hintMaterialization (101x)
+		57408: 59,  // hintTiFlash (101x)
+		57407: 60,  // hintTiKV (101x)
+		57409: 61,  // hintFalse (100x)
+		57404: 62,  // hintOLAP (100x)
+		57405: 63,  // hintOLTP (100x)
+		57410: 64,  // hintTrue (100x)
+		57412: 65,  // hintGB (99x)
+		57411: 66,  // hintMB (99x)
 		57347: 67,  // hintIdentifier (98x)
-		57348: 68,  // hintSingleAtIdentifier (83x)
+		57349: 68,  // hintSingleAtIdentifier (83x)
 		93:    69,  // ']' (77x)
-		57405: 70,  // hintPartition (71x)
+		57406: 70,  // hintPartition (71x)
 		46:    71,  // '.' (67x)
 		61:    72,  // '=' (67x)
 		40:    73,  // '(' (62x)
 		57344: 74,  // $end (24x)
-		57436: 75,  // QueryBlockOpt (17x)
-		57428: 76,  // Identifier (13x)
+		57437: 75,  // QueryBlockOpt (17x)
+		57429: 76,  // Identifier (13x)
 		57346: 77,  // hintIntLit (8x)
-		57349: 78,  // hintStringLit (5x)
-		57418: 79,  // CommaOpt (4x)
-		57424: 80,  // HintTable (4x)
-		57425: 81,  // HintTableList (4x)
+		57350: 78,  // hintStringLit (5x)
+		57419: 79,  // CommaOpt (4x)
+		57425: 80,  // HintTable (4x)
+		57426: 81,  // HintTableList (4x)
 		91:    82,  // '[' (3x)
-		57417: 83,  // BooleanHintName (2x)
-		57419: 84,  // HintIndexList (2x)
-		57421: 85,  // HintStorageType (2x)
-		57422: 86,  // HintStorageTypeAndTable (2x)
-		57426: 87,  // HintTableListOpt (2x)
-		57431: 88,  // JoinOrderOptimizerHintName (2x)
-		57432: 89,  // NullaryHintName (2x)
-		57435: 90,  // PartitionListOpt (2x)
-		57438: 91,  // StorageOptimizerHintOpt (2x)
-		57439: 92,  // SubqueryOptimizerHintName (2x)
-		57442: 93,  // SubqueryStrategy (2x)
-		57443: 94,  // SupportedIndexLevelOptimizerHintName (2x)
-		57444: 95,  // SupportedTableLevelOptimizerHintName (2x)
-		57445: 96,  // TableOptimizerHintOpt (2x)
-		57447: 97,  // UnsupportedIndexLevelOptimizerHintName (2x)
-		57448: 98,  // UnsupportedTableLevelOptimizerHintName (2x)
-		57420: 99,  // HintQueryType (1x)
-		57423: 100, // HintStorageTypeAndTableList (1x)
-		57427: 101, // HintTrueOrFalse (1x)
-		57429: 102, // IndexNameList (1x)
-		57430: 103, // IndexNameListOpt (1x)
-		57433: 104, // OptimizerHintList (1x)
-		57434: 105, // PartitionList (1x)
-		57437: 106, // Start (1x)
-		57440: 107, // SubqueryStrategies (1x)
-		57441: 108, // SubqueryStrategiesOpt (1x)
-		57446: 109, // UnitOfBytes (1x)
-		57449: 110, // Value (1x)
-		57416: 111, // $default (0x)
+		57418: 83,  // BooleanHintName (2x)
+		57420: 84,  // HintIndexList (2x)
+		57422: 85,  // HintStorageType (2x)
+		57423: 86,  // HintStorageTypeAndTable (2x)
+		57427: 87,  // HintTableListOpt (2x)
+		57432: 88,  // JoinOrderOptimizerHintName (2x)
+		57433: 89,  // NullaryHintName (2x)
+		57436: 90,  // PartitionListOpt (2x)
+		57439: 91,  // StorageOptimizerHintOpt (2x)
+		57440: 92,  // SubqueryOptimizerHintName (2x)
+		57443: 93,  // SubqueryStrategy (2x)
+		57444: 94,  // SupportedIndexLevelOptimizerHintName (2x)
+		57445: 95,  // SupportedTableLevelOptimizerHintName (2x)
+		57446: 96,  // TableOptimizerHintOpt (2x)
+		57448: 97,  // UnsupportedIndexLevelOptimizerHintName (2x)
+		57449: 98,  // UnsupportedTableLevelOptimizerHintName (2x)
+		57421: 99,  // HintQueryType (1x)
+		57424: 100, // HintStorageTypeAndTableList (1x)
+		57428: 101, // HintTrueOrFalse (1x)
+		57430: 102, // IndexNameList (1x)
+		57431: 103, // IndexNameListOpt (1x)
+		57434: 104, // OptimizerHintList (1x)
+		57435: 105, // PartitionList (1x)
+		57438: 106, // Start (1x)
+		57441: 107, // SubqueryStrategies (1x)
+		57442: 108, // SubqueryStrategiesOpt (1x)
+		57447: 109, // UnitOfBytes (1x)
+		57450: 110, // Value (1x)
+		57417: 111, // $default (0x)
 		57345: 112, // error (0x)
-=======
-		41:    0,   // ')' (130x)
-		57377: 1,   // hintAggToCop (122x)
-		57390: 2,   // hintBCJoin (122x)
-		57391: 3,   // hintBCJoinPreferLocal (122x)
-		57355: 4,   // hintBKA (122x)
-		57357: 5,   // hintBNL (122x)
-		57402: 6,   // hintForceIndex (122x)
-		57379: 7,   // hintHashAgg (122x)
-		57359: 8,   // hintHashJoin (122x)
-		57380: 9,   // hintIgnoreIndex (122x)
-		57378: 10,  // hintIgnorePlanCache (122x)
-		57363: 11,  // hintIndexMerge (122x)
-		57381: 12,  // hintInlHashJoin (122x)
-		57382: 13,  // hintInlJoin (122x)
-		57383: 14,  // hintInlMergeJoin (122x)
-		57351: 15,  // hintJoinFixedOrder (122x)
-		57352: 16,  // hintJoinOrder (122x)
-		57353: 17,  // hintJoinPrefix (122x)
-		57354: 18,  // hintJoinSuffix (122x)
-		57401: 19,  // hintLimitToCop (122x)
-		57373: 20,  // hintMaxExecutionTime (122x)
-		57384: 21,  // hintMemoryQuota (122x)
-		57361: 22,  // hintMerge (122x)
-		57365: 23,  // hintMRR (122x)
-		57356: 24,  // hintNoBKA (122x)
-		57358: 25,  // hintNoBNL (122x)
-		57360: 26,  // hintNoHashJoin (122x)
-		57367: 27,  // hintNoICP (122x)
-		57364: 28,  // hintNoIndexMerge (122x)
-		57362: 29,  // hintNoMerge (122x)
-		57366: 30,  // hintNoMRR (122x)
-		57368: 31,  // hintNoRangeOptimization (122x)
-		57372: 32,  // hintNoSemijoin (122x)
-		57370: 33,  // hintNoSkipScan (122x)
-		57385: 34,  // hintNoSwapJoinInputs (122x)
-		57400: 35,  // hintNthPlan (122x)
-		57376: 36,  // hintQBName (122x)
-		57386: 37,  // hintQueryType (122x)
-		57387: 38,  // hintReadConsistentReplica (122x)
-		57388: 39,  // hintReadFromStorage (122x)
-		57375: 40,  // hintResourceGroup (122x)
-		57371: 41,  // hintSemijoin (122x)
-		57374: 42,  // hintSetVar (122x)
-		57369: 43,  // hintSkipScan (122x)
-		57389: 44,  // hintSMJoin (122x)
-		57392: 45,  // hintStreamAgg (122x)
-		57393: 46,  // hintSwapJoinInputs (122x)
-		57398: 47,  // hintTimeRange (122x)
-		57399: 48,  // hintUseCascades (122x)
-		57395: 49,  // hintUseIndex (122x)
-		57394: 50,  // hintUseIndexMerge (122x)
-		57396: 51,  // hintUsePlanCache (122x)
-		57397: 52,  // hintUseToja (122x)
-		44:    53,  // ',' (120x)
-		57412: 54,  // hintDupsWeedOut (100x)
-		57413: 55,  // hintFirstMatch (100x)
-		57414: 56,  // hintLooseScan (100x)
-		57415: 57,  // hintMaterialization (100x)
-		57407: 58,  // hintTiFlash (100x)
-		57406: 59,  // hintTiKV (100x)
-		57408: 60,  // hintFalse (99x)
-		57403: 61,  // hintOLAP (99x)
-		57404: 62,  // hintOLTP (99x)
-		57409: 63,  // hintTrue (99x)
-		57411: 64,  // hintGB (98x)
-		57410: 65,  // hintMB (98x)
-		57347: 66,  // hintIdentifier (97x)
-		57349: 67,  // hintSingleAtIdentifier (82x)
-		93:    68,  // ']' (76x)
-		57405: 69,  // hintPartition (70x)
-		46:    70,  // '.' (66x)
-		61:    71,  // '=' (66x)
-		40:    72,  // '(' (61x)
-		57344: 73,  // $end (24x)
-		57436: 74,  // QueryBlockOpt (17x)
-		57428: 75,  // Identifier (13x)
-		57346: 76,  // hintIntLit (8x)
-		57350: 77,  // hintStringLit (5x)
-		57418: 78,  // CommaOpt (4x)
-		57424: 79,  // HintTable (4x)
-		57425: 80,  // HintTableList (4x)
-		91:    81,  // '[' (3x)
-		57417: 82,  // BooleanHintName (2x)
-		57419: 83,  // HintIndexList (2x)
-		57421: 84,  // HintStorageType (2x)
-		57422: 85,  // HintStorageTypeAndTable (2x)
-		57426: 86,  // HintTableListOpt (2x)
-		57431: 87,  // JoinOrderOptimizerHintName (2x)
-		57432: 88,  // NullaryHintName (2x)
-		57435: 89,  // PartitionListOpt (2x)
-		57438: 90,  // StorageOptimizerHintOpt (2x)
-		57439: 91,  // SubqueryOptimizerHintName (2x)
-		57442: 92,  // SubqueryStrategy (2x)
-		57443: 93,  // SupportedIndexLevelOptimizerHintName (2x)
-		57444: 94,  // SupportedTableLevelOptimizerHintName (2x)
-		57445: 95,  // TableOptimizerHintOpt (2x)
-		57447: 96,  // UnsupportedIndexLevelOptimizerHintName (2x)
-		57448: 97,  // UnsupportedTableLevelOptimizerHintName (2x)
-		57420: 98,  // HintQueryType (1x)
-		57423: 99,  // HintStorageTypeAndTableList (1x)
-		57427: 100, // HintTrueOrFalse (1x)
-		57429: 101, // IndexNameList (1x)
-		57430: 102, // IndexNameListOpt (1x)
-		57433: 103, // OptimizerHintList (1x)
-		57434: 104, // PartitionList (1x)
-		57437: 105, // Start (1x)
-		57440: 106, // SubqueryStrategies (1x)
-		57441: 107, // SubqueryStrategiesOpt (1x)
-		57446: 108, // UnitOfBytes (1x)
-		57449: 109, // Value (1x)
-		57416: 110, // $default (0x)
-		57345: 111, // error (0x)
-		57348: 112, // hintInvalid (0x)
->>>>>>> upstream/master
+		57348: 113, // hintInvalid (0x)
 	}
 
 	yyhintSymNames = []string{
