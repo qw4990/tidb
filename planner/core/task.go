@@ -940,6 +940,11 @@ func buildIndexLookUpTask(ctx sessionctx.Context, t *copTask) *rootTask {
 		idxCst = math.Min(idxCst, pagingCst)
 	}
 	newTask.cst += idxCst
+	idxCostInfo := errors.Errorf("lookupIdxCost(%v)=rowCount(%v)*cpuFac(%v)", idxCst, indexRows, sessVars.CPUFactor)
+	if sessVars.CostCalibrationMode == 2 {
+		sessVars.StmtCtx.AppendNote(idxCostInfo)
+	}
+
 	// Add cost of worker goroutines in index lookup.
 	numTblWorkers := float64(sessVars.IndexLookupConcurrency())
 	newTask.cst += (numTblWorkers + 1) * sessVars.ConcurrencyFactor
@@ -951,6 +956,10 @@ func buildIndexLookUpTask(ctx sessionctx.Context, t *copTask) *rootTask {
 	if batchSize > 2 {
 		sortCPUCost := (indexRows * math.Log2(batchSize) * sessVars.CPUFactor) / numTblWorkers
 		newTask.cst += sortCPUCost
+		batchCostInfo := errors.Errorf("lookupBatchCost(%v)=rowCount(%v)*log2(batch(%v))*cpuFac(%v)", sortCPUCost, indexRows, batchSize, sessVars.CPUFactor)
+		if sessVars.CostCalibrationMode == 2 {
+			sessVars.StmtCtx.AppendNote(batchCostInfo)
+		}
 	}
 	// Also, we need to sort the retrieved rows if index lookup reader is expected to return
 	// ordered results. Note that row count of these two sorts can be different, if there are
@@ -960,7 +969,11 @@ func buildIndexLookUpTask(ctx sessionctx.Context, t *copTask) *rootTask {
 	batchSize = math.Min(indexLookupSize*selectivity, tableRows)
 	if t.keepOrder && batchSize > 2 {
 		sortCPUCost := (tableRows * math.Log2(batchSize) * sessVars.CPUFactor) / numTblWorkers
+		sortCostInfo := errors.Errorf("lookupSortCost(%v)=rowCount(%v)*log2(batch(%v))*cpuFac(%v)", sortCPUCost, indexRows, batchSize, sessVars.CPUFactor)
 		newTask.cst += sortCPUCost
+		if sessVars.CostCalibrationMode == 2 {
+			sessVars.StmtCtx.AppendNote(sortCostInfo)
+		}
 	}
 	p.cost = newTask.cst
 	if t.needExtraProj {
