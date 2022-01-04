@@ -815,12 +815,12 @@ func (h *Handle) TrueCardinality(sctx sessionctx.Context, sql string) (ret int, 
 		return v, nil
 	}
 
-	reader, err := h.getStatsReader(0)
+	reader, err := h.getGlobalStatsReader(0)
 	if err != nil {
 		return 0, err
 	}
 	defer func() {
-		err1 := h.releaseStatsReader(reader)
+		err1 := h.releaseGlobalStatsReader(reader)
 		if err == nil && err1 != nil {
 			err = err1
 		}
