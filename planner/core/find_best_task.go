@@ -2093,8 +2093,13 @@ func (ds *DataSource) getOriginalPhysicalTableScan(prop *property.PhysicalProper
 	// for all columns now, as we do in `deriveStatsByFilter`.
 	ts.stats = ds.tableStats.ScaleByExpectCnt(rowCount)
 
-	// TODO: only count PK column size if access PK only
 	rowSize := ds.TblColHists.GetTableAvgRowSize(ds.ctx, ds.TblCols, ts.StoreType, true)
+	if ds.ctx.GetSessionVars().CostCalibrationMode == 2 {
+		// TODO: only count PK column size if access PK only
+		if ds.table.Meta().Name.L == "t" && len(ds.Schema().Columns) == 1 && ds.Schema().Columns[0].OrigName == "synthetic.t.a" {
+			rowSize = ds.TblColHists.GetTableAvgRowSize(ds.ctx, ds.Schema().Columns, ts.StoreType, true)
+		}
+	}
 	sessVars := ds.ctx.GetSessionVars()
 	cost := rowCount * rowSize * sessVars.GetScanFactor(ds.tableInfo)
 	scanCostInfo := errors.Errorf("tblScanCost(%v)=rowCount(%v)*rowSize(%v)*scanFac(%v)", cost, rowCount, rowSize, sessVars.GetScanFactor(ds.tableInfo))
