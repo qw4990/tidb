@@ -1273,7 +1273,6 @@ func (ds *DataSource) convertToIndexScan(prop *property.PhysicalProperty, candid
 		// the other hand, it may be hard to identify `StatsVersion` of `ts` in `(*copTask).finishIndexPlan`.
 		ts.stats = &property.StatsInfo{StatsVersion: ds.tableStats.StatsVersion}
 		cop.tablePlan = ts
-		cop.tblPKRowSize = ds.statisticTable.GetPKAvgRowSize(ds.ctx, path.StoreType, ds.tableInfo)
 	}
 	cop.cst = cost
 	task = cop
@@ -2093,7 +2092,9 @@ func (ds *DataSource) getOriginalPhysicalTableScan(prop *property.PhysicalProper
 	// we still need to assume values are uniformly distributed. For simplicity, we use uniform-assumption
 	// for all columns now, as we do in `deriveStatsByFilter`.
 	ts.stats = ds.tableStats.ScaleByExpectCnt(rowCount)
-	rowSize := ds.statisticTable.GetPKAvgRowSize(ds.ctx, path.StoreType, ds.tableInfo)
+
+	// TODO: only count PK column size if access PK only
+	rowSize := ds.TblColHists.GetTableAvgRowSize(ds.ctx, ds.TblCols, ts.StoreType, true)
 	sessVars := ds.ctx.GetSessionVars()
 	cost := rowCount * rowSize * sessVars.GetScanFactor(ds.tableInfo)
 	scanCostInfo := errors.Errorf("tblScanCost(%v)=rowCount(%v)*rowSize(%v)*scanFac(%v)", cost, rowCount, rowSize, sessVars.GetScanFactor(ds.tableInfo))
