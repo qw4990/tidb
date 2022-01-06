@@ -784,6 +784,7 @@ var (
 // NewConfig creates a new config instance with default value.
 func NewConfig() *Config {
 	conf := defaultConf
+	conf.TiKVClient.CoprCache.CapacityMB = 0.0
 	return &conf
 }
 
