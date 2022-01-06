@@ -743,9 +743,6 @@ type SessionVars struct {
 	// EnablePointGetCache is used to cache value for point get for read only scenario.
 	EnablePointGetCache bool
 
-	// EnableAlterPlacement indicates whether a user can alter table partition placement rules.
-	EnableAlterPlacement bool
-
 	// EnablePlacementChecks indicates whether a user can check validation of placement.
 	EnablePlacementChecks bool
 
@@ -1230,7 +1227,6 @@ func NewSessionVars() *SessionVars {
 		ShardAllocateStep:           DefTiDBShardAllocateStep,
 		EnableChangeMultiSchema:     DefTiDBChangeMultiSchema,
 		EnablePointGetCache:         DefTiDBPointGetCache,
-		EnableAlterPlacement:        DefTiDBEnableAlterPlacement,
 		EnableAmendPessimisticTxn:   DefTiDBEnableAmendPessimisticTxn,
 		PartitionPruneMode:          *atomic2.NewString(DefTiDBPartitionPruneMode),
 		TxnScope:                    kv.NewDefaultTxnScopeVar(),
