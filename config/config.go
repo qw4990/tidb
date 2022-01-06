@@ -1091,6 +1091,7 @@ func initByLDFlags(edition, checkBeforeDropLDFlag string) {
 		defaultConf.EnableTelemetry = false
 	}
 	conf := defaultConf
+	conf.TiKVClient.CoprCache.CapacityMB = 0.0
 	StoreGlobalConfig(&conf)
 	if checkBeforeDropLDFlag == "1" {
 		CheckTableBeforeDrop = true
