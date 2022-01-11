@@ -186,11 +186,14 @@ func (t *copTask) finishIndexPlan() {
 	for p = t.indexPlan; len(p.Children()) > 0; p = p.Children()[0] {
 	}
 	rowSize := t.tblColHists.GetIndexAvgRowSize(t.indexPlan.SCtx(), t.tblCols, p.(*PhysicalIndexScan).Index.Unique)
+	var rowSizeInfo error
 	if t.indexPlan.SCtx().GetSessionVars().CostVariant == 1 {
+		rowSizeInfo = errors.Errorf("adjust tblRowSize from %v to %v", rowSize, math.Log2(rowSize))
 		rowSize = math.Log2(rowSize)
 	}
 
 	if t.indexPlan.SCtx().GetSessionVars().CostCalibrationMode == 2 {
+		t.indexPlan.SCtx().GetSessionVars().StmtCtx.AppendNote(rowSizeInfo)
 		t.indexPlan.SCtx().GetSessionVars().StmtCtx.AppendNote(errors.Errorf("tblScanCost(%v)=rowCount(%v)*rowSize(%v)*scanFac(%v)",
 			cnt*rowSize*sessVars.GetScanFactor(tableInfo), cnt, rowSize, sessVars.GetScanFactor(tableInfo)))
 	}

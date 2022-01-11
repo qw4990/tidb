@@ -2172,7 +2172,9 @@ func (ds *DataSource) getOriginalPhysicalTableScan(prop *property.PhysicalProper
 	ts.stats = ds.tableStats.ScaleByExpectCnt(rowCount)
 
 	rowSize := ds.TblColHists.GetTableAvgRowSize(ds.ctx, ds.TblCols, ts.StoreType, true)
+	var rowSizeInfo error
 	if ds.ctx.GetSessionVars().CostVariant == 1 {
+		rowSizeInfo = errors.Errorf("adjust tblRowSize from %v to %v", rowSize, math.Log2(rowSize))
 		rowSize = math.Log2(rowSize)
 	}
 	if ds.ctx.GetSessionVars().CostCalibrationMode == 2 {
@@ -2206,6 +2208,7 @@ func (ds *DataSource) getOriginalPhysicalTableScan(prop *property.PhysicalProper
 	}
 
 	if sessVars.CostCalibrationMode == 2 {
+		sessVars.StmtCtx.AppendNote(rowSizeInfo)
 		sessVars.StmtCtx.AppendNote(scanCostInfo)
 		sessVars.StmtCtx.AppendNote(seekCostInfo)
 	}
@@ -2246,7 +2249,9 @@ func (ds *DataSource) getOriginalPhysicalIndexScan(prop *property.PhysicalProper
 	}
 	is.stats = ds.tableStats.ScaleByExpectCnt(rowCount)
 	rowSize, idxCols := is.indexScanRowSize(idx, ds, true)
+	var rowSizeInfo error
 	if ds.ctx.GetSessionVars().CostVariant == 1 {
+		rowSizeInfo = errors.Errorf("adjust tblRowSize from %v to %v", rowSize, math.Log2(rowSize))
 		rowSize = math.Log2(rowSize)
 	}
 
@@ -2265,6 +2270,7 @@ func (ds *DataSource) getOriginalPhysicalIndexScan(prop *property.PhysicalProper
 	seekCostInfo := errors.Errorf("idxSeekCost(%v)=regions(%v)*seekFac(%v)", float64(len(is.Ranges))*sessVars.GetSeekFactor(ds.tableInfo), len(is.Ranges), sessVars.GetSeekFactor(ds.tableInfo))
 
 	if sessVars.CostCalibrationMode == 2 {
+		sessVars.StmtCtx.AppendNote(rowSizeInfo)
 		sessVars.StmtCtx.AppendNote(scanCostInfo)
 		sessVars.StmtCtx.AppendNote(seekCostInfo)
 	}
