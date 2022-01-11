@@ -197,7 +197,7 @@ func (t *copTask) finishIndexPlan() {
 		t.indexPlan.SCtx().GetSessionVars().StmtCtx.AppendNote(rowSizeInfo)
 		t.indexPlan.SCtx().GetSessionVars().StmtCtx.AppendNote(errors.Errorf("tblScanCost(%v)=rowCount(%v)*rowSize(%v)*scanFac(%v)",
 			cnt*rowSize*sessVars.GetScanFactor(tableInfo), cnt, rowSize, sessVars.GetScanFactor(tableInfo)))
-		t.indexPlan.SCtx().GetSessionVars().CostVector.AccumulateNet(cnt * rowSize)
+		t.indexPlan.SCtx().GetSessionVars().CostVector.AccumulateScan(cnt * rowSize)
 	}
 	t.cst += cnt * rowSize * sessVars.GetScanFactor(tableInfo)
 }
