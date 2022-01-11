@@ -188,7 +188,7 @@ func (t *copTask) finishIndexPlan() {
 	rowSize := t.tblColHists.GetIndexAvgRowSize(t.indexPlan.SCtx(), t.tblCols, p.(*PhysicalIndexScan).Index.Unique)
 	var rowSizeInfo error
 	if t.indexPlan.SCtx().GetSessionVars().CostVariant == 1 {
-		rowSizeInfo = errors.Errorf("adjust tblRowSize from %v to %v", rowSize, math.Log2(rowSize))
+		rowSizeInfo = errors.Errorf("adjust scan tblRowSize from %v to %v", rowSize, math.Log2(rowSize))
 		rowSize = math.Log2(rowSize)
 	}
 

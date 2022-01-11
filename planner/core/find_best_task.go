@@ -2174,15 +2174,15 @@ func (ds *DataSource) getOriginalPhysicalTableScan(prop *property.PhysicalProper
 	rowSize := ds.TblColHists.GetTableAvgRowSize(ds.ctx, ds.TblCols, ts.StoreType, true)
 	var rowSizeInfo error
 	if ds.ctx.GetSessionVars().CostVariant == 1 {
-		rowSizeInfo = errors.Errorf("adjust tblRowSize from %v to %v", rowSize, math.Log2(rowSize))
+		rowSizeInfo = errors.Errorf("adjust scan tblRowSize from %v to %v", rowSize, math.Log2(rowSize))
 		rowSize = math.Log2(rowSize)
 	}
-	if ds.ctx.GetSessionVars().CostCalibrationMode == 2 {
-		// TODO: only count PK column size if access PK only
-		if ds.table.Meta().Name.L == "t" && len(ds.Schema().Columns) == 1 && ds.Schema().Columns[0].OrigName == "synthetic.t.a" {
-			rowSize = ds.TblColHists.GetTableAvgRowSize(ds.ctx, ds.Schema().Columns, ts.StoreType, true)
-		}
-	}
+	//if ds.ctx.GetSessionVars().CostCalibrationMode == 2 {
+	//	// TODO: only count PK column size if access PK only
+	//	if ds.table.Meta().Name.L == "t" && len(ds.Schema().Columns) == 1 && ds.Schema().Columns[0].OrigName == "synthetic.t.a" {
+	//		rowSize = ds.TblColHists.GetTableAvgRowSize(ds.ctx, ds.Schema().Columns, ts.StoreType, true)
+	//	}
+	//}
 	sessVars := ds.ctx.GetSessionVars()
 	cost := rowCount * rowSize * sessVars.GetScanFactor(ds.tableInfo)
 	scanCostInfo := errors.Errorf("tblScanCost(%v)=rowCount(%v)*rowSize(%v)*scanFac(%v)", cost, rowCount, rowSize, sessVars.GetScanFactor(ds.tableInfo))
@@ -2251,7 +2251,7 @@ func (ds *DataSource) getOriginalPhysicalIndexScan(prop *property.PhysicalProper
 	rowSize, idxCols := is.indexScanRowSize(idx, ds, true)
 	var rowSizeInfo error
 	if ds.ctx.GetSessionVars().CostVariant == 1 {
-		rowSizeInfo = errors.Errorf("adjust tblRowSize from %v to %v", rowSize, math.Log2(rowSize))
+		rowSizeInfo = errors.Errorf("adjust scan idxRowSize from %v to %v", rowSize, math.Log2(rowSize))
 		rowSize = math.Log2(rowSize)
 	}
 
