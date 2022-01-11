@@ -2172,6 +2172,9 @@ func (ds *DataSource) getOriginalPhysicalTableScan(prop *property.PhysicalProper
 	ts.stats = ds.tableStats.ScaleByExpectCnt(rowCount)
 
 	rowSize := ds.TblColHists.GetTableAvgRowSize(ds.ctx, ds.TblCols, ts.StoreType, true)
+	if ds.ctx.GetSessionVars().CostVariant == 1 {
+		rowSize = math.Log2(rowSize)
+	}
 	if ds.ctx.GetSessionVars().CostCalibrationMode == 2 {
 		// TODO: only count PK column size if access PK only
 		if ds.table.Meta().Name.L == "t" && len(ds.Schema().Columns) == 1 && ds.Schema().Columns[0].OrigName == "synthetic.t.a" {
@@ -2243,6 +2246,10 @@ func (ds *DataSource) getOriginalPhysicalIndexScan(prop *property.PhysicalProper
 	}
 	is.stats = ds.tableStats.ScaleByExpectCnt(rowCount)
 	rowSize, idxCols := is.indexScanRowSize(idx, ds, true)
+	if ds.ctx.GetSessionVars().CostVariant == 1 {
+		rowSize = math.Log2(rowSize)
+	}
+
 	sessVars := ds.ctx.GetSessionVars()
 	cost := rowCount * rowSize * sessVars.GetScanFactor(ds.tableInfo)
 	scanCostInfo := errors.Errorf("idxScanCost(%v)=rowCount(%v)*rowSize(%v)*scanFac(%v), idxCols=%v", cost, rowCount, rowSize, sessVars.GetScanFactor(ds.tableInfo), idxCols)

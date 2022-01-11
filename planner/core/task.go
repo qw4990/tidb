@@ -186,6 +186,10 @@ func (t *copTask) finishIndexPlan() {
 	for p = t.indexPlan; len(p.Children()) > 0; p = p.Children()[0] {
 	}
 	rowSize := t.tblColHists.GetIndexAvgRowSize(t.indexPlan.SCtx(), t.tblCols, p.(*PhysicalIndexScan).Index.Unique)
+	if t.indexPlan.SCtx().GetSessionVars().CostVariant == 1 {
+		rowSize = math.Log2(rowSize)
+	}
+
 	if t.indexPlan.SCtx().GetSessionVars().CostCalibrationMode == 2 {
 		t.indexPlan.SCtx().GetSessionVars().StmtCtx.AppendNote(errors.Errorf("tblScanCost(%v)=rowCount(%v)*rowSize(%v)*scanFac(%v)",
 			cnt*rowSize*sessVars.GetScanFactor(tableInfo), cnt, rowSize, sessVars.GetScanFactor(tableInfo)))
