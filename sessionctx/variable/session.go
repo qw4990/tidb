@@ -964,6 +964,9 @@ type SessionVars struct {
 	// CostCalibrationMode ...
 	CostCalibrationMode int
 
+	// CostVariant ...
+	CostVariant int
+
 	// EnablePseudoForOutdatedStats if using pseudo for outdated stats
 	EnablePseudoForOutdatedStats bool
 

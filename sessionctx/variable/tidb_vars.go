@@ -611,6 +611,9 @@ const (
 	// TiDBCostCalibrationMode ...
 	TiDBCostCalibrationMode = "tidb_cost_calibration_mode"
 
+	// TiDBCostVariant ...
+	TiDBCostVariant = "tidb_cost_variant"
+
 	// TiDBTableCacheLease indicates the read lock lease of a cached table.
 	TiDBTableCacheLease = "tidb_table_cache_lease"
 

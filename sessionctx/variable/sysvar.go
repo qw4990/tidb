@@ -1308,6 +1308,14 @@ var defaultSysVars = []*SysVar{
 		s.CostCalibrationMode = int(val)
 		return nil
 	}},
+	{Scope: ScopeSession, Name: TiDBCostVariant, Value: strconv.Itoa(0), Type: TypeInt, Hidden: true, MinValue: 0, MaxValue: 2, SetSession: func(s *SessionVars, v string) error {
+		val, err := strconv.ParseInt(v, 10, 64)
+		if err != nil {
+			return err
+		}
+		s.CostVariant = int(val)
+		return nil
+	}},
 	{Scope: ScopeGlobal | ScopeSession, Name: TiDBEnablePseudoForOutdatedStats, Value: BoolToOnOff(DefTiDBEnablePseudoForOutdatedStats), Type: TypeBool, SetSession: func(s *SessionVars, val string) error {
 		s.EnablePseudoForOutdatedStats = TiDBOptOn(val)
 		return nil
