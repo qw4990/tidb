@@ -2175,21 +2175,9 @@ func (ds *DataSource) getOriginalPhysicalTableScan(prop *property.PhysicalProper
 	// TODO: refine these lines of code
 	if ds.ctx.GetSessionVars().CostCalibrationMode == 2 {
 		// if only access PK columns, only accumulate PK columns when calculating row size
-		onlyAccessIdxCols := true
-		for _, col := range ds.Schema().Columns {
-			find := false
-			for _, idxCol := range path.FullIdxCols {
-				if col.OrigName == idxCol.OrigName {
-					find = true
-					break
-				}
-			}
-			if !find {
-				onlyAccessIdxCols = false
-				break
-			}
-		}
-		if onlyAccessIdxCols {
+		accessCols := ds.Schema().Columns
+		pkCol := ds.tableInfo.GetPkColInfo()
+		if pkCol != nil && len(accessCols) == 1 && accessCols[0].ID == pkCol.ID {
 			rowSize = ds.TblColHists.GetTableAvgRowSize(ds.ctx, ds.Schema().Columns, ts.StoreType, true)
 		}
 	}
