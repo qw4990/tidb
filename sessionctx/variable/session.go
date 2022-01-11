@@ -461,13 +461,13 @@ func validateReadConsistencyLevel(val string) error {
 type CostVector [6]float64 // (CPU, CopCPU, Net, Scan, DescScan, Mem)
 
 // Reset ...
-func (cv CostVector) Reset() {
+func (cv *CostVector) Reset() {
 	for i := range cv {
 		cv[i] = 0
 	}
 }
 
-func (cv CostVector) CalculateCost(costFactors [6]float64) float64 {
+func (cv *CostVector) CalculateCost(costFactors [6]float64) float64 {
 	var cost float64
 	for i := range costFactors {
 		cost += cv[i] * costFactors[i]
@@ -475,27 +475,27 @@ func (cv CostVector) CalculateCost(costFactors [6]float64) float64 {
 	return cost
 }
 
-func (cv CostVector) AccumulateCPU(v float64) {
+func (cv *CostVector) AccumulateCPU(v float64) {
 	cv[0] += v
 }
 
-func (cv CostVector) AccumulateCopCPU(v float64) {
+func (cv *CostVector) AccumulateCopCPU(v float64) {
 	cv[1] += v
 }
 
-func (cv CostVector) AccumulateNet(v float64) {
+func (cv *CostVector) AccumulateNet(v float64) {
 	cv[2] += v
 }
 
-func (cv CostVector) AccumulateScan(v float64) {
+func (cv *CostVector) AccumulateScan(v float64) {
 	cv[3] += v
 }
 
-func (cv CostVector) AccumulateDescScan(v float64) {
+func (cv *CostVector) AccumulateDescScan(v float64) {
 	cv[4] += v
 }
 
-func (cv CostVector) AccumulateMem(v float64) {
+func (cv *CostVector) AccumulateMem(v float64) {
 	cv[5] += v
 }
 
