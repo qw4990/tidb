@@ -1061,6 +1061,7 @@ func (t *copTask) convertToRootTaskImpl(ctx sessionctx.Context) *rootTask {
 		if t.tablePlan.SCtx().GetSessionVars().CostCalibrationMode == 2 {
 			t.tablePlan.SCtx().GetSessionVars().StmtCtx.AppendNote(errors.Errorf("tblNetCost(%v)=rowCount(%v)*rowSize(%v)*netFac(%v), cols=%v",
 				t.count()*sessVars.GetNetworkFactor(nil)*rowSize, t.count(), rowSize, sessVars.GetNetworkFactor(nil), t.tablePlan.Schema().Columns))
+			t.tablePlan.SCtx().GetSessionVars().CostVector.AccumulateNet(t.count() * rowSize)
 		}
 
 		tp := t.tablePlan
