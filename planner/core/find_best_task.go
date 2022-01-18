@@ -2214,7 +2214,7 @@ func (ds *DataSource) getOriginalPhysicalTableScan(prop *property.PhysicalProper
 		cost += float64(len(ts.Ranges)) * float64(len(ts.Columns)) * sessVars.GetSeekFactor(ds.tableInfo)
 	}
 
-	if sessVars.CostCalibrationMode == 2 {
+	if sessVars.CostCalibrationMode == 2 && sessVars.StmtCtx.InExplainStmt {
 		sessVars.StmtCtx.AppendNote(rowSizeInfo)
 		sessVars.StmtCtx.AppendNote(scanCostInfo)
 		sessVars.StmtCtx.AppendNote(seekCostInfo)
@@ -2283,7 +2283,7 @@ func (ds *DataSource) getOriginalPhysicalIndexScan(prop *property.PhysicalProper
 	cost += float64(len(is.Ranges)) * sessVars.GetSeekFactor(ds.tableInfo)
 	seekCostInfo := errors.Errorf("idxSeekCost(%v)=regions(%v)*seekFac(%v)", float64(len(is.Ranges))*sessVars.GetSeekFactor(ds.tableInfo), len(is.Ranges), sessVars.GetSeekFactor(ds.tableInfo))
 
-	if sessVars.CostCalibrationMode == 2 {
+	if sessVars.CostCalibrationMode == 2 && sessVars.StmtCtx.InExplainStmt {
 		sessVars.StmtCtx.AppendNote(rowSizeInfo)
 		sessVars.StmtCtx.AppendNote(scanCostInfo)
 		sessVars.StmtCtx.AppendNote(seekCostInfo)
