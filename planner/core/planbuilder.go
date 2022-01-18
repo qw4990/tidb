@@ -155,8 +155,9 @@ func (hint *indexHintInfo) indexString() string {
 }
 
 type aggHintInfo struct {
-	preferAggType  uint
-	preferAggToCop bool
+	preferAggType     uint
+	preferAggToCop    bool
+	preferAggNotToCop bool
 }
 
 // QueryTimeRange represents a time range specified by TIME_RANGE hint

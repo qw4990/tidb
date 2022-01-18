@@ -3333,7 +3333,7 @@ func (b *PlanBuilder) pushTableHints(hints []*ast.TableOptimizerHint, currentLev
 		case HintAggToCop:
 			aggHints.preferAggToCop = true
 		case HintAggNotToCop:
-			fmt.Println("?????????")
+			aggHints.preferAggNotToCop = true
 		case HintUseIndex:
 			dbName := hint.Tables[0].DBName
 			if dbName.L == "" {
