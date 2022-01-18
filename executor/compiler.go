@@ -102,7 +102,8 @@ func (c *Compiler) Compile(ctx context.Context, stmtNode ast.StmtNode) (*ExecStm
 		//(CPU, CopCPU, Net, Scan, DescScan, Mem)
 		sv := c.Ctx.GetSessionVars()
 		costFactors := [6]float64{sv.CPUFactor, sv.CopCPUFactor, sv.GetNetworkFactor(nil), sv.GetScanFactor(nil), sv.GetDescScanFactor(nil), sv.MemoryFactor}
-		physicalPlan := finalPlan.(plannercore.PhysicalPlan)
+		explainPlan := finalPlan.(*plannercore.Explain)
+		physicalPlan := explainPlan.TargetPlan.(plannercore.PhysicalPlan)
 		c.Ctx.GetSessionVars().StmtCtx.AppendNote(fmt.Errorf("cost vector %v * %v = %v",
 			physicalPlan.PlanCostWeights(), costFactors, physicalPlan.PlanCostWeights().DotProduct(costFactors)))
 	}
