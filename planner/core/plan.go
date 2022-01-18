@@ -319,6 +319,7 @@ type CostTracer interface {
 	AddDescScanWeight(w float64)
 	AddMemWeight(w float64)
 	PlanCostWeights() CostWeights
+	DebugCostWeights(prefix string)
 }
 
 // PhysicalPlan is a tree of the physical operators.
@@ -455,8 +456,19 @@ func (p *basePhysicalPlan) PlanCostWeights() CostWeights {
 	var cw CostWeights
 	weights := make([]CostWeights, len(p.children)+1)
 	weights = append(weights, p.CostWeights)
-	for _, c := range p.children {
-		weights = append(weights, c.PlanCostWeights())
+
+	switch x := p.self.(type) {
+	case *PhysicalIndexReader:
+		weights = append(weights, x.indexPlan.PlanCostWeights())
+	case *PhysicalTableReader:
+		weights = append(weights, x.tablePlan.PlanCostWeights())
+	case *PhysicalIndexLookUpReader:
+		weights = append(weights, x.indexPlan.PlanCostWeights())
+		weights = append(weights, x.tablePlan.PlanCostWeights())
+	default:
+		for _, c := range p.children {
+			weights = append(weights, c.PlanCostWeights())
+		}
 	}
 
 	for _, w := range weights {
@@ -465,6 +477,23 @@ func (p *basePhysicalPlan) PlanCostWeights() CostWeights {
 		}
 	}
 	return cw
+}
+
+func (p *basePhysicalPlan) DebugCostWeights(prefix string) {
+	fmt.Println(prefix, p.CostWeights)
+	switch x := p.self.(type) {
+	case *PhysicalIndexReader:
+		x.indexPlan.DebugCostWeights(prefix + "  ")
+	case *PhysicalTableReader:
+		x.tablePlan.DebugCostWeights(prefix + "  ")
+	case *PhysicalIndexLookUpReader:
+		x.indexPlan.DebugCostWeights(prefix + "  ")
+		x.tablePlan.DebugCostWeights(prefix + "  ")
+	default:
+		for _, c := range p.children {
+			c.DebugCostWeights(prefix + "  ")
+		}
+	}
 }
 
 // Cost implements PhysicalPlan interface.
