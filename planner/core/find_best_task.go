@@ -2192,7 +2192,7 @@ func (ds *DataSource) getOriginalPhysicalTableScan(prop *property.PhysicalProper
 	sessVars := ds.ctx.GetSessionVars()
 	cost := rowCount * rowSize * sessVars.GetScanFactor(ds.tableInfo)
 	scanCostInfo := errors.Errorf("tblScanCost(%v)=rowCount(%v)*rowSize(%v)*scanFac(%v)", cost, rowCount, rowSize, sessVars.GetScanFactor(ds.tableInfo))
-
+	isDesc := false
 	if ts.IsGlobalRead {
 		cost += rowCount * sessVars.GetNetworkFactor(ds.tableInfo) * rowSize
 	}
@@ -2201,6 +2201,7 @@ func (ds *DataSource) getOriginalPhysicalTableScan(prop *property.PhysicalProper
 		if prop.SortItems[0].Desc && prop.ExpectedCnt >= smallScanThreshold {
 			cost = rowCount * rowSize * sessVars.GetDescScanFactor(ds.tableInfo)
 			scanCostInfo = errors.Errorf("tblScanCost(%v)=rowCount(%v)*rowSize(%v)*descScanFac(%v)", cost, rowCount, rowSize, sessVars.GetDescScanFactor(ds.tableInfo))
+			isDesc = true
 		}
 		ts.KeepOrder = true
 	}
@@ -2217,7 +2218,11 @@ func (ds *DataSource) getOriginalPhysicalTableScan(prop *property.PhysicalProper
 		sessVars.StmtCtx.AppendNote(rowSizeInfo)
 		sessVars.StmtCtx.AppendNote(scanCostInfo)
 		sessVars.StmtCtx.AppendNote(seekCostInfo)
-		sessVars.CostVector.AccumulateScan(rowCount * rowSize)
+		if !isDesc {
+			sessVars.CostVector.AccumulateScan(rowCount * rowSize)
+		} else {
+			sessVars.CostVector.AccumulateDescScan(rowCount * rowSize)
+		}
 	}
 	return ts, cost, rowCount
 }
@@ -2264,12 +2269,14 @@ func (ds *DataSource) getOriginalPhysicalIndexScan(prop *property.PhysicalProper
 
 	sessVars := ds.ctx.GetSessionVars()
 	cost := rowCount * rowSize * sessVars.GetScanFactor(ds.tableInfo)
+	isDesc := false
 	scanCostInfo := errors.Errorf("idxScanCost(%v)=rowCount(%v)*rowSize(%v)*scanFac(%v), idxCols=%v", cost, rowCount, rowSize, sessVars.GetScanFactor(ds.tableInfo), idxCols)
 	if isMatchProp {
 		is.Desc = prop.SortItems[0].Desc
 		if prop.SortItems[0].Desc && prop.ExpectedCnt >= smallScanThreshold {
 			cost = rowCount * rowSize * sessVars.GetDescScanFactor(ds.tableInfo)
 			scanCostInfo = errors.Errorf("idxScanCost(%v)=rowCount(%v)*rowSize(%v)*descScanFac(%v), idxCols=%v", cost, rowCount, rowSize, sessVars.GetDescScanFactor(ds.tableInfo), idxCols)
+			isDesc = true
 		}
 		is.KeepOrder = true
 	}
@@ -2280,7 +2287,11 @@ func (ds *DataSource) getOriginalPhysicalIndexScan(prop *property.PhysicalProper
 		sessVars.StmtCtx.AppendNote(rowSizeInfo)
 		sessVars.StmtCtx.AppendNote(scanCostInfo)
 		sessVars.StmtCtx.AppendNote(seekCostInfo)
-		sessVars.CostVector.AccumulateScan(rowCount * rowSize)
+		if !isDesc {
+			sessVars.CostVector.AccumulateScan(rowCount * rowSize)
+		} else {
+			sessVars.CostVector.AccumulateDescScan(rowCount * rowSize)
+		}
 	}
 
 	is.cost = cost
