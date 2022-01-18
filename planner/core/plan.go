@@ -311,9 +311,22 @@ type LogicalPlan interface {
 	buildLogicalPlanTrace() *tracing.LogicalPlanTrace
 }
 
+type CostTracer interface {
+	AddCPUWeight(w float64)
+	AddCopCPUWeight(w float64)
+	AddNetWeight(w float64)
+	AddScanWeight(w float64)
+	AddDescScanWeight(w float64)
+	AddMemWeight(w float64)
+	CostWeightsString() string
+	PlanCostWeights() CostWeights
+}
+
 // PhysicalPlan is a tree of the physical operators.
 type PhysicalPlan interface {
 	Plan
+
+	CostTracer
 
 	// attach2Task makes the current physical plan as the father of task's physicalPlan and updates the cost of
 	// current task. If the child's task is cop task, some operator may close this task and return a new rootTask.
@@ -390,6 +403,9 @@ func (p *baseLogicalPlan) buildLogicalPlanTrace() *tracing.LogicalPlanTrace {
 	return planTrace
 }
 
+// CostWeights ...
+type CostWeights [6]float64 // (CPU, CopCPU, Net, Scan, DescScan, Mem)
+
 type basePhysicalPlan struct {
 	basePlan
 
@@ -397,6 +413,50 @@ type basePhysicalPlan struct {
 	self             PhysicalPlan
 	children         []PhysicalPlan
 	cost             float64
+	CostWeights
+}
+
+func (p *basePhysicalPlan) AddCPUWeight(w float64) {
+	p.CostWeights[0] += w
+}
+
+func (p *basePhysicalPlan) AddCopCPUWeight(w float64) {
+	p.CostWeights[1] += w
+}
+
+func (p *basePhysicalPlan) AddNetWeight(w float64) {
+	p.CostWeights[2] += w
+}
+
+func (p *basePhysicalPlan) AddScanWeight(w float64) {
+	p.CostWeights[3] += w
+}
+
+func (p *basePhysicalPlan) AddDescScanWeight(w float64) {
+	p.CostWeights[4] += w
+}
+
+func (p *basePhysicalPlan) AddMemWeight(w float64) {
+	p.CostWeights[5] += w
+}
+
+func (p *basePhysicalPlan) CostWeightsString() string {
+	return fmt.Sprintf("[CPU: %v, CopCPU: %v, Net: %v, Scan: %v, DescScan: %v, Mem: %v]",
+		p.CostWeights[0], p.CostWeights[1], p.CostWeights[2], p.CostWeights[3], p.CostWeights[4], p.CostWeights[5])
+}
+
+func (p *basePhysicalPlan) PlanCostWeights() CostWeights {
+	var cw CostWeights
+	weights := make([]CostWeights, len(p.children)+1)
+	weights = append(weights, p.CostWeights)
+	for _, c := range p.children {
+		weights = append(weights, c.PlanCostWeights())
+	}
+
+	for i, v := range p.CostWeights {
+		cw[i] += v
+	}
+	return cw
 }
 
 // Cost implements PhysicalPlan interface.

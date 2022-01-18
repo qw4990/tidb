@@ -266,6 +266,15 @@ func (p *PointGetPlan) GetCost(cols []*expression.Column) float64 {
 	return cost
 }
 
+func (p *PointGetPlan) AddCPUWeight(w float64)       {}
+func (p *PointGetPlan) AddCopCPUWeight(w float64)    {}
+func (p *PointGetPlan) AddNetWeight(w float64)       {}
+func (p *PointGetPlan) AddScanWeight(w float64)      {}
+func (p *PointGetPlan) AddDescScanWeight(w float64)  {}
+func (p *PointGetPlan) AddMemWeight(w float64)       {}
+func (p *PointGetPlan) CostWeightsString() string    { return "" }
+func (p *PointGetPlan) PlanCostWeights() CostWeights { return CostWeights{} }
+
 // BatchPointGetPlan represents a physical plan which contains a bunch of
 // keys reference the same table and use the same `unique key`
 type BatchPointGetPlan struct {
@@ -453,6 +462,15 @@ func (p *BatchPointGetPlan) GetCost(cols []*expression.Column) float64 {
 	cost /= float64(sessVars.DistSQLScanConcurrency())
 	return cost
 }
+
+func (p *BatchPointGetPlan) AddCPUWeight(w float64)       {}
+func (p *BatchPointGetPlan) AddCopCPUWeight(w float64)    {}
+func (p *BatchPointGetPlan) AddNetWeight(w float64)       {}
+func (p *BatchPointGetPlan) AddScanWeight(w float64)      {}
+func (p *BatchPointGetPlan) AddDescScanWeight(w float64)  {}
+func (p *BatchPointGetPlan) AddMemWeight(w float64)       {}
+func (p *BatchPointGetPlan) CostWeightsString() string    { return "" }
+func (p *BatchPointGetPlan) PlanCostWeights() CostWeights { return CostWeights{} }
 
 // PointPlanKey is used to get point plan that is pre-built for multi-statement query.
 const PointPlanKey = stringutil.StringerStr("pointPlanKey")
