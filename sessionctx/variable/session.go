@@ -456,52 +456,6 @@ func validateReadConsistencyLevel(val string) error {
 	}
 }
 
-// CostVector ...
-type CostVector [6]float64 // (CPU, CopCPU, Net, Scan, DescScan, Mem)
-
-// Reset ...
-func (cv *CostVector) Reset() {
-	for i := range cv {
-		cv[i] = 0
-	}
-}
-
-func (cv *CostVector) CalculateCost(costFactors [6]float64) float64 {
-	var cost float64
-	for i := range costFactors {
-		cost += cv[i] * costFactors[i]
-	}
-	return cost
-}
-
-func (cv *CostVector) AccumulateCPU(v float64) {
-	cv[0] += v
-}
-
-func (cv *CostVector) AccumulateCopCPU(v float64) {
-	cv[1] += v
-}
-
-func (cv *CostVector) AccumulateNet(v float64) {
-	cv[2] += v
-}
-
-func (cv *CostVector) AccumulateScan(v float64) {
-	cv[3] += v
-}
-
-func (cv *CostVector) AccumulateDescScan(v float64) {
-	cv[4] += v
-}
-
-func (cv *CostVector) AccumulateMem(v float64) {
-	cv[5] += v
-}
-
-func (cv CostVector) String() string {
-	return fmt.Sprintf("[CPU: %v, CopCPU: %v, Net: %v, Scan: %v, DescScan: %v, Mem: %v]", cv[0], cv[1], cv[2], cv[3], cv[4], cv[5])
-}
-
 // SessionVars is to handle user-defined or global variables in the current session.
 type SessionVars struct {
 	Concurrency
@@ -690,9 +644,6 @@ type SessionVars struct {
 
 	// CorrelationExpFactor is used to control the heuristic approach of row count estimation when CorrelationThreshold is not met.
 	CorrelationExpFactor int
-
-	// CostVector ...
-	CostVector CostVector
 
 	// CPUFactor is the CPU cost of processing one expression for one row.
 	CPUFactor float64

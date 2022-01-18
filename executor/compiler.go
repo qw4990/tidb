@@ -81,7 +81,6 @@ func (c *Compiler) Compile(ctx context.Context, stmtNode ast.StmtNode) (*ExecStm
 		} else if c.Ctx.GetSessionVars().CostCalibrationMode == 2 {
 			c.Ctx.GetSessionVars().StmtCtx.EnableOptimizerCETrace = true
 			c.Ctx.GetSessionVars().StmtCtx.EnableUsingTrueCE = true
-			c.Ctx.GetSessionVars().CostVector.Reset()
 		}
 	}
 	failpoint.Inject("assertTxnManagerInCompile", func() {
@@ -103,8 +102,9 @@ func (c *Compiler) Compile(ctx context.Context, stmtNode ast.StmtNode) (*ExecStm
 		//(CPU, CopCPU, Net, Scan, DescScan, Mem)
 		sv := c.Ctx.GetSessionVars()
 		costFactors := [6]float64{sv.CPUFactor, sv.CopCPUFactor, sv.GetNetworkFactor(nil), sv.GetScanFactor(nil), sv.GetDescScanFactor(nil), sv.MemoryFactor}
+		physicalPlan := finalPlan.(plannercore.PhysicalPlan)
 		c.Ctx.GetSessionVars().StmtCtx.AppendNote(fmt.Errorf("cost vector %v * %v = %v",
-			c.Ctx.GetSessionVars().CostVector.String(), costFactors, c.Ctx.GetSessionVars().CostVector.CalculateCost(costFactors)))
+			physicalPlan.PlanCostWeights(), costFactors, physicalPlan.PlanCostWeights().DotProduct(costFactors)))
 	}
 
 	failpoint.Inject("assertStmtCtxIsStaleness", func(val failpoint.Value) {

@@ -2219,9 +2219,9 @@ func (ds *DataSource) getOriginalPhysicalTableScan(prop *property.PhysicalProper
 		sessVars.StmtCtx.AppendNote(scanCostInfo)
 		sessVars.StmtCtx.AppendNote(seekCostInfo)
 		if !isDesc {
-			sessVars.CostVector.AccumulateScan(rowCount * rowSize)
+			ts.AddScanWeight(rowCount * rowSize)
 		} else {
-			sessVars.CostVector.AccumulateDescScan(rowCount * rowSize)
+			ts.AddDescScanWeight(rowCount * rowSize)
 		}
 	}
 	return ts, cost, rowCount
@@ -2288,9 +2288,9 @@ func (ds *DataSource) getOriginalPhysicalIndexScan(prop *property.PhysicalProper
 		sessVars.StmtCtx.AppendNote(scanCostInfo)
 		sessVars.StmtCtx.AppendNote(seekCostInfo)
 		if !isDesc {
-			sessVars.CostVector.AccumulateScan(rowCount * rowSize)
+			is.AddScanWeight(rowCount * rowSize)
 		} else {
-			sessVars.CostVector.AccumulateDescScan(rowCount * rowSize)
+			is.AddDescScanWeight(rowCount * rowSize)
 		}
 	}
 

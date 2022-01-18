@@ -318,7 +318,6 @@ type CostTracer interface {
 	AddScanWeight(w float64)
 	AddDescScanWeight(w float64)
 	AddMemWeight(w float64)
-	CostWeightsString() string
 	PlanCostWeights() CostWeights
 }
 
@@ -406,6 +405,18 @@ func (p *baseLogicalPlan) buildLogicalPlanTrace() *tracing.LogicalPlanTrace {
 // CostWeights ...
 type CostWeights [6]float64 // (CPU, CopCPU, Net, Scan, DescScan, Mem)
 
+func (cw CostWeights) String() string {
+	return fmt.Sprintf("[CPU: %v, CopCPU: %v, Net: %v, Scan: %v, DescScan: %v, Mem: %v]",
+		cw[0], cw[1], cw[2], cw[3], cw[4], cw[5])
+}
+
+func (cw CostWeights) DotProduct(costFactors [6]float64) (ret float64) {
+	for i := range costFactors {
+		ret += costFactors[i] * cw[i]
+	}
+	return
+}
+
 type basePhysicalPlan struct {
 	basePlan
 
@@ -438,11 +449,6 @@ func (p *basePhysicalPlan) AddDescScanWeight(w float64) {
 
 func (p *basePhysicalPlan) AddMemWeight(w float64) {
 	p.CostWeights[5] += w
-}
-
-func (p *basePhysicalPlan) CostWeightsString() string {
-	return fmt.Sprintf("[CPU: %v, CopCPU: %v, Net: %v, Scan: %v, DescScan: %v, Mem: %v]",
-		p.CostWeights[0], p.CostWeights[1], p.CostWeights[2], p.CostWeights[3], p.CostWeights[4], p.CostWeights[5])
 }
 
 func (p *basePhysicalPlan) PlanCostWeights() CostWeights {

@@ -176,7 +176,7 @@ func (t *copTask) finishIndexPlan() {
 	if t.indexPlan.SCtx().GetSessionVars().CostCalibrationMode == 2 {
 		t.indexPlan.SCtx().GetSessionVars().StmtCtx.AppendNote(errors.Errorf("idxNetCost(%v)=rowCount(%v)*rowSize(%v)*netFac(%v), idxCols=%v",
 			cnt*sessVars.GetNetworkFactor(tableInfo)*idxRowSize, cnt, idxRowSize, sessVars.GetNetworkFactor(tableInfo), t.indexPlan.Schema().Columns))
-		t.indexPlan.SCtx().GetSessionVars().CostVector.AccumulateNet(cnt * idxRowSize)
+		t.indexPlan.AddNetWeight(cnt * idxRowSize)
 	}
 	if t.tablePlan == nil {
 		return
@@ -197,7 +197,7 @@ func (t *copTask) finishIndexPlan() {
 		t.indexPlan.SCtx().GetSessionVars().StmtCtx.AppendNote(rowSizeInfo)
 		t.indexPlan.SCtx().GetSessionVars().StmtCtx.AppendNote(errors.Errorf("tblScanCost(%v)=rowCount(%v)*rowSize(%v)*scanFac(%v)",
 			cnt*rowSize*sessVars.GetScanFactor(tableInfo), cnt, rowSize, sessVars.GetScanFactor(tableInfo)))
-		t.indexPlan.SCtx().GetSessionVars().CostVector.AccumulateScan(cnt * rowSize)
+		t.tablePlan.AddScanWeight(cnt * rowSize)
 	}
 	t.cst += cnt * rowSize * sessVars.GetScanFactor(tableInfo)
 }
@@ -951,7 +951,7 @@ func buildIndexLookUpTask(ctx sessionctx.Context, t *copTask) *rootTask {
 	idxCostInfo := errors.Errorf("lookupIdxCost(%v)=rowCount(%v)*cpuFac(%v)", idxCst, indexRows, sessVars.CPUFactor)
 	if sessVars.CostCalibrationMode == 2 {
 		sessVars.StmtCtx.AppendNote(idxCostInfo)
-		sessVars.CostVector.AccumulateCPU(indexRows)
+		p.AddCPUWeight(indexRows)
 	}
 
 	// Add cost of worker goroutines in index lookup.
@@ -968,7 +968,7 @@ func buildIndexLookUpTask(ctx sessionctx.Context, t *copTask) *rootTask {
 		batchCostInfo := errors.Errorf("lookupBatchCost(%v)=rowCount(%v)*log2(batch(%v))*cpuFac(%v)", sortCPUCost, indexRows, batchSize, sessVars.CPUFactor)
 		if sessVars.CostCalibrationMode == 2 {
 			sessVars.StmtCtx.AppendNote(batchCostInfo)
-			sessVars.CostVector.AccumulateCPU(indexRows * math.Log2(batchSize))
+			p.AddCPUWeight(indexRows * math.Log2(batchSize))
 		}
 	}
 	// Also, we need to sort the retrieved rows if index lookup reader is expected to return
@@ -983,7 +983,7 @@ func buildIndexLookUpTask(ctx sessionctx.Context, t *copTask) *rootTask {
 		newTask.cst += sortCPUCost
 		if sessVars.CostCalibrationMode == 2 {
 			sessVars.StmtCtx.AppendNote(sortCostInfo)
-			sessVars.CostVector.AccumulateCPU(indexRows * math.Log2(batchSize))
+			p.AddCPUWeight(indexRows * math.Log2(batchSize))
 		}
 	}
 	p.cost = newTask.cst
@@ -1061,7 +1061,7 @@ func (t *copTask) convertToRootTaskImpl(ctx sessionctx.Context) *rootTask {
 		if t.tablePlan.SCtx().GetSessionVars().CostCalibrationMode == 2 {
 			t.tablePlan.SCtx().GetSessionVars().StmtCtx.AppendNote(errors.Errorf("tblNetCost(%v)=rowCount(%v)*rowSize(%v)*netFac(%v), cols=%v",
 				t.count()*sessVars.GetNetworkFactor(nil)*rowSize, t.count(), rowSize, sessVars.GetNetworkFactor(nil), t.tablePlan.Schema().Columns))
-			t.tablePlan.SCtx().GetSessionVars().CostVector.AccumulateNet(t.count() * rowSize)
+			t.tablePlan.AddNetWeight(t.count() * rowSize)
 		}
 
 		tp := t.tablePlan
