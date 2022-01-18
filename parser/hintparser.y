@@ -109,7 +109,8 @@ import (
 	hintForceIndex            "FORCE_INDEX"
 
 	/* Cost Calibration */
-	hintNoReorder "NO_REORDER"
+	hintNoReorder   "NO_REORDER"
+	hintMustReorder "MUST_REORDER"
 
 	/* Other keywords */
 	hintOLAP            "OLAP"
@@ -584,6 +585,7 @@ NullaryHintName:
 |	"AGG_NOT_TO_COP"
 |	"LIMIT_TO_COP"
 |	"NO_REORDER"
+|	"MUST_REORDER"
 |	"NO_INDEX_MERGE"
 |	"READ_CONSISTENT_REPLICA"
 |	"IGNORE_PLAN_CACHE"
@@ -630,6 +632,7 @@ Identifier:
 |	"AGG_NOT_TO_COP"
 |	"LIMIT_TO_COP"
 |	"NO_REORDER"
+|	"MUST_REORDER"
 |	"IGNORE_PLAN_CACHE"
 |	"HASH_AGG"
 |	"IGNORE_INDEX"
