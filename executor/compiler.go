@@ -97,7 +97,9 @@ func (c *Compiler) Compile(ctx context.Context, stmtNode ast.StmtNode) (*ExecStm
 	if c.Ctx.GetSessionVars().StmtCtx.EnableOptimizerCETrace {
 		c.handleCERecord()
 	}
-	if c.Ctx.GetSessionVars().CostCalibrationMode == 2 {
+
+	// print cost factors
+	if c.Ctx.GetSessionVars().CostCalibrationMode == 2 && c.Ctx.GetSessionVars().StmtCtx.InExplainStmt {
 		//(CPU, CopCPU, Net, Scan, DescScan, Mem)
 		sv := c.Ctx.GetSessionVars()
 		costFactors := [6]float64{sv.CPUFactor, sv.CopCPUFactor, sv.GetNetworkFactor(nil), sv.GetScanFactor(nil), sv.GetDescScanFactor(nil), sv.MemoryFactor}
