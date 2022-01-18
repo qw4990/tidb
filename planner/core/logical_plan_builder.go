@@ -96,7 +96,7 @@ const (
 	// HintForceIndex make optimizer to use this index even if it thinks a table scan is more efficient.
 	HintForceIndex = "force_index"
 	// HintAggToCop is hint enforce pushing aggregation to coprocessor.
-	HintAggToCop = "agg_to_cop"
+	HintAggToCop    = "agg_to_cop"
 	HintAggNotToCop = "agg_not_to_cop"
 	// HintReadFromStorage is hint enforce some tables read from specific type of storage.
 	HintReadFromStorage = "read_from_storage"
@@ -114,7 +114,8 @@ const (
 	HintLimitToCop = "limit_to_cop"
 
 	// hints for cost calibration
-	HintNoReorder = "no_reorder"
+	HintNoReorder   = "no_reorder"
+	HintMustReorder = "must_reorder"
 )
 
 const (
@@ -3407,6 +3408,8 @@ func (b *PlanBuilder) pushTableHints(hints []*ast.TableOptimizerHint, currentLev
 			limitHints.preferLimitToCop = true
 		case HintNoReorder:
 			sortHints.noReorder = true
+		case HintMustReorder:
+			sortHints.mustReorder = true
 		default:
 			// ignore hints that not implemented
 		}

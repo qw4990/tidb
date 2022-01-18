@@ -106,7 +106,8 @@ type limitHintInfo struct {
 }
 
 type sortHintInfo struct {
-	noReorder bool
+	noReorder   bool
+	mustReorder bool
 }
 
 type hintTableInfo struct {

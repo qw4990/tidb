@@ -2829,9 +2829,11 @@ func (ls *LogicalSort) exhaustPhysicalPlans(prop *property.PhysicalProperty) ([]
 			if !ls.sortHints.noReorder {
 				ret = append(ret, ls.getPhysicalSort(prop))
 			}
-			ns := ls.getNominalSort(prop)
-			if ns != nil {
-				ret = append(ret, ns)
+			if !ls.sortHints.mustReorder {
+				ns := ls.getNominalSort(prop)
+				if ns != nil {
+					ret = append(ret, ns)
+				}
 			}
 			return ret, true, nil
 		}
