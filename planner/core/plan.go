@@ -459,8 +459,10 @@ func (p *basePhysicalPlan) PlanCostWeights() CostWeights {
 		weights = append(weights, c.PlanCostWeights())
 	}
 
-	for i, v := range p.CostWeights {
-		cw[i] += v
+	for _, w := range weights {
+		for i, v := range w {
+			cw[i] += v
+		}
 	}
 	return cw
 }
