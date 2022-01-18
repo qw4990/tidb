@@ -97,6 +97,7 @@ const (
 	HintForceIndex = "force_index"
 	// HintAggToCop is hint enforce pushing aggregation to coprocessor.
 	HintAggToCop = "agg_to_cop"
+	HintAggNotToCop = "agg_not_to_cop"
 	// HintReadFromStorage is hint enforce some tables read from specific type of storage.
 	HintReadFromStorage = "read_from_storage"
 	// HintTiFlash is a label represents the tiflash storage type.
@@ -3331,6 +3332,8 @@ func (b *PlanBuilder) pushTableHints(hints []*ast.TableOptimizerHint, currentLev
 			aggHints.preferAggType |= preferStreamAgg
 		case HintAggToCop:
 			aggHints.preferAggToCop = true
+		case HintAggNotToCop:
+			fmt.Println("?????????")
 		case HintUseIndex:
 			dbName := hint.Tables[0].DBName
 			if dbName.L == "" {

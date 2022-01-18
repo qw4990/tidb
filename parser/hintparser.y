@@ -81,6 +81,7 @@ import (
 
 	/* TiDB hint names */
 	hintAggToCop              "AGG_TO_COP"
+	hintAggNotToCop           "AGG_NOT_TO_COP"
 	hintIgnorePlanCache       "IGNORE_PLAN_CACHE"
 	hintHashAgg               "HASH_AGG"
 	hintIgnoreIndex           "IGNORE_INDEX"
@@ -580,6 +581,7 @@ NullaryHintName:
 |	"HASH_AGG"
 |	"STREAM_AGG"
 |	"AGG_TO_COP"
+|	"AGG_NOT_TO_COP"
 |	"LIMIT_TO_COP"
 |	"NO_REORDER"
 |	"NO_INDEX_MERGE"
@@ -625,6 +627,7 @@ Identifier:
 |	"QB_NAME"
 /* TiDB hint names */
 |	"AGG_TO_COP"
+|	"AGG_NOT_TO_COP"
 |	"LIMIT_TO_COP"
 |	"NO_REORDER"
 |	"IGNORE_PLAN_CACHE"
