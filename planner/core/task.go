@@ -1011,7 +1011,7 @@ func buildIndexLookUpTask(ctx sessionctx.Context, t *copTask) *rootTask {
 		newTask.cst += lookupCost
 		if sessVars.CostCalibrationMode == 2 {
 			sessVars.StmtCtx.AppendNote(errors.Errorf("lookupCost(%v)=numTasks(%v)*seekFac(%v)", lookupCost, numLookupTasks, sessVars.GetSeekFactor(nil)))
-			p.AddCPUWeight(float64(numLookupTasks))
+			p.AddSeekWeight(float64(numLookupTasks))
 		}
 	}
 	p.cost = newTask.cst

@@ -272,6 +272,7 @@ func (p *PointGetPlan) AddNetWeight(w float64)         {}
 func (p *PointGetPlan) AddScanWeight(w float64)        {}
 func (p *PointGetPlan) AddDescScanWeight(w float64)    {}
 func (p *PointGetPlan) AddMemWeight(w float64)         {}
+func (p *PointGetPlan) AddSeekWeight(w float64)        {}
 func (p *PointGetPlan) CostWeightsString() string      { return "" }
 func (p *PointGetPlan) PlanCostWeights() CostWeights   { return CostWeights{} }
 func (p *PointGetPlan) DebugCostWeights(prefix string) {}
@@ -470,6 +471,7 @@ func (p *BatchPointGetPlan) AddNetWeight(w float64)         {}
 func (p *BatchPointGetPlan) AddScanWeight(w float64)        {}
 func (p *BatchPointGetPlan) AddDescScanWeight(w float64)    {}
 func (p *BatchPointGetPlan) AddMemWeight(w float64)         {}
+func (p *BatchPointGetPlan) AddSeekWeight(w float64)        {}
 func (p *BatchPointGetPlan) CostWeightsString() string      { return "" }
 func (p *BatchPointGetPlan) PlanCostWeights() CostWeights   { return CostWeights{} }
 func (p *BatchPointGetPlan) DebugCostWeights(prefix string) {}

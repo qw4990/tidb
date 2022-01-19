@@ -101,7 +101,7 @@ func (c *Compiler) Compile(ctx context.Context, stmtNode ast.StmtNode) (*ExecStm
 	if c.Ctx.GetSessionVars().CostCalibrationMode == 2 && c.Ctx.GetSessionVars().StmtCtx.InExplainStmt {
 		//(CPU, CopCPU, Net, Scan, DescScan, Mem)
 		sv := c.Ctx.GetSessionVars()
-		costFactors := [6]float64{sv.CPUFactor, sv.CopCPUFactor, sv.GetNetworkFactor(nil), sv.GetScanFactor(nil), sv.GetDescScanFactor(nil), sv.MemoryFactor}
+		costFactors := [7]float64{sv.CPUFactor, sv.CopCPUFactor, sv.GetNetworkFactor(nil), sv.GetScanFactor(nil), sv.GetDescScanFactor(nil), sv.MemoryFactor, sv.GetSeekFactor(nil)}
 		explainPlan := finalPlan.(*plannercore.Explain)
 		physicalPlan := explainPlan.TargetPlan.(plannercore.PhysicalPlan)
 		c.Ctx.GetSessionVars().StmtCtx.AppendNote(fmt.Errorf("cost vector %v * %v = %v",

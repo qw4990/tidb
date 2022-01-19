@@ -2209,6 +2209,7 @@ func (ds *DataSource) getOriginalPhysicalTableScan(prop *property.PhysicalProper
 	switch ts.StoreType {
 	case kv.TiKV:
 		cost += float64(len(ts.Ranges)) * sessVars.GetSeekFactor(ds.tableInfo)
+		ts.AddSeekWeight(float64(len(ts.Ranges)))
 		seekCostInfo = errors.Errorf("tblSeekCost(%v)=regions(%v)*seekFac(%v)", float64(len(ts.Ranges))*sessVars.GetSeekFactor(ds.tableInfo), len(ts.Ranges), sessVars.GetSeekFactor(ds.tableInfo))
 	case kv.TiFlash:
 		cost += float64(len(ts.Ranges)) * float64(len(ts.Columns)) * sessVars.GetSeekFactor(ds.tableInfo)
@@ -2281,6 +2282,7 @@ func (ds *DataSource) getOriginalPhysicalIndexScan(prop *property.PhysicalProper
 		is.KeepOrder = true
 	}
 	cost += float64(len(is.Ranges)) * sessVars.GetSeekFactor(ds.tableInfo)
+	is.AddSeekWeight(float64(len(is.Ranges)))
 	seekCostInfo := errors.Errorf("idxSeekCost(%v)=regions(%v)*seekFac(%v)", float64(len(is.Ranges))*sessVars.GetSeekFactor(ds.tableInfo), len(is.Ranges), sessVars.GetSeekFactor(ds.tableInfo))
 
 	if sessVars.CostCalibrationMode == 2 && sessVars.StmtCtx.InExplainStmt {
