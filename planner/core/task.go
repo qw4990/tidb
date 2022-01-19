@@ -991,7 +991,7 @@ func buildIndexLookUpTask(ctx sessionctx.Context, t *copTask) *rootTask {
 		}
 	} else { // use Seek Factor to calculate lookup(double-read) cost
 		initBatch := 1024
-		maxBatch := 20000
+		maxBatch := sessVars.IndexLookupSize
 		batch := initBatch
 		rows := int(math.Ceil(t.indexPlan.statsInfo().RowCount))
 		numLookupTasks := 0
