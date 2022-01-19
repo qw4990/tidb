@@ -990,7 +990,29 @@ func buildIndexLookUpTask(ctx sessionctx.Context, t *copTask) *rootTask {
 			}
 		}
 	} else { // use Seek Factor to calculate lookup(double-read) cost
-		// TODO:
+		initBatch := 1024
+		maxBatch := 20000
+		batch := initBatch
+		rows := int(math.Ceil(t.indexPlan.statsInfo().RowCount))
+		numLookupTasks := 0
+		for batch < maxBatch && rows > 0 {
+			numLookupTasks += 1
+			rows -= batch
+			batch *= 2
+			if rows < 0 {
+				rows = 0
+			}
+			if batch > maxBatch {
+				batch = maxBatch
+			}
+		}
+		numLookupTasks += rows / batch
+		lookupCost := float64(numLookupTasks) * sessVars.GetSeekFactor(nil)
+		newTask.cst += lookupCost
+		if sessVars.CostCalibrationMode == 2 {
+			sessVars.StmtCtx.AppendNote(errors.Errorf("lookupCost(%v)=numTasks(%v)*seekFac(%v)", lookupCost, numLookupTasks, sessVars.GetSeekFactor(nil)))
+			p.AddCPUWeight(float64(numLookupTasks))
+		}
 	}
 	p.cost = newTask.cst
 	if t.needExtraProj {
