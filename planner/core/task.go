@@ -1351,6 +1351,11 @@ func (p *PhysicalSort) GetCost(count float64, schema *expression.Schema) float64
 	} else {
 		memoryCost *= float64(memQuota) / (rowSize * count)
 	}
+
+	if p.ctx.GetSessionVars().CostVariant == 1 {
+		memoryCost = 0
+	}
+
 	return cpuCost + memoryCost + diskCost
 }
 
@@ -2303,6 +2308,11 @@ func (p *PhysicalHashAgg) GetCost(inputRows float64, isRoot bool, isMPP bool) fl
 	// When aggregation has distinct flag, we would allocate a map for each group to
 	// check duplication.
 	memoryCost += inputRows * distinctFactor * sessVars.MemoryFactor * float64(numDistinctFunc)
+
+	if p.ctx.GetSessionVars().CostVariant == 1 {
+		memoryCost = 0
+	}
+
 	return cpuCost + memoryCost
 }
 
