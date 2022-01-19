@@ -932,59 +932,65 @@ func buildIndexLookUpTask(ctx sessionctx.Context, t *copTask) *rootTask {
 	p.PartitionInfo = t.partitionInfo
 	setTableScanToTableRowIDScan(p.tablePlan)
 	p.stats = t.tablePlan.statsInfo()
-	// Add cost of building table reader executors. Handles are extracted in batch style,
-	// each handle is a range, the CPU cost of building copTasks should be:
-	// (indexRows / batchSize) * batchSize * CPUFactor
-	// Since we don't know the number of copTasks built, ignore these network cost now.
-	indexRows := t.indexPlan.statsInfo().RowCount
-	idxCst := indexRows * sessVars.CPUFactor
-	// if the expectCnt is below the paging threshold, using paging API, recalculate idxCst.
-	// paging API reduces the count of index and table rows, however introduces more seek cost.
-	if ctx.GetSessionVars().EnablePaging && t.expectCnt > 0 && t.expectCnt <= paging.Threshold {
-		p.Paging = true
-		pagingCst := calcPagingCost(ctx, t)
-		// prevent enlarging the cost because we take paging as a better plan,
-		// if the cost is enlarged, it'll be easier to go another plan.
-		idxCst = math.Min(idxCst, pagingCst)
-	}
-	newTask.cst += idxCst
-	idxCostInfo := errors.Errorf("lookupIdxCost(%v)=rowCount(%v)*cpuFac(%v)", idxCst, indexRows, sessVars.CPUFactor)
-	if sessVars.CostCalibrationMode == 2 {
-		sessVars.StmtCtx.AppendNote(idxCostInfo)
-		p.AddCPUWeight(indexRows)
-	}
 
-	// Add cost of worker goroutines in index lookup.
-	numTblWorkers := float64(sessVars.IndexLookupConcurrency())
-	newTask.cst += (numTblWorkers + 1) * sessVars.ConcurrencyFactor
-	// When building table reader executor for each batch, we would sort the handles. CPU
-	// cost of sort is:
-	// CPUFactor * batchSize * Log2(batchSize) * (indexRows / batchSize)
-	indexLookupSize := float64(sessVars.IndexLookupSize)
-	batchSize := math.Min(indexLookupSize, indexRows)
-	if batchSize > 2 {
-		sortCPUCost := (indexRows * math.Log2(batchSize) * sessVars.CPUFactor) / numTblWorkers
-		newTask.cst += sortCPUCost
-		batchCostInfo := errors.Errorf("lookupBatchCost(%v)=rowCount(%v)*log2(batch(%v))*cpuFac(%v)", sortCPUCost, indexRows, batchSize, sessVars.CPUFactor)
-		if sessVars.CostCalibrationMode == 2 {
-			sessVars.StmtCtx.AppendNote(batchCostInfo)
-			p.AddCPUWeight(indexRows * math.Log2(batchSize))
+	// use CPU Factor to calculate lookup(double-read) cost
+	if t.indexPlan.SCtx().GetSessionVars().CostVariant == 0 {
+		// Add cost of building table reader executors. Handles are extracted in batch style,
+		// each handle is a range, the CPU cost of building copTasks should be:
+		// (indexRows / batchSize) * batchSize * CPUFactor
+		// Since we don't know the number of copTasks built, ignore these network cost now.
+		indexRows := t.indexPlan.statsInfo().RowCount
+		idxCst := indexRows * sessVars.CPUFactor
+		// if the expectCnt is below the paging threshold, using paging API, recalculate idxCst.
+		// paging API reduces the count of index and table rows, however introduces more seek cost.
+		if ctx.GetSessionVars().EnablePaging && t.expectCnt > 0 && t.expectCnt <= paging.Threshold {
+			p.Paging = true
+			pagingCst := calcPagingCost(ctx, t)
+			// prevent enlarging the cost because we take paging as a better plan,
+			// if the cost is enlarged, it'll be easier to go another plan.
+			idxCst = math.Min(idxCst, pagingCst)
 		}
-	}
-	// Also, we need to sort the retrieved rows if index lookup reader is expected to return
-	// ordered results. Note that row count of these two sorts can be different, if there are
-	// operators above table scan.
-	tableRows := t.tablePlan.statsInfo().RowCount
-	selectivity := tableRows / indexRows
-	batchSize = math.Min(indexLookupSize*selectivity, tableRows)
-	if t.keepOrder && batchSize > 2 {
-		sortCPUCost := (tableRows * math.Log2(batchSize) * sessVars.CPUFactor) / numTblWorkers
-		sortCostInfo := errors.Errorf("lookupSortCost(%v)=rowCount(%v)*log2(batch(%v))*cpuFac(%v)", sortCPUCost, indexRows, batchSize, sessVars.CPUFactor)
-		newTask.cst += sortCPUCost
+		newTask.cst += idxCst
+		idxCostInfo := errors.Errorf("lookupIdxCost(%v)=rowCount(%v)*cpuFac(%v)", idxCst, indexRows, sessVars.CPUFactor)
 		if sessVars.CostCalibrationMode == 2 {
-			sessVars.StmtCtx.AppendNote(sortCostInfo)
-			p.AddCPUWeight(indexRows * math.Log2(batchSize))
+			sessVars.StmtCtx.AppendNote(idxCostInfo)
+			p.AddCPUWeight(indexRows)
 		}
+
+		// Add cost of worker goroutines in index lookup.
+		numTblWorkers := float64(sessVars.IndexLookupConcurrency())
+		newTask.cst += (numTblWorkers + 1) * sessVars.ConcurrencyFactor
+		// When building table reader executor for each batch, we would sort the handles. CPU
+		// cost of sort is:
+		// CPUFactor * batchSize * Log2(batchSize) * (indexRows / batchSize)
+		indexLookupSize := float64(sessVars.IndexLookupSize)
+		batchSize := math.Min(indexLookupSize, indexRows)
+		if batchSize > 2 {
+			sortCPUCost := (indexRows * math.Log2(batchSize) * sessVars.CPUFactor) / numTblWorkers
+			newTask.cst += sortCPUCost
+			batchCostInfo := errors.Errorf("lookupBatchCost(%v)=rowCount(%v)*log2(batch(%v))*cpuFac(%v)", sortCPUCost, indexRows, batchSize, sessVars.CPUFactor)
+			if sessVars.CostCalibrationMode == 2 {
+				sessVars.StmtCtx.AppendNote(batchCostInfo)
+				p.AddCPUWeight(indexRows * math.Log2(batchSize))
+			}
+		}
+		// Also, we need to sort the retrieved rows if index lookup reader is expected to return
+		// ordered results. Note that row count of these two sorts can be different, if there are
+		// operators above table scan.
+		tableRows := t.tablePlan.statsInfo().RowCount
+		selectivity := tableRows / indexRows
+		batchSize = math.Min(indexLookupSize*selectivity, tableRows)
+		if t.keepOrder && batchSize > 2 {
+			sortCPUCost := (tableRows * math.Log2(batchSize) * sessVars.CPUFactor) / numTblWorkers
+			sortCostInfo := errors.Errorf("lookupSortCost(%v)=rowCount(%v)*log2(batch(%v))*cpuFac(%v)", sortCPUCost, indexRows, batchSize, sessVars.CPUFactor)
+			newTask.cst += sortCPUCost
+			if sessVars.CostCalibrationMode == 2 {
+				sessVars.StmtCtx.AppendNote(sortCostInfo)
+				p.AddCPUWeight(indexRows * math.Log2(batchSize))
+			}
+		}
+	} else { // use Seek Factor to calculate lookup(double-read) cost
+		// TODO:
 	}
 	p.cost = newTask.cst
 	if t.needExtraProj {
