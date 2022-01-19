@@ -1006,7 +1006,7 @@ func buildIndexLookUpTask(ctx sessionctx.Context, t *copTask) *rootTask {
 				batch = maxBatch
 			}
 		}
-		numLookupTasks += rows / batch
+		numLookupTasks += (rows + batch - 1) / batch
 		lookupCost := float64(numLookupTasks) * sessVars.GetSeekFactor(nil)
 		newTask.cst += lookupCost
 		if sessVars.CostCalibrationMode == 2 {
