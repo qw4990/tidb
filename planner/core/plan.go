@@ -394,15 +394,6 @@ func (p *baseLogicalPlan) ExplainInfo() string {
 	return ""
 }
 
-// buildLogicalPlanTrace implements LogicalPlan
-func (p *baseLogicalPlan) buildLogicalPlanTrace() *tracing.LogicalPlanTrace {
-	planTrace := &tracing.LogicalPlanTrace{ID: p.ID(), TP: p.TP(), ExplainInfo: p.self.ExplainInfo()}
-	for _, child := range p.Children() {
-		planTrace.Children = append(planTrace.Children, child.buildLogicalPlanTrace())
-	}
-	return planTrace
-}
-
 // CostWeights ...
 type CostWeights [7]float64 // (CPU, CopCPU, Net, Scan, DescScan, Mem, Seek)
 
