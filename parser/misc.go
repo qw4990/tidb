@@ -903,6 +903,7 @@ var hintTokenMap = map[string]int{
 	"QB_NAME":               hintQBName,
 
 	// TiDB hint names
+	"TRUE_CARDINALITY":        hintTrueCardinality,
 	"AGG_TO_COP":              hintAggToCop,
 	"LIMIT_TO_COP":            hintLimitToCop,
 	"IGNORE_PLAN_CACHE":       hintIgnorePlanCache,

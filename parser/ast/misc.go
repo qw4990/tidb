@@ -3298,6 +3298,8 @@ type TableOptimizerHint struct {
 	QBName  model.CIStr
 	Tables  []HintTable
 	Indexes []model.CIStr
+
+	TrueCards []*HintTrueCard
 }
 
 // HintTimeRange is the payload of `TIME_RANGE` hint
@@ -3310,6 +3312,12 @@ type HintTimeRange struct {
 type HintSetVar struct {
 	VarName string
 	Value   string
+}
+
+// HintTrueCard ...
+type HintTrueCard struct {
+	OperatorID string
+	Value      string
 }
 
 // HintTable is table in the hint. It may have query block info.
@@ -3417,6 +3425,13 @@ func (n *TableOptimizerHint) Restore(ctx *format.RestoreCtx) error {
 		ctx.WriteString(hintData.VarName)
 		ctx.WritePlain(", ")
 		ctx.WriteString(hintData.Value)
+	case "true_cardinality":
+		for i, h := range n.TrueCards {
+			if i > 0 {
+				ctx.WritePlain(", ")
+			}
+			ctx.WritePlain(fmt.Sprintf("%v=%v", h.OperatorID, h.Value))
+		}
 	}
 	ctx.WritePlain(")")
 	return nil

@@ -92,6 +92,7 @@ import (
 	hintQueryType             "QUERY_TYPE"
 	hintReadConsistentReplica "READ_CONSISTENT_REPLICA"
 	hintReadFromStorage       "READ_FROM_STORAGE"
+	hintTrueCardinality       "TRUE_CARDINALITY"
 	hintSMJoin                "MERGE_JOIN"
 	hintBCJoin                "BROADCAST_JOIN"
 	hintBCJoinPreferLocal     "BROADCAST_JOIN_LOCAL"
@@ -158,6 +159,7 @@ import (
 	SubqueryStrategiesOpt   "optional subquery strategies"
 	HintTrueOrFalse         "true or false in optimizer hint"
 	HintStorageTypeAndTable "storage type and tables in optimizer hint"
+	HintTrueCardList        "hint true cardinality list"
 
 %type	<table>
 	HintTable "Table in optimizer hint"
@@ -323,6 +325,35 @@ TableOptimizerHintOpt:
 			QBName:   model.NewCIStr($3),
 			HintData: model.NewCIStr($4),
 		}
+	}
+|	"TRUE_CARDINALITY" '(' HintTrueCardList ')'
+	{
+		h := $3
+		h.HintName = model.NewCIStr($1)
+		$$ = h
+	}
+
+HintTrueCardList:
+	Identifier '=' Value
+	{
+		tc := &ast.HintTrueCard{
+			OperatorID: $1,
+			Value:      $3,
+		}
+		$$ = &ast.TableOptimizerHint{
+			HintName:  model.NewCIStr("TRUE_CARDINALITY"),
+			TrueCards: []*ast.HintTrueCard{tc},
+		}
+	}
+|	HintTrueCardList ',' Identifier '=' Value
+	{
+		h := $1
+		tc := &ast.HintTrueCard{
+			OperatorID: $3,
+			Value:      $5,
+		}
+		h.TrueCards = append(h.TrueCards, tc)
+		$$ = h
 	}
 
 StorageOptimizerHintOpt:
@@ -633,6 +664,7 @@ Identifier:
 |	"QUERY_TYPE"
 |	"READ_CONSISTENT_REPLICA"
 |	"READ_FROM_STORAGE"
+|	"TRUE_CARDINALITY"
 |	"MERGE_JOIN"
 |	"BROADCAST_JOIN"
 |	"BROADCAST_JOIN_LOCAL"
