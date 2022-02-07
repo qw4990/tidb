@@ -273,7 +273,9 @@ func TestTableOptimizerHintRestore(t *testing.T) {
 		{"READ_FROM_STORAGE(@sel TIFLASH[t1, t2])", "READ_FROM_STORAGE(@`sel` TIFLASH[`t1`, `t2`])"},
 		{"READ_FROM_STORAGE(@sel TIFLASH[t1 partition(p0)])", "READ_FROM_STORAGE(@`sel` TIFLASH[`t1` PARTITION(`p0`)])"},
 		{"TIME_RANGE('2020-02-02 10:10:10','2020-02-02 11:10:10')", "TIME_RANGE('2020-02-02 10:10:10', '2020-02-02 11:10:10')"},
-		{"TRUE_CARDINALITY(p1=1, p2=2)", "TRUE_CARDINALITY(p1=1, p2=2)"},
+		{"TRUE_CARDINALITY(p_1=1, p2=2)", "TRUE_CARDINALITY(p_1=1, p2=2)"},
+		{"TRUE_CARDINALITY(HashAgg_13=1)", "TRUE_CARDINALITY(HashAgg_13=1)"},
+		{"TRUE_CARDINALITY(HashAgg_13=233,IndexJoin_34=33)", "TRUE_CARDINALITY(HashAgg_13=233, IndexJoin_34=33)"},
 	}
 	extractNodeFunc := func(node ast.Node) ast.Node {
 		return node.(*ast.SelectStmt).TableHints[0]
