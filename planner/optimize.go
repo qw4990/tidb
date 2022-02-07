@@ -20,6 +20,7 @@ import (
 	"math"
 	"math/rand"
 	"runtime/trace"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -270,7 +271,7 @@ func allowInReadOnlyMode(sctx sessionctx.Context, node ast.Node) (bool, error) {
 	switch node.(type) {
 	// allow change variables (otherwise can't unset read-only mode)
 	case *ast.SetStmt,
-		// allow analyze table
+	// allow analyze table
 		*ast.AnalyzeTableStmt,
 		*ast.UseStmt,
 		*ast.ShowStmt,
@@ -594,6 +595,16 @@ func handleStmtHints(hints []*ast.TableOptimizerHint) (stmtHints stmtctx.StmtHin
 			}
 			setVars[setVarHint.VarName] = setVarHint.Value
 			setVarsOffs = append(setVarsOffs, i)
+		case "true_cardinality":
+			stmtHints.TrueCardinality = make(map[string]float64)
+			for _, tc := range hint.TrueCards {
+				card, err := strconv.ParseFloat(tc.Value, 64)
+				if err != nil {
+					warns = append(warns, err)
+					continue
+				}
+				stmtHints.TrueCardinality[tc.OperatorID] = card
+			}
 		}
 	}
 	stmtHints.SetVars = setVars

@@ -259,6 +259,8 @@ type StmtHints struct {
 	HasMaxExecutionTime            bool
 	HasEnableCascadesPlannerHint   bool
 	SetVars                        map[string]string
+
+	TrueCardinality map[string]float64 // operatorID:cardinality
 }
 
 // TaskMapNeedBackUp indicates that whether we need to back up taskMap during physical optimizing.
