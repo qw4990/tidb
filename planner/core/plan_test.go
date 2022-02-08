@@ -314,12 +314,13 @@ func TestCostTrace(t *testing.T) {
 	// DescTableScan
 
 	// DescIndexScan
+	checkCost(`select /*+ display_cost(), trace_cost(), use_index(t, b), must_reorder() */ b from t where b>=1 and b<=10 order by b`)
 
 	// IndexLookup
 	checkCost(`select /*+ display_cost(), trace_cost(), use_index(t, b) */ * from t where b>=1 and b<=20`)
 
 	// Sort
-	//checkCost(`select /*+ display_cost(), trace_cost(), use_index(t, b), must_reorder() */ b from t where b>=1 and b<=10 order by b`)
+	checkCost(`select /*+ display_cost(), trace_cost(), use_index(t, b), must_reorder() */ b from t where b>=1 and b<=10 order by b`)
 
 	// CopAgg
 

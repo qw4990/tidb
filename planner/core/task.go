@@ -1311,6 +1311,7 @@ func (p *PhysicalSort) GetCost(count float64, schema *expression.Schema) float64
 	}
 	sessVars := p.ctx.GetSessionVars()
 	cpuCost := count * math.Log2(count) * sessVars.CPUFactor
+	p.AddCostWeight(CPU, count*math.Log2(count), fmt.Sprintf("sort-count(%v)", count))
 	memoryCost := count * sessVars.MemoryFactor
 
 	oomUseTmpStorage := config.GetGlobalConfig().OOMUseTmpStorage
@@ -1323,6 +1324,7 @@ func (p *PhysicalSort) GetCost(count float64, schema *expression.Schema) float64
 	} else {
 		memoryCost *= float64(memQuota) / (rowSize * count)
 	}
+	p.AddCostWeight(Mem, memoryCost/sessVars.MemoryFactor, fmt.Sprintf("sort-mem-count(%v)", count))
 	return cpuCost + memoryCost + diskCost
 }
 
