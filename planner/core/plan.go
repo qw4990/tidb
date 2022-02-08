@@ -347,6 +347,27 @@ func (ct CostFactorType) String() string {
 
 type CostWeights [NumFactorType]float64
 
+func GetCostFactors(sctx sessionctx.Context) [NumFactorType]float64 {
+	sv := sctx.GetSessionVars()
+	return [NumFactorType]float64{
+		sv.CPUFactor,
+		sv.CopCPUFactor,
+		sv.GetNetworkFactor(nil),
+		sv.GetScanFactor(nil),
+		sv.GetDescScanFactor(nil),
+		sv.MemoryFactor,
+		sv.GetSeekFactor(nil),
+	}
+}
+
+func CalCost(cf [NumFactorType]float64, cw CostWeights) float64 {
+	var cost float64
+	for i := 0; i < NumFactorType; i++ {
+		cost += cf[i] * cw[i]
+	}
+	return cost
+}
+
 // PhysicalPlan is a tree of the physical operators.
 type PhysicalPlan interface {
 	Plan

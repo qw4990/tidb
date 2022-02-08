@@ -297,20 +297,9 @@ func DoOptimize(ctx context.Context, sctx sessionctx.Context, flag uint64, logic
 		cw, details := finalPlan.PlanCostWeight()
 		sctx.GetSessionVars().StmtCtx.AppendNote(errors.Errorf("[COST] CostWeights: %v", cw))
 		sv := sctx.GetSessionVars()
-		cf := [NumFactorType]float64{
-			sv.CPUFactor,
-			sv.CopCPUFactor,
-			sv.GetNetworkFactor(nil),
-			sv.GetScanFactor(nil),
-			sv.GetDescScanFactor(nil),
-			sv.MemoryFactor,
-			sv.GetSeekFactor(nil),
-		}
+		cf := GetCostFactors(sctx)
 		cfName := "[CPU, CopCPU, Net, Scan, DescScan, Mem, Seek]"
-		var cost float64
-		for i := 0; i < NumFactorType; i++ {
-			cost += cf[i] * cw[i]
-		}
+		cost := CalCost(cf, cw)
 		sv.StmtCtx.AppendNote(errors.Errorf("[COST] CostCalculation: %v %v*%v = %v", cfName, cw, cf, cost))
 		for _, d := range details {
 			sv.StmtCtx.AppendNote(errors.Errorf("[COST] Detail %v", d))
