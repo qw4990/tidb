@@ -17,6 +17,7 @@ package core_test
 import (
 	"bytes"
 	"fmt"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -262,18 +263,63 @@ func TestCostTrace(t *testing.T) {
 	tk.MustExec("use test")
 	tk.MustExec(`drop table if exists t`)
 	tk.MustExec(`create table t (a int, b int, c varchar(128), d int, primary key(a), key b(b), key bc(b, c))`)
+	var vals []string
+	for i := 0; i < 100; i++ {
+		vals = append(vals, fmt.Sprintf("(%v, %v, '%v', %v)", i, i, "", i))
+	}
+	tk.MustExec(fmt.Sprintf("insert into t values %v", strings.Join(vals, ", ")))
+	tk.MustExec(`set @@tidb_distsql_scan_concurrency=1`)
+	tk.MustExec(`set @@tidb_executor_concurrency=1`)
+
+	checkCost := func(q string) {
+		rs := tk.MustQuery("explain " + q).Rows()
+		costStr := rs[0][2].(string)
+		cost, err := strconv.ParseFloat(costStr, 64)
+		if err != nil {
+			panic(err)
+		}
+
+		rs = tk.MustQuery("show warnings").Rows()
+		var traceCost float64
+		var costDetail string
+		for _, r := range rs {
+			msg := r[2].(string)
+			if strings.Contains(msg, "CostCalculation") {
+				costDetail = msg
+				tmp := strings.Split(msg, "=")
+				traceCostStr := strings.TrimSpace(tmp[1])
+				traceCost, err = strconv.ParseFloat(traceCostStr, 64)
+				if err != nil {
+					panic(err)
+				}
+				break
+			}
+		}
+
+		delta := traceCost - cost
+		if delta < 0 {
+			delta *= -1
+		}
+		if delta/cost > 0.01 && delta > 5 {
+			panic(q + " === " + costDetail + " === actual " + costStr)
+		}
+	}
 
 	// TableScan
+	checkCost("select /*+ display_cost(), trace_cost(), use_index(t, primary) */ * from t where a>=20")
 
 	// IndexScan
+	checkCost(`select /*+ display_cost(), trace_cost(), use_index(t, b) */ b from t where b>=20`)
 
 	// DescTableScan
 
 	// DescIndexScan
 
 	// IndexLookup
+	checkCost(`select /*+ display_cost(), trace_cost(), use_index(t, b) */ * from t where b>=1 and b<=20`)
 
 	// Sort
+	//checkCost(`select /*+ display_cost(), trace_cost(), use_index(t, b), must_reorder() */ b from t where b>=1 and b<=10 order by b`)
 
 	// CopAgg
 
