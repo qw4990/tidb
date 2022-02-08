@@ -16,8 +16,6 @@ package core
 
 import (
 	"fmt"
-	"math"
-
 	"github.com/cznic/mathutil"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb/config"
@@ -40,6 +38,7 @@ import (
 	"github.com/pingcap/tidb/util/plancodec"
 	"github.com/pingcap/tipb/go-tipb"
 	"go.uber.org/zap"
+	"math"
 )
 
 var (
@@ -1415,12 +1414,14 @@ func (p *PhysicalTopN) attach2Task(tasks ...task) task {
 func (p *PhysicalProjection) GetCost(count float64) float64 {
 	sessVars := p.ctx.GetSessionVars()
 	cpuCost := count * sessVars.CPUFactor
+	p.AddCostWeight(CPU, count, fmt.Sprintf("proj-count(%v)", count))
 	concurrency := float64(sessVars.ProjectionConcurrency())
 	if concurrency <= 0 {
 		return cpuCost
 	}
 	cpuCost /= concurrency
 	concurrencyCost := (1 + concurrency) * sessVars.ConcurrencyFactor
+	p.AddCostWeight(CPU, concurrencyCost/sessVars.CPUFactor, fmt.Sprintf("proj-concCost(%v)", concurrencyCost))
 	return cpuCost + concurrencyCost
 }
 
