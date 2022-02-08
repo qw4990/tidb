@@ -15,7 +15,6 @@
 package stmtctx
 
 import (
-	"fmt"
 	"math"
 	"sort"
 	"strconv"
@@ -302,7 +301,6 @@ func (sc *StatementContext) ResetStmtCache() {
 
 // FindTrueCard ...
 func (sc *StatementContext) FindTrueCard(operatorID string) (float64, bool) {
-	fmt.Println(">>>>>>>>>>>>>>>>> ", sc.TrueCardinality, operatorID)
 	if sc.TrueCardinality == nil {
 		return 0, false
 	}
