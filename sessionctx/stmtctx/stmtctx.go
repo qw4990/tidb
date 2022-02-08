@@ -261,6 +261,8 @@ type StmtHints struct {
 	SetVars                        map[string]string
 
 	TrueCardinality map[string]float64 // operatorID:cardinality
+	DisplayCost     bool
+	TraceCost       bool
 }
 
 // TaskMapNeedBackUp indicates that whether we need to back up taskMap during physical optimizing.

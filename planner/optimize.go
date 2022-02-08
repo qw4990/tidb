@@ -605,6 +605,10 @@ func handleStmtHints(hints []*ast.TableOptimizerHint) (stmtHints stmtctx.StmtHin
 				}
 				stmtHints.TrueCardinality[tc.OperatorID] = card
 			}
+		case "display_cost":
+			stmtHints.DisplayCost = true
+		case "trace_cost":
+			stmtHints.TraceCost = true
 		}
 	}
 	stmtHints.SetVars = setVars
