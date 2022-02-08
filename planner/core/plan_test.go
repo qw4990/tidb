@@ -274,7 +274,8 @@ func TestCostTrace(t *testing.T) {
 	checkCost := func(q string) {
 		rs := tk.MustQuery("explain " + q).Rows()
 		costStr := rs[0][2].(string)
-		cost, err := strconv.ParseFloat(costStr, 64)
+		tmp := strings.Split(costStr, ":")
+		cost, err := strconv.ParseFloat(tmp[0], 64)
 		if err != nil {
 			panic(err)
 		}
