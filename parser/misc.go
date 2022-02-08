@@ -909,6 +909,8 @@ var hintTokenMap = map[string]int{
 	"LIMIT_TO_COP":            hintLimitToCop,
 	"NO_REORDER":              hintNoReorder,
 	"MUST_REORDER":            hintMustReorder,
+	"DISPLAY_COST":            hintDisplayCost,
+	"TRACE_COST":              hintTraceCost,
 	"IGNORE_PLAN_CACHE":       hintIgnorePlanCache,
 	"HASH_AGG":                hintHashAgg,
 	"IGNORE_INDEX":            hintIgnoreIndex,

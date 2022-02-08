@@ -112,6 +112,8 @@ import (
 	/* Cost Calibration */
 	hintNoReorder   "NO_REORDER"
 	hintMustReorder "MUST_REORDER"
+	hintDisplayCost "DISPLAY_COST"
+	hintTraceCost   "TRACE_COST"
 
 	/* Other keywords */
 	hintOLAP            "OLAP"
@@ -617,6 +619,8 @@ NullaryHintName:
 |	"LIMIT_TO_COP"
 |	"NO_REORDER"
 |	"MUST_REORDER"
+|	"DISPLAY_COST"
+|	"TRACE_COST"
 |	"NO_INDEX_MERGE"
 |	"READ_CONSISTENT_REPLICA"
 |	"IGNORE_PLAN_CACHE"
@@ -664,6 +668,8 @@ Identifier:
 |	"LIMIT_TO_COP"
 |	"NO_REORDER"
 |	"MUST_REORDER"
+|	"DISPLAY_COST"
+|	"TRACE_COST"
 |	"IGNORE_PLAN_CACHE"
 |	"HASH_AGG"
 |	"IGNORE_INDEX"
