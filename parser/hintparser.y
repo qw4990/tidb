@@ -81,6 +81,7 @@ import (
 
 	/* TiDB hint names */
 	hintAggToCop              "AGG_TO_COP"
+	hintAggNotToCop           "AGG_NOT_TO_COP"
 	hintIgnorePlanCache       "IGNORE_PLAN_CACHE"
 	hintHashAgg               "HASH_AGG"
 	hintIgnoreIndex           "IGNORE_INDEX"
@@ -107,6 +108,10 @@ import (
 	hintNthPlan               "NTH_PLAN"
 	hintLimitToCop            "LIMIT_TO_COP"
 	hintForceIndex            "FORCE_INDEX"
+
+	/* Cost Calibration */
+	hintNoReorder   "NO_REORDER"
+	hintMustReorder "MUST_REORDER"
 
 	/* Other keywords */
 	hintOLAP            "OLAP"
@@ -608,7 +613,10 @@ NullaryHintName:
 |	"HASH_AGG"
 |	"STREAM_AGG"
 |	"AGG_TO_COP"
+|	"AGG_NOT_TO_COP"
 |	"LIMIT_TO_COP"
+|	"NO_REORDER"
+|	"MUST_REORDER"
 |	"NO_INDEX_MERGE"
 |	"READ_CONSISTENT_REPLICA"
 |	"IGNORE_PLAN_CACHE"
@@ -652,7 +660,10 @@ Identifier:
 |	"QB_NAME"
 /* TiDB hint names */
 |	"AGG_TO_COP"
+|	"AGG_NOT_TO_COP"
 |	"LIMIT_TO_COP"
+|	"NO_REORDER"
+|	"MUST_REORDER"
 |	"IGNORE_PLAN_CACHE"
 |	"HASH_AGG"
 |	"IGNORE_INDEX"
