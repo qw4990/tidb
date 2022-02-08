@@ -353,6 +353,7 @@ type PhysicalPlan interface {
 
 	// for cost calibration
 	AddCostWeight(costType CostFactorType, weight float64, detail string)
+	PlanCostWeight() (CostWeights, []string)
 
 	// attach2Task makes the current physical plan as the father of task's physicalPlan and updates the cost of
 	// current task. If the child's task is cop task, some operator may close this task and return a new rootTask.
@@ -446,6 +447,43 @@ func (p *basePhysicalPlan) SetCost(cost float64) {
 func (p *basePhysicalPlan) AddCostWeight(costType CostFactorType, weight float64, detail string) {
 	p.weights[costType] += weight
 	p.costDetails = append(p.costDetails, fmt.Sprintf("%v:%v:%v", costType, weight, detail))
+}
+
+func (p *basePhysicalPlan) PlanCostWeight() (ret CostWeights, details []string) {
+	var weights []CostWeights
+	weights = append(weights, p.weights)
+	details = append(details, p.costDetails...)
+
+	switch x := p.self.(type) {
+	case *PhysicalIndexReader:
+		w, ds := x.indexPlan.PlanCostWeight()
+		weights = append(weights, w)
+		details = append(details, ds...)
+	case *PhysicalTableReader:
+		w, ds := x.tablePlan.PlanCostWeight()
+		weights = append(weights, w)
+		details = append(details, ds...)
+	case *PhysicalIndexLookUpReader:
+		w, ds := x.indexPlan.PlanCostWeight()
+		weights = append(weights, w)
+		details = append(details, ds...)
+		w, ds = x.tablePlan.PlanCostWeight()
+		weights = append(weights, w)
+		details = append(details, ds...)
+	default:
+		for _, child := range p.children {
+			w, ds := child.PlanCostWeight()
+			weights = append(weights, w)
+			details = append(details, ds...)
+		}
+	}
+
+	for _, w := range weights {
+		for i, v := range w {
+			ret[i] += v
+		}
+	}
+	return
 }
 
 func (p *basePhysicalPlan) cloneWithSelf(newSelf PhysicalPlan) (*basePhysicalPlan, error) {

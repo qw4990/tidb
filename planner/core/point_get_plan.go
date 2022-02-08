@@ -88,6 +88,8 @@ type nameValuePair struct {
 func (p *PointGetPlan) AddCostWeight(costType CostFactorType, weight float64, detail string) {
 }
 
+func (p *PointGetPlan) PlanCostWeight() (CostWeights, []string) { return CostWeights{}, nil }
+
 // Schema implements the Plan interface.
 func (p *PointGetPlan) Schema() *expression.Schema {
 	return p.schema
@@ -306,6 +308,8 @@ type BatchPointGetPlan struct {
 
 func (p *BatchPointGetPlan) AddCostWeight(costType CostFactorType, weight float64, detail string) {
 }
+
+func (p *BatchPointGetPlan) PlanCostWeight() (CostWeights, []string) { return CostWeights{}, nil }
 
 // Cost implements PhysicalPlan interface
 func (p *BatchPointGetPlan) Cost() float64 {
