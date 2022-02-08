@@ -156,8 +156,8 @@ func (hint *indexHintInfo) indexString() string {
 }
 
 type aggHintInfo struct {
-	preferAggType  uint
-	preferAggToCop bool
+	preferAggType     uint
+	preferAggToCop    bool
 	preferAggNotToCop bool
 }
 
@@ -4489,7 +4489,8 @@ func (b *PlanBuilder) buildExplain(ctx context.Context, explain *ast.ExplainStmt
 	if err != nil {
 		return nil, err
 	}
-	explain.Format = types.ExplainFormatVerbose
+
+	//explain.Format = types.ExplainFormatVerbose
 
 	return b.buildExplainPlan(targetPlan, explain.Format, nil, explain.Analyze, explain.Stmt, nil)
 }

@@ -237,6 +237,40 @@ func TestHintTrueCardinality(t *testing.T) {
 		`└─IndexRangeScan_5 777.00 cop[tikv] table:t, index:b(b) range:[2,+inf], keep order:false, stats:pseudo`))
 }
 
+func TestHintCostCalibration(t *testing.T) {
+	store, clean := testkit.CreateMockStore(t)
+	defer clean()
+	tk := testkit.NewTestKit(t, store)
+	tk.MustExec("use test")
+	tk.MustExec(`drop table if exists t`)
+	tk.MustExec(`create table t (a int, b int, c varchar(128), d int,
+		primary key(a), key b(b), key bc(b, c))`)
+
+	// no_reorder
+	tk.MustQuery(`explain select /*+ use_index(t, primary), no_reorder() */ a from t where a>=1 and a<=10 order by a desc`).Check(
+		testkit.Rows("TableReader_8 9.00 root  data:TableRangeScan_7",
+			"└─TableRangeScan_7 9.00 cop[tikv] table:t range:[1,10], keep order:true, desc, stats:pseudo"))
+
+	// must_reorder
+	tk.MustQuery(`explain select /*+ use_index(t, b), must_reorder() */ b from t where b>=1 and b<=10 order by b`).Check(
+		testkit.Rows("Sort_5 250.00 root  test.t.b",
+			"└─IndexReader_8 250.00 root  index:IndexRangeScan_7",
+			"  └─IndexRangeScan_7 250.00 cop[tikv] table:t, index:b(b) range:[1,10], keep order:false, stats:pseudo"))
+
+	// agg_not_to_cop
+	tk.MustQuery(`explain select /*+ use_index(t, b), stream_agg(), agg_not_to_cop() */ count(1) from t where b>=1 and b<=10`).Check(
+		testkit.Rows("StreamAgg_9 1.00 root  funcs:count(1)->Column#5",
+			"└─IndexReader_12 250.00 root  index:IndexRangeScan_11",
+			"  └─IndexRangeScan_11 250.00 cop[tikv] table:t, index:b(b) range:[1,10], keep order:false, stats:pseudo"))
+
+	// agg_to_cop
+	tk.MustQuery(`explain select /*+ use_index(t, b), stream_agg(), agg_to_cop() */ count(1) from t where b>=1 and b<=10`).Check(
+		testkit.Rows("StreamAgg_12 1.00 root  funcs:count(Column#6)->Column#5",
+			"└─IndexReader_13 1.00 root  index:StreamAgg_8",
+			"  └─StreamAgg_8 1.00 cop[tikv]  funcs:count(1)->Column#6",
+			"    └─IndexRangeScan_11 250.00 cop[tikv] table:t, index:b(b) range:[1,10], keep order:false, stats:pseudo"))
+}
+
 func TestNormalizedDigest(t *testing.T) {
 	store, clean := testkit.CreateMockStore(t)
 	defer clean()
