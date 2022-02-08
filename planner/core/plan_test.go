@@ -217,22 +217,15 @@ func TestHintTrueCardinality(t *testing.T) {
 	tk := testkit.NewTestKit(t, store)
 	tk.MustExec("use test")
 	tk.MustExec(`drop table if exists t`)
-	tk.MustExec(`create table t (a int primary key, b int, key(b))`)
-	tk.MustExec(`insert into t values (1, 1), (2, 2), (3, 3), (4, 4), (5, 5)`)
+	tk.MustExec(`create table t (a int, b int, c varchar(128), d int, primary key(a), key b(b), key bc(b, c))`)
 
 	// true cardinality for TableScan
-	tk.MustQuery(`explain select /*+ use_index(t, primary) */ * from t where a>=2`).Check(testkit.Rows(
-		`TableReader_6 3333.33 root  data:TableRangeScan_5`,
-		`└─TableRangeScan_5 3333.33 cop[tikv] table:t range:[2,+inf], keep order:false, stats:pseudo`))
 	tk.MustQuery(`explain select /*+ true_cardinality(TableRangeScan_5=777), use_index(t, primary) */ * from t where a>=2`).Check(testkit.Rows(
 		`TableReader_6 777.00 root  data:TableRangeScan_5`,
 		`└─TableRangeScan_5 777.00 cop[tikv] table:t range:[2,+inf], keep order:false, stats:pseudo`))
 
 	// true cardinality for IndexScan
-	tk.MustQuery(`explain select /*+ use_index(t, b) */ * from t where b>=2`).Check(testkit.Rows(
-		`IndexReader_6 3333.33 root  index:IndexRangeScan_5`,
-		`└─IndexRangeScan_5 3333.33 cop[tikv] table:t, index:b(b) range:[2,+inf], keep order:false, stats:pseudo`))
-	tk.MustQuery(`explain select /*+ true_cardinality(IndexRangeScan_5=777), use_index(t, b) */ * from t where b>=2`).Check(testkit.Rows(
+	tk.MustQuery(`explain select /*+ true_cardinality(IndexRangeScan_5=777), use_index(t, b) */ b from t where b>=2`).Check(testkit.Rows(
 		`IndexReader_6 777.00 root  index:IndexRangeScan_5`,
 		`└─IndexRangeScan_5 777.00 cop[tikv] table:t, index:b(b) range:[2,+inf], keep order:false, stats:pseudo`))
 }
@@ -243,8 +236,7 @@ func TestHintCostCalibration(t *testing.T) {
 	tk := testkit.NewTestKit(t, store)
 	tk.MustExec("use test")
 	tk.MustExec(`drop table if exists t`)
-	tk.MustExec(`create table t (a int, b int, c varchar(128), d int,
-		primary key(a), key b(b), key bc(b, c))`)
+	tk.MustExec(`create table t (a int, b int, c varchar(128), d int, primary key(a), key b(b), key bc(b, c))`)
 
 	// no_reorder
 	tk.MustQuery(`explain select /*+ use_index(t, primary), no_reorder() */ a from t where a>=1 and a<=10 order by a desc`).Check(
