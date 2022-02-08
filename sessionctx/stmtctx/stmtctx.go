@@ -15,6 +15,7 @@
 package stmtctx
 
 import (
+	"fmt"
 	"math"
 	"sort"
 	"strconv"
@@ -297,6 +298,16 @@ func (sc *StatementContext) ResetInStmtCache(key StmtCacheKey) {
 // ResetStmtCache resets all cached values.
 func (sc *StatementContext) ResetStmtCache() {
 	sc.stmtCache = make(map[StmtCacheKey]interface{})
+}
+
+// FindTrueCard ...
+func (sc *StatementContext) FindTrueCard(operatorID string) (float64, bool) {
+	fmt.Println(">>>>>>>>>>>>>>>>> ", sc.TrueCardinality, operatorID)
+	if sc.TrueCardinality == nil {
+		return 0, false
+	}
+	v, ok := sc.TrueCardinality[operatorID]
+	return v, ok
 }
 
 // SQLDigest gets normalized and digest for provided sql.

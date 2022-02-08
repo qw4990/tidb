@@ -211,6 +211,32 @@ func TestEncodeDecodePlan(t *testing.T) {
 	require.True(t, strings.Contains(planTree, "loops"))
 }
 
+func TestHintTrueCardinality(t *testing.T) {
+	store, clean := testkit.CreateMockStore(t)
+	defer clean()
+	tk := testkit.NewTestKit(t, store)
+	tk.MustExec("use test")
+	tk.MustExec(`drop table if exists t`)
+	tk.MustExec(`create table t (a int primary key, b int, key(b))`)
+	tk.MustExec(`insert into t values (1, 1), (2, 2), (3, 3), (4, 4), (5, 5)`)
+
+	// true cardinality for TableScan
+	tk.MustQuery(`explain select /*+ use_index(t, primary) */ * from t where a>=2`).Check(testkit.Rows(
+		`TableReader_6 3333.33 root  data:TableRangeScan_5`,
+		`└─TableRangeScan_5 3333.33 cop[tikv] table:t range:[2,+inf], keep order:false, stats:pseudo`))
+	tk.MustQuery(`explain select /*+ true_cardinality(TableRangeScan_5=777), use_index(t, primary) */ * from t where a>=2`).Check(testkit.Rows(
+		`TableReader_6 777.00 root  data:TableRangeScan_5`,
+		`└─TableRangeScan_5 777.00 cop[tikv] table:t range:[2,+inf], keep order:false, stats:pseudo`))
+
+	// true cardinality for IndexScan
+	tk.MustQuery(`explain select /*+ use_index(t, b) */ * from t where b>=2`).Check(testkit.Rows(
+		`IndexReader_6 3333.33 root  index:IndexRangeScan_5`,
+		`└─IndexRangeScan_5 3333.33 cop[tikv] table:t, index:b(b) range:[2,+inf], keep order:false, stats:pseudo`))
+	tk.MustQuery(`explain select /*+ true_cardinality(IndexRangeScan_5=777), use_index(t, b) */ * from t where b>=2`).Check(testkit.Rows(
+		`IndexReader_6 777.00 root  index:IndexRangeScan_5`,
+		`└─IndexRangeScan_5 777.00 cop[tikv] table:t, index:b(b) range:[2,+inf], keep order:false, stats:pseudo`))
+}
+
 func TestNormalizedDigest(t *testing.T) {
 	store, clean := testkit.CreateMockStore(t)
 	defer clean()
