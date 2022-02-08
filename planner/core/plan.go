@@ -310,9 +310,29 @@ type LogicalPlan interface {
 	canPushToCop(store kv.StoreType) bool
 }
 
+// CostFactorType ...
+type CostFactorType int
+
+const (
+	CPU CostFactorType = iota
+	CopCPU
+	Net
+	Scan
+	DescScan
+	Mem
+	Seek
+
+	NumFactorType int = 7
+)
+
+type CostWeights [NumFactorType]float64
+
 // PhysicalPlan is a tree of the physical operators.
 type PhysicalPlan interface {
 	Plan
+
+	// for cost calibration
+	AddCostWeight(costType CostFactorType, weight float64)
 
 	// attach2Task makes the current physical plan as the father of task's physicalPlan and updates the cost of
 	// current task. If the child's task is cop task, some operator may close this task and return a new rootTask.
@@ -387,6 +407,7 @@ type basePhysicalPlan struct {
 	self             PhysicalPlan
 	children         []PhysicalPlan
 	cost             float64
+	weights          CostWeights
 }
 
 // Cost implements PhysicalPlan interface.
@@ -397,6 +418,10 @@ func (p *basePhysicalPlan) Cost() float64 {
 // SetCost implements PhysicalPlan interface.
 func (p *basePhysicalPlan) SetCost(cost float64) {
 	p.cost = cost
+}
+
+func (p *basePhysicalPlan) AddCostWeight(costType CostFactorType, weight float64) {
+	p.weights[costType] += weight
 }
 
 func (p *basePhysicalPlan) cloneWithSelf(newSelf PhysicalPlan) (*basePhysicalPlan, error) {

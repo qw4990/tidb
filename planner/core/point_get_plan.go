@@ -85,6 +85,9 @@ type nameValuePair struct {
 	param   *driver.ParamMarkerExpr
 }
 
+func (p *PointGetPlan) AddCostWeight(costType CostFactorType, weight float64) {
+}
+
 // Schema implements the Plan interface.
 func (p *PointGetPlan) Schema() *expression.Schema {
 	return p.schema
@@ -299,6 +302,9 @@ type BatchPointGetPlan struct {
 	SinglePart bool
 	// PartTblID is the table ID for the specific table partition.
 	PartTblID int64
+}
+
+func (p *BatchPointGetPlan) AddCostWeight(costType CostFactorType, weight float64) {
 }
 
 // Cost implements PhysicalPlan interface
