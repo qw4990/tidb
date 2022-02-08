@@ -104,10 +104,12 @@ func ResolveExprAndReplace(origin expression.Expression, replace map[string]*exp
 }
 
 func doPhysicalProjectionElimination(p PhysicalPlan) (PhysicalPlan, float64) {
+	var deltaTotal float64
 	for i, child := range p.Children() {
 		newChild, costDelta := doPhysicalProjectionElimination(child)
 		p.Children()[i] = newChild
 		p.SetCost(p.Cost() - costDelta)
+		deltaTotal += costDelta
 	}
 
 	// eliminate projection in a coprocessor task
@@ -126,8 +128,8 @@ func doPhysicalProjectionElimination(p PhysicalPlan) (PhysicalPlan, float64) {
 	if childProj, ok := child.(*PhysicalProjection); ok {
 		childProj.SetSchema(p.Schema())
 	}
-	costDelta := p.Cost() - child.Cost()
-	return child, costDelta
+	deltaTotal += p.Cost() - child.Cost()
+	return child, deltaTotal
 }
 
 // eliminatePhysicalProjection should be called after physical optimization to
