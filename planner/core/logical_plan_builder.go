@@ -96,7 +96,8 @@ const (
 	// HintForceIndex make optimizer to use this index even if it thinks a table scan is more efficient.
 	HintForceIndex = "force_index"
 	// HintAggToCop is hint enforce pushing aggregation to coprocessor.
-	HintAggToCop = "agg_to_cop"
+	HintAggToCop    = "agg_to_cop"
+	HintAggNotToCop = "agg_not_to_cop"
 	// HintReadFromStorage is hint enforce some tables read from specific type of storage.
 	HintReadFromStorage = "read_from_storage"
 	// HintTiFlash is a label represents the tiflash storage type.
@@ -111,6 +112,10 @@ const (
 	HintIgnorePlanCache = "ignore_plan_cache"
 	// HintLimitToCop is a hint enforce pushing limit or topn to coprocessor.
 	HintLimitToCop = "limit_to_cop"
+
+	// hints for cost calibration
+	HintNoReorder   = "no_reorder"
+	HintMustReorder = "must_reorder"
 )
 
 const (
@@ -1741,6 +1746,9 @@ func (b *PlanBuilder) buildSortWithCheck(ctx context.Context, p LogicalPlan, byI
 		p = np
 		exprs = append(exprs, &util.ByItems{Expr: it, Desc: item.Desc})
 	}
+	if hint := b.TableHints(); hint != nil {
+		sort.sortHints = hint.sortHints
+	}
 	sort.ByItems = exprs
 	sort.SetChildren(p)
 	return sort, nil
@@ -3291,6 +3299,7 @@ func (b *PlanBuilder) pushTableHints(hints []*ast.TableOptimizerHint, currentLev
 		aggHints                                                                                              aggHintInfo
 		timeRangeHint                                                                                         ast.HintTimeRange
 		limitHints                                                                                            limitHintInfo
+		sortHints                                                                                             sortHintInfo
 	)
 	for _, hint := range hints {
 		// Set warning for the hint that requires the table name.
@@ -3324,6 +3333,8 @@ func (b *PlanBuilder) pushTableHints(hints []*ast.TableOptimizerHint, currentLev
 			aggHints.preferAggType |= preferStreamAgg
 		case HintAggToCop:
 			aggHints.preferAggToCop = true
+		case HintAggNotToCop:
+			aggHints.preferAggNotToCop = true
 		case HintUseIndex:
 			dbName := hint.Tables[0].DBName
 			if dbName.L == "" {
@@ -3395,6 +3406,10 @@ func (b *PlanBuilder) pushTableHints(hints []*ast.TableOptimizerHint, currentLev
 			timeRangeHint = hint.HintData.(ast.HintTimeRange)
 		case HintLimitToCop:
 			limitHints.preferLimitToCop = true
+		case HintNoReorder:
+			sortHints.noReorder = true
+		case HintMustReorder:
+			sortHints.mustReorder = true
 		default:
 			// ignore hints that not implemented
 		}
@@ -3412,6 +3427,7 @@ func (b *PlanBuilder) pushTableHints(hints []*ast.TableOptimizerHint, currentLev
 		indexMergeHintList:          indexMergeHintList,
 		timeRangeHint:               timeRangeHint,
 		limitHints:                  limitHints,
+		sortHints:                   sortHints,
 	})
 }
 

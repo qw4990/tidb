@@ -771,7 +771,7 @@ func (ds *DataSource) deriveCommonHandleTablePathStats(path *util.AccessPath, co
 	}
 	// If the `CountAfterAccess` is less than `stats.RowCount`, there must be some inconsistent stats info.
 	// We prefer the `stats.RowCount` because it could use more stats info to calculate the selectivity.
-	if path.CountAfterAccess < ds.stats.RowCount && !isIm {
+	if path.CountAfterAccess < ds.stats.RowCount-1 && !isIm {
 		path.CountAfterAccess = math.Min(ds.stats.RowCount/SelectionFactor, float64(ds.statisticTable.Count))
 	}
 	return nil
@@ -849,7 +849,7 @@ func (ds *DataSource) deriveTablePathStats(path *util.AccessPath, conds []expres
 	path.CountAfterAccess, err = ds.statisticTable.GetRowCountByIntColumnRanges(ds.ctx, pkCol.ID, path.Ranges)
 	// If the `CountAfterAccess` is less than `stats.RowCount`, there must be some inconsistent stats info.
 	// We prefer the `stats.RowCount` because it could use more stats info to calculate the selectivity.
-	if path.CountAfterAccess < ds.stats.RowCount && !isIm {
+	if path.CountAfterAccess < ds.stats.RowCount-1 && !isIm {
 		path.CountAfterAccess = math.Min(ds.stats.RowCount/SelectionFactor, float64(ds.statisticTable.Count))
 	}
 	return err
@@ -935,7 +935,7 @@ func (ds *DataSource) deriveIndexPathStats(path *util.AccessPath, conds []expres
 	path.IndexFilters = append(path.IndexFilters, indexFilters...)
 	// If the `CountAfterAccess` is less than `stats.RowCount`, there must be some inconsistent stats info.
 	// We prefer the `stats.RowCount` because it could use more stats info to calculate the selectivity.
-	if path.CountAfterAccess < ds.stats.RowCount && !isIm {
+	if path.CountAfterAccess < ds.stats.RowCount-1 && !isIm {
 		path.CountAfterAccess = math.Min(ds.stats.RowCount/SelectionFactor, float64(ds.statisticTable.Count))
 	}
 	if path.IndexFilters != nil {
@@ -1000,7 +1000,8 @@ type LogicalPartitionUnionAll struct {
 type LogicalSort struct {
 	baseLogicalPlan
 
-	ByItems []*util.ByItems
+	ByItems   []*util.ByItems
+	sortHints sortHintInfo
 }
 
 // ExtractCorrelatedCols implements LogicalPlan interface.

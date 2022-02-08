@@ -2416,6 +2416,9 @@ func (la *LogicalAggregation) getEnforcedStreamAggs(prop *property.PhysicalPrope
 	} else if !la.aggHints.preferAggToCop {
 		taskTypes = append(taskTypes, property.RootTaskType)
 	}
+	if la.aggHints.preferAggNotToCop {
+		taskTypes = []property.TaskType{property.RootTaskType}
+	}
 	for _, taskTp := range taskTypes {
 		copiedChildProperty := new(property.PhysicalProperty)
 		*copiedChildProperty = *childProp // It's ok to not deep copy the "cols" field.
@@ -2487,7 +2490,7 @@ func (la *LogicalAggregation) getStreamAggs(prop *property.PhysicalProperty) []P
 			} else if !la.distinctArgsMeetsProperty() {
 				continue
 			}
-		} else if !la.aggHints.preferAggToCop {
+		} else if !la.aggHints.preferAggToCop || la.aggHints.preferAggNotToCop {
 			taskTypes = append(taskTypes, property.RootTaskType)
 		}
 		if !la.canPushToCop(kv.TiKV) {
@@ -2822,10 +2825,14 @@ func (ls *LogicalSort) exhaustPhysicalPlans(prop *property.PhysicalProperty) ([]
 	if prop.TaskTp == property.RootTaskType {
 		if MatchItems(prop, ls.ByItems) {
 			ret := make([]PhysicalPlan, 0, 2)
-			ret = append(ret, ls.getPhysicalSort(prop))
-			ns := ls.getNominalSort(prop)
-			if ns != nil {
-				ret = append(ret, ns)
+			if !ls.sortHints.noReorder {
+				ret = append(ret, ls.getPhysicalSort(prop))
+			}
+			if !ls.sortHints.mustReorder {
+				ns := ls.getNominalSort(prop)
+				if ns != nil {
+					ret = append(ret, ns)
+				}
 			}
 			return ret, true, nil
 		}
