@@ -229,6 +229,12 @@ func TestHintTrueCardinality(t *testing.T) {
 		`IndexReader_6 777.00 root  index:IndexRangeScan_5`,
 		`└─IndexRangeScan_5 777.00 cop[tikv] table:t, index:b(b) range:[2,+inf], keep order:false, stats:pseudo`))
 
+	// true cardinality for IndexLookup
+	tk.MustQuery(`explain select /*+ true_cardinality(IndexRangeScan_5=7), use_index(t, b) */ * from t where b>=1 and b<=20`).Check(testkit.Rows(
+		`IndexLookUp_7 7.00 root  `,
+		`├─IndexRangeScan_5(Build) 7.00 cop[tikv] table:t, index:b(b) range:[1,20], keep order:false, stats:pseudo`,
+		`└─TableRowIDScan_6(Probe) 7.00 cop[tikv] table:t keep order:false, stats:pseudo`))
+
 	// true cardinality for root agg
 	tk.MustQuery(`explain select /*+ true_cardinality(IndexRangeScan_11=7, StreamAgg_9=3), use_index(t, b), stream_agg(), agg_not_to_cop() */ count(1) from t where b>=1 and b<=10;`).Check(
 		testkit.Rows("StreamAgg_9 3.00 root  funcs:count(1)->Column#5",
