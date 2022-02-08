@@ -228,6 +228,25 @@ func TestHintTrueCardinality(t *testing.T) {
 	tk.MustQuery(`explain select /*+ true_cardinality(IndexRangeScan_5=777), use_index(t, b) */ b from t where b>=2`).Check(testkit.Rows(
 		`IndexReader_6 777.00 root  index:IndexRangeScan_5`,
 		`└─IndexRangeScan_5 777.00 cop[tikv] table:t, index:b(b) range:[2,+inf], keep order:false, stats:pseudo`))
+
+	// true cardinality for root agg
+	tk.MustQuery(`explain select /*+ true_cardinality(IndexRangeScan_11=7, StreamAgg_9=3), use_index(t, b), stream_agg(), agg_not_to_cop() */ count(1) from t where b>=1 and b<=10;`).Check(
+		testkit.Rows("StreamAgg_9 3.00 root  funcs:count(1)->Column#5",
+			"└─IndexReader_12 7.00 root  index:IndexRangeScan_11",
+			"  └─IndexRangeScan_11 7.00 cop[tikv] table:t, index:b(b) range:[1,10], keep order:false, stats:pseudo"))
+
+	// true cardinality for cop agg
+	tk.MustQuery(`explain select /*+ true_cardinality(IndexRangeScan_14=7, StreamAgg_9=3), use_index(t, b), stream_agg(), agg_to_cop() */ count(1) from t where b>=1 and b<=10`).Check(
+		testkit.Rows("StreamAgg_15 3.00 root  funcs:count(Column#7)->Column#5",
+			"└─IndexReader_16 3.00 root  index:StreamAgg_9",
+			"  └─StreamAgg_9 3.00 cop[tikv]  funcs:count(1)->Column#7",
+			"    └─IndexRangeScan_14 7.00 cop[tikv] table:t, index:b(b) range:[1,10], keep order:false, stats:pseudo"))
+
+	// true cardinality for sort
+	tk.MustQuery(`explain select /*+ true_cardinality(IndexRangeScan_7=777, Sort_5=777), use_index(t, b), must_reorder() */ b from t where b>=1 and b<=10 order by b`).Check(
+		testkit.Rows("Sort_5 777.00 root  test.t.b",
+			"└─IndexReader_8 777.00 root  index:IndexRangeScan_7",
+			"  └─IndexRangeScan_7 777.00 cop[tikv] table:t, index:b(b) range:[1,10], keep order:false, stats:pseudo"))
 }
 
 func TestHintCostCalibration(t *testing.T) {

@@ -326,6 +326,14 @@ func (op *physicalOptimizeOp) appendCandidate(lp LogicalPlan, pp PhysicalPlan, p
 	op.tracer.State[name] = pps
 }
 
+func (p *baseLogicalPlan) trueCardinality4PhysicalPlan(plans []PhysicalPlan) {
+	for _, plan := range plans {
+		if trueCard, ok := p.ctx.GetSessionVars().StmtCtx.FindTrueCard(plan.ExplainID().String()); ok {
+			plan.Stats().ScaleSelfTo(trueCard)
+		}
+	}
+}
+
 // findBestTask implements LogicalPlan interface.
 func (p *baseLogicalPlan) findBestTask(prop *property.PhysicalProperty, planCounter *PlanCounterTp, opt *physicalOptimizeOp) (bestTask task, cntPlan int64, err error) {
 	// If p is an inner plan in an IndexJoin, the IndexJoin will generate an inner plan by itself,
@@ -362,6 +370,12 @@ func (p *baseLogicalPlan) findBestTask(prop *property.PhysicalProperty, planCoun
 	if err != nil {
 		return nil, 0, err
 	}
+	p.trueCardinality4PhysicalPlan(plansFitsProp)
+	for _, plan := range plansFitsProp {
+		if trueCard, ok := p.ctx.GetSessionVars().StmtCtx.FindTrueCard(plan.ExplainID().String()); ok {
+			plan.Stats().ScaleSelfTo(trueCard)
+		}
+	}
 	if !hintWorksWithProp && !newProp.IsEmpty() {
 		// If there is a hint in the plan and the hint cannot satisfy the property,
 		// we enforce this property and try to generate the PhysicalPlan again to
@@ -381,6 +395,7 @@ func (p *baseLogicalPlan) findBestTask(prop *property.PhysicalProperty, planCoun
 		if err != nil {
 			return nil, 0, err
 		}
+		p.trueCardinality4PhysicalPlan(plansNeedEnforce)
 		if hintCanWork && !hintWorksWithProp {
 			// If the hint can work with the empty property, but cannot work with
 			// the required property, we give up `plansFitProp` to make sure the hint
@@ -2148,7 +2163,7 @@ func (ds *DataSource) getOriginalPhysicalTableScan(prop *property.PhysicalProper
 	ts.stats = ds.tableStats.ScaleByExpectCnt(rowCount)
 
 	if trueCard, ok := ds.ctx.GetSessionVars().StmtCtx.FindTrueCard(ts.ExplainID().String()); ok {
-		ts.stats = ds.tableStats.ScaleTo(trueCard)
+		ts.stats.ScaleSelfTo(trueCard)
 		rowCount = trueCard
 	}
 
@@ -2216,7 +2231,7 @@ func (ds *DataSource) getOriginalPhysicalIndexScan(prop *property.PhysicalProper
 	is.stats = ds.tableStats.ScaleByExpectCnt(rowCount)
 
 	if trueCard, ok := ds.ctx.GetSessionVars().StmtCtx.FindTrueCard(is.ExplainID().String()); ok {
-		is.stats = ds.tableStats.ScaleTo(trueCard)
+		is.stats.ScaleSelfTo(trueCard)
 		rowCount = trueCard
 	}
 
