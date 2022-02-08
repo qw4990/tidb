@@ -255,6 +255,31 @@ func TestHintTrueCardinality(t *testing.T) {
 			"  └─IndexRangeScan_7 777.00 cop[tikv] table:t, index:b(b) range:[1,10], keep order:false, stats:pseudo"))
 }
 
+func TestCostTrace(t *testing.T) {
+	store, clean := testkit.CreateMockStore(t)
+	defer clean()
+	tk := testkit.NewTestKit(t, store)
+	tk.MustExec("use test")
+	tk.MustExec(`drop table if exists t`)
+	tk.MustExec(`create table t (a int, b int, c varchar(128), d int, primary key(a), key b(b), key bc(b, c))`)
+
+	// TableScan
+
+	// IndexScan
+
+	// DescTableScan
+
+	// DescIndexScan
+
+	// IndexLookup
+
+	// Sort
+
+	// CopAgg
+
+	// RootAgg
+}
+
 func TestHintCostCalibration(t *testing.T) {
 	store, clean := testkit.CreateMockStore(t)
 	defer clean()

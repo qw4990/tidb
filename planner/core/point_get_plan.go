@@ -85,7 +85,7 @@ type nameValuePair struct {
 	param   *driver.ParamMarkerExpr
 }
 
-func (p *PointGetPlan) AddCostWeight(costType CostFactorType, weight float64) {
+func (p *PointGetPlan) AddCostWeight(costType CostFactorType, weight float64, detail string) {
 }
 
 // Schema implements the Plan interface.
@@ -304,7 +304,7 @@ type BatchPointGetPlan struct {
 	PartTblID int64
 }
 
-func (p *BatchPointGetPlan) AddCostWeight(costType CostFactorType, weight float64) {
+func (p *BatchPointGetPlan) AddCostWeight(costType CostFactorType, weight float64, detail string) {
 }
 
 // Cost implements PhysicalPlan interface

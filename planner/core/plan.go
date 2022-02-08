@@ -325,6 +325,26 @@ const (
 	NumFactorType int = 7
 )
 
+func (ct CostFactorType) String() string {
+	switch ct {
+	case CPU:
+		return "CPU"
+	case CopCPU:
+		return "CopCPU"
+	case Net:
+		return "Net"
+	case Scan:
+		return "Scan"
+	case DescScan:
+		return "DescScan"
+	case Mem:
+		return "Mem"
+	case Seek:
+		return "Seek"
+	}
+	return "Unknown"
+}
+
 type CostWeights [NumFactorType]float64
 
 // PhysicalPlan is a tree of the physical operators.
@@ -332,7 +352,7 @@ type PhysicalPlan interface {
 	Plan
 
 	// for cost calibration
-	AddCostWeight(costType CostFactorType, weight float64)
+	AddCostWeight(costType CostFactorType, weight float64, detail string)
 
 	// attach2Task makes the current physical plan as the father of task's physicalPlan and updates the cost of
 	// current task. If the child's task is cop task, some operator may close this task and return a new rootTask.
@@ -407,7 +427,10 @@ type basePhysicalPlan struct {
 	self             PhysicalPlan
 	children         []PhysicalPlan
 	cost             float64
-	weights          CostWeights
+
+	// for cost calibration
+	weights     CostWeights
+	costDetails []string
 }
 
 // Cost implements PhysicalPlan interface.
@@ -420,8 +443,9 @@ func (p *basePhysicalPlan) SetCost(cost float64) {
 	p.cost = cost
 }
 
-func (p *basePhysicalPlan) AddCostWeight(costType CostFactorType, weight float64) {
+func (p *basePhysicalPlan) AddCostWeight(costType CostFactorType, weight float64, detail string) {
 	p.weights[costType] += weight
+	p.costDetails = append(p.costDetails, fmt.Sprintf("%v:%v:%v", costType, weight, detail))
 }
 
 func (p *basePhysicalPlan) cloneWithSelf(newSelf PhysicalPlan) (*basePhysicalPlan, error) {

@@ -2177,6 +2177,7 @@ func (ds *DataSource) getOriginalPhysicalTableScan(prop *property.PhysicalProper
 	}
 	sessVars := ds.ctx.GetSessionVars()
 	cost := rowCount * rowSize * sessVars.GetScanFactor(ds.tableInfo)
+	ts.AddCostWeight(Scan, rowCount*rowSize, fmt.Sprintf("tblScan-cnt(%v)*rowSize(%v)", rowCount, rowSize))
 	if ts.IsGlobalRead {
 		cost += rowCount * sessVars.GetNetworkFactor(ds.tableInfo) * rowSize
 	}
@@ -2184,14 +2185,18 @@ func (ds *DataSource) getOriginalPhysicalTableScan(prop *property.PhysicalProper
 		ts.Desc = prop.SortItems[0].Desc
 		if prop.SortItems[0].Desc && prop.ExpectedCnt >= smallScanThreshold {
 			cost = rowCount * rowSize * sessVars.GetDescScanFactor(ds.tableInfo)
+			ts.AddCostWeight(DescScan, rowCount*rowSize, fmt.Sprintf("tblScan-cnt(%v)*rowSize(%v)", rowCount, rowSize))
+			ts.AddCostWeight(Scan, - rowCount*rowSize, fmt.Sprintf("tblScan-cnt(%v)*rowSize(%v)", rowCount, rowSize))
 		}
 		ts.KeepOrder = true
 	}
 	switch ts.StoreType {
 	case kv.TiKV:
 		cost += float64(len(ts.Ranges)) * sessVars.GetSeekFactor(ds.tableInfo)
+		ts.AddCostWeight(Seek, float64(len(ts.Ranges)), fmt.Sprintf("ranges(%v)", len(ts.Ranges)))
 	case kv.TiFlash:
 		cost += float64(len(ts.Ranges)) * float64(len(ts.Columns)) * sessVars.GetSeekFactor(ds.tableInfo)
+		ts.AddCostWeight(Seek, float64(len(ts.Ranges))*float64(len(ts.Columns)), fmt.Sprintf("ranges(%v)*cols(%v)", len(ts.Ranges), len(ts.Columns)))
 	}
 	return ts, cost, rowCount
 }
@@ -2238,14 +2243,18 @@ func (ds *DataSource) getOriginalPhysicalIndexScan(prop *property.PhysicalProper
 	rowSize := is.indexScanRowSize(idx, ds, true)
 	sessVars := ds.ctx.GetSessionVars()
 	cost := rowCount * rowSize * sessVars.GetScanFactor(ds.tableInfo)
+	is.AddCostWeight(Scan, rowCount*rowSize, fmt.Sprintf("idxScan-cnt(%v)*rowSize(%v)", rowCount, rowSize))
 	if isMatchProp {
 		is.Desc = prop.SortItems[0].Desc
 		if prop.SortItems[0].Desc && prop.ExpectedCnt >= smallScanThreshold {
 			cost = rowCount * rowSize * sessVars.GetDescScanFactor(ds.tableInfo)
+			is.AddCostWeight(DescScan, rowCount*rowSize, fmt.Sprintf("idxScan-cnt(%v)*rowSize(%v)", rowCount, rowSize))
+			is.AddCostWeight(Scan, -rowCount*rowSize, fmt.Sprintf("idxScan-cnt(%v)*rowSize(%v)", rowCount, rowSize))
 		}
 		is.KeepOrder = true
 	}
 	cost += float64(len(is.Ranges)) * sessVars.GetSeekFactor(ds.tableInfo)
+	is.AddCostWeight(Seek, float64(len(is.Ranges)), fmt.Sprintf("ranges(%v)", len(is.Ranges)))
 	is.cost = cost
 	return is, cost, rowCount
 }

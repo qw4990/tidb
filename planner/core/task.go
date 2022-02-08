@@ -15,6 +15,7 @@
 package core
 
 import (
+	"fmt"
 	"math"
 
 	"github.com/cznic/mathutil"
@@ -171,7 +172,10 @@ func (t *copTask) finishIndexPlan() {
 		tableInfo = ts.Table
 	}
 	// Network cost of transferring rows of index scan to TiDB.
-	t.cst += cnt * sessVars.GetNetworkFactor(tableInfo) * t.tblColHists.GetAvgRowSize(t.indexPlan.SCtx(), t.indexPlan.Schema().Columns, true, false)
+	rowSize := t.tblColHists.GetAvgRowSize(t.indexPlan.SCtx(), t.indexPlan.Schema().Columns, true, false)
+	netWeight := cnt * rowSize
+	t.cst += sessVars.GetNetworkFactor(tableInfo) * netWeight
+	t.indexPlan.AddCostWeight(Net, netWeight, fmt.Sprintf("idxNet-cnt(%v)*rowSize(%v)", cnt, rowSize))
 	if t.tablePlan == nil {
 		return
 	}
@@ -180,8 +184,9 @@ func (t *copTask) finishIndexPlan() {
 	var p PhysicalPlan
 	for p = t.indexPlan; len(p.Children()) > 0; p = p.Children()[0] {
 	}
-	rowSize := t.tblColHists.GetIndexAvgRowSize(t.indexPlan.SCtx(), t.tblCols, p.(*PhysicalIndexScan).Index.Unique)
+	rowSize = t.tblColHists.GetIndexAvgRowSize(t.indexPlan.SCtx(), t.tblCols, p.(*PhysicalIndexScan).Index.Unique)
 	t.cst += cnt * rowSize * sessVars.GetScanFactor(tableInfo)
+	t.tablePlan.AddCostWeight(Scan, cnt*rowSize, fmt.Sprintf("tblScan-cnt(%v)*rowSize(%v)", cnt, rowSize))
 }
 
 func (t *copTask) getStoreType() kv.StoreType {
@@ -920,6 +925,7 @@ func buildIndexLookUpTask(ctx sessionctx.Context, t *copTask) *rootTask {
 	// Since we don't know the number of copTasks built, ignore these network cost now.
 	indexRows := t.indexPlan.statsInfo().RowCount
 	idxCst := indexRows * sessVars.CPUFactor
+	p.AddCostWeight(CPU, indexRows, fmt.Sprintf("lkup-rows(%v)", indexRows))
 	// if the expectCnt is below the paging threshold, using paging API, recalculate idxCst.
 	// paging API reduces the count of index and table rows, however introduces more seek cost.
 	if ctx.GetSessionVars().EnablePaging && t.expectCnt > 0 && t.expectCnt <= paging.Threshold {
@@ -939,7 +945,9 @@ func buildIndexLookUpTask(ctx sessionctx.Context, t *copTask) *rootTask {
 	indexLookupSize := float64(sessVars.IndexLookupSize)
 	batchSize := math.Min(indexLookupSize, indexRows)
 	if batchSize > 2 {
-		sortCPUCost := (indexRows * math.Log2(batchSize) * sessVars.CPUFactor) / numTblWorkers
+		weight := indexRows * math.Log2(batchSize)
+		p.AddCostWeight(CPU, weight, fmt.Sprintf("ikup-idxBatch-rows(%v)*bsize(%v)", indexRows, math.Log2(batchSize)))
+		sortCPUCost := (weight * sessVars.CPUFactor) / numTblWorkers
 		newTask.cst += sortCPUCost
 	}
 	// Also, we need to sort the retrieved rows if index lookup reader is expected to return
@@ -949,7 +957,9 @@ func buildIndexLookUpTask(ctx sessionctx.Context, t *copTask) *rootTask {
 	selectivity := tableRows / indexRows
 	batchSize = math.Min(indexLookupSize*selectivity, tableRows)
 	if t.keepOrder && batchSize > 2 {
-		sortCPUCost := (tableRows * math.Log2(batchSize) * sessVars.CPUFactor) / numTblWorkers
+		weight := tableRows * math.Log2(batchSize)
+		p.AddCostWeight(CPU, weight, fmt.Sprintf("ikup-tblBatch-rows(%v)*bsize(%v)", tableRows, math.Log2(batchSize)))
+		sortCPUCost := (weight * sessVars.CPUFactor) / numTblWorkers
 		newTask.cst += sortCPUCost
 	}
 	p.cost = newTask.cst
@@ -1020,7 +1030,10 @@ func (t *copTask) convertToRootTaskImpl(ctx sessionctx.Context) *rootTask {
 	t.finishIndexPlan()
 	// Network cost of transferring rows of table scan to TiDB.
 	if t.tablePlan != nil {
-		t.cst += t.count() * sessVars.GetNetworkFactor(nil) * t.tblColHists.GetAvgRowSize(ctx, t.tablePlan.Schema().Columns, false, false)
+		rowSize := t.tblColHists.GetAvgRowSize(ctx, t.tablePlan.Schema().Columns, false, false)
+		netWeight := t.count() * rowSize
+		t.cst += sessVars.GetNetworkFactor(nil) * netWeight
+		t.tablePlan.AddCostWeight(Net, netWeight, fmt.Sprintf("tblNet-cnt(%v)*rowSize(%v)", t.count(), rowSize))
 
 		tp := t.tablePlan
 		for len(tp.Children()) > 0 {
