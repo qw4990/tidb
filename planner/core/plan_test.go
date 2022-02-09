@@ -313,9 +313,10 @@ func TestCostTrace(t *testing.T) {
 	checkCost(`select /*+ display_cost(), trace_cost(), use_index(t, b) */ b from t where b>=20`)
 
 	// DescTableScan
+	checkCost("select /*+ display_cost(), trace_cost(), use_index(t, primary), no_reorder() */ * from t where a>=20 order by a desc")
 
 	// DescIndexScan
-	checkCost(`select /*+ display_cost(), trace_cost(), use_index(t, b), must_reorder() */ b from t where b>=1 and b<=10 order by b`)
+	checkCost(`select /*+ display_cost(), trace_cost(), use_index(t, b), no_reorder() */ b from t where b>=1 and b<=10 order by b desc`)
 
 	// IndexLookup
 	checkCost(`select /*+ display_cost(), trace_cost(), use_index(t, b) */ * from t where b>=1 and b<=20`)
@@ -324,8 +325,10 @@ func TestCostTrace(t *testing.T) {
 	checkCost(`select /*+ display_cost(), trace_cost(), use_index(t, b), must_reorder() */ b from t where b>=1 and b<=10 order by b`)
 
 	// CopAgg
+	checkCost(`select /*+ display_cost(), trace_cost(), stream_agg(), agg_to_cop() */ count(1) from t where b>=1 and b<=10`)
 
 	// RootAgg
+	checkCost(`select /*+ display_cost(), trace_cost(), stream_agg(), agg_not_to_cop() */ count(1) from t where b>=1 and b<=10`)
 }
 
 func TestHintCostCalibration(t *testing.T) {

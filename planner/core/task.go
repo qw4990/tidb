@@ -2014,6 +2014,7 @@ func computePartialCursorOffset(name string) int {
 func (p *PhysicalStreamAgg) attach2Task(tasks ...task) task {
 	t := tasks[0].copy()
 	inputRows := t.count()
+	finalStreamAgg := p
 	if cop, ok := t.(*copTask); ok {
 		// We should not push agg down across double read, since the data of second read is ordered by handle instead of index.
 		// The `extraHandleCol` is added if the double read needs to keep order. So we just use it to decided
@@ -2025,6 +2026,7 @@ func (p *PhysicalStreamAgg) attach2Task(tasks ...task) task {
 		} else {
 			copTaskType := cop.getStoreType()
 			partialAgg, finalAgg := p.newPartialAggregate(copTaskType, false)
+			finalStreamAgg = finalAgg.(*PhysicalStreamAgg)
 			if partialAgg != nil {
 				if cop.tablePlan != nil {
 					cop.finishIndexPlan()
@@ -2041,19 +2043,19 @@ func (p *PhysicalStreamAgg) attach2Task(tasks ...task) task {
 					partialAgg.SetChildren(cop.indexPlan)
 					cop.indexPlan = partialAgg
 				}
-				cop.addCost(p.GetCost(inputRows, false))
+				cop.addCost(partialAgg.(*PhysicalStreamAgg).GetCost(inputRows, false))
 				partialAgg.SetCost(cop.cost())
 			}
 			t = cop.convertToRootTask(p.ctx)
 			inputRows = t.count()
 			attachPlan2Task(finalAgg, t)
-			finalAgg.SetCost(cop.cost())
+			finalAgg.SetCost(t.cost())
 		}
 	} else {
 		attachPlan2Task(p, t)
 	}
-	t.addCost(p.GetCost(inputRows, true))
-	p.SetCost(t.cost())
+	t.addCost(finalStreamAgg.GetCost(inputRows, true))
+	finalStreamAgg.SetCost(t.cost())
 	return t
 }
 
@@ -2064,11 +2066,14 @@ func (p *PhysicalStreamAgg) GetCost(inputRows float64, isRoot bool) float64 {
 	sessVars := p.ctx.GetSessionVars()
 	if isRoot {
 		cpuCost = inputRows * sessVars.CPUFactor * aggFuncFactor
+		p.AddCostWeight(CPU, inputRows*aggFuncFactor, fmt.Sprintf("agg-rows(%v)*agg(%v)", inputRows, aggFuncFactor))
 	} else {
 		cpuCost = inputRows * sessVars.CopCPUFactor * aggFuncFactor
+		p.AddCostWeight(CopCPU, inputRows*aggFuncFactor, fmt.Sprintf("agg-rows(%v)*agg(%v)", inputRows, aggFuncFactor))
 	}
 	rowsPerGroup := inputRows / p.statsInfo().RowCount
 	memoryCost := rowsPerGroup * distinctFactor * sessVars.MemoryFactor * float64(p.numDistinctFunc())
+	p.AddCostWeight(Mem, rowsPerGroup*distinctFactor*float64(p.numDistinctFunc()), fmt.Sprintf("agg-mem"))
 	return cpuCost + memoryCost
 }
 
