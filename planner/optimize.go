@@ -596,7 +596,9 @@ func handleStmtHints(hints []*ast.TableOptimizerHint) (stmtHints stmtctx.StmtHin
 			setVars[setVarHint.VarName] = setVarHint.Value
 			setVarsOffs = append(setVarsOffs, i)
 		case "true_cardinality":
-			stmtHints.TrueCardinality = make(map[string]float64)
+			if stmtHints.TrueCardinality == nil {
+				stmtHints.TrueCardinality = make(map[string]float64)
+			}
 			for _, tc := range hint.TrueCards {
 				card, err := strconv.ParseFloat(tc.Value, 64)
 				if err != nil {
