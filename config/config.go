@@ -758,6 +758,7 @@ var (
 // NewConfig creates a new config instance with default value.
 func NewConfig() *Config {
 	conf := defaultConf
+	conf.TiKVClient.CoprCache.CapacityMB = 0.0
 	return &conf
 }
 
@@ -1054,6 +1055,7 @@ func initByLDFlags(edition, checkBeforeDropLDFlag string) {
 		defaultConf.EnableTelemetry = false
 	}
 	conf := defaultConf
+	conf.TiKVClient.CoprCache.CapacityMB = 0.0
 	StoreGlobalConfig(&conf)
 	if checkBeforeDropLDFlag == "1" {
 		CheckTableBeforeDrop = true
