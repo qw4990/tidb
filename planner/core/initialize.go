@@ -499,7 +499,7 @@ func (p PointGetPlan) Init(ctx sessionctx.Context, stats *property.StatsInfo, of
 
 // Init only assigns type and context.
 func (p PhysicalExchangeSender) Init(ctx sessionctx.Context, stats *property.StatsInfo) *PhysicalExchangeSender {
-	p.basePlan = newBasePlan(ctx, plancodec.TypeExchangeSender, 0)
+	p.basePhysicalPlan = newBasePhysicalPlan(ctx, plancodec.TypeExchangeSender, &p, 0)
 	p.stats = stats
 	p.SetTrueCardinality()
 	return &p
@@ -507,7 +507,7 @@ func (p PhysicalExchangeSender) Init(ctx sessionctx.Context, stats *property.Sta
 
 // Init only assigns type and context.
 func (p PhysicalExchangeReceiver) Init(ctx sessionctx.Context, stats *property.StatsInfo) *PhysicalExchangeReceiver {
-	p.basePlan = newBasePlan(ctx, plancodec.TypeExchangeReceiver, 0)
+	p.basePhysicalPlan = newBasePhysicalPlan(ctx, plancodec.TypeExchangeReceiver, &p, 0)
 	p.stats = stats
 	return &p
 }
