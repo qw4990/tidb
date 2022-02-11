@@ -501,6 +501,7 @@ func (p PointGetPlan) Init(ctx sessionctx.Context, stats *property.StatsInfo, of
 func (p PhysicalExchangeSender) Init(ctx sessionctx.Context, stats *property.StatsInfo) *PhysicalExchangeSender {
 	p.basePlan = newBasePlan(ctx, plancodec.TypeExchangeSender, 0)
 	p.stats = stats
+	p.SetTrueCardinality()
 	return &p
 }
 

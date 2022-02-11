@@ -2393,6 +2393,7 @@ func (t *mppTask) convertToRootTaskImpl(ctx sessionctx.Context) *rootTask {
 		StoreType: kv.TiFlash,
 	}.Init(ctx, t.p.SelectBlockOffset())
 	p.stats = t.p.statsInfo()
+	p.SetTrueCardinality()
 	collectPartitionInfosFromMPPPlan(p, t.p)
 
 	cst := t.cst + t.count()*ctx.GetSessionVars().GetNetworkFactor(nil)
