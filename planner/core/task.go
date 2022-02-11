@@ -1924,6 +1924,14 @@ func (p *basePhysicalAgg) newPartialAggregate(copTaskType kv.StoreType, isMPPTas
 			MppRunMode:   p.MppRunMode,
 		}.initForStream(p.ctx, p.stats, p.blockOffset, prop)
 		finalAgg.schema = finalPref.Schema
+
+		if trueCard, ok := p.ctx.GetSessionVars().StmtCtx.FindTrueCard(finalAgg.ExplainID().String()); ok {
+			finalAgg.stats.ScaleSelfTo(trueCard)
+		}
+		if trueCard, ok := p.ctx.GetSessionVars().StmtCtx.FindTrueCard(partialAgg.ExplainID().String()); ok {
+			partialAgg.Stats().ScaleSelfTo(trueCard)
+		}
+
 		return partialAgg, finalAgg
 	}
 
