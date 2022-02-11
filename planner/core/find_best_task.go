@@ -2162,15 +2162,23 @@ func (ds *DataSource) getOriginalPhysicalTableScan(prop *property.PhysicalProper
 		rowCount = trueCard
 	}
 
+	sessVars := ds.ctx.GetSessionVars()
 	var rowSize float64
 	if ts.StoreType == kv.TiKV {
 		rowSize = ds.TblColHists.GetTableAvgRowSize(ds.ctx, ds.TblCols, ts.StoreType, true)
+		if sessVars.CostVariant == 1 {
+			// if only access PK columns, only accumulate PK columns when calculating row size
+			accessCols := ds.Schema().Columns
+			pkCol := ds.tableInfo.GetPkColInfo()
+			if pkCol != nil && len(accessCols) == 1 && accessCols[0].ID == pkCol.ID {
+				rowSize = ds.TblColHists.GetTableAvgRowSize(ds.ctx, ds.Schema().Columns, ts.StoreType, true)
+			}
+		}
 	} else {
 		// If `ds.handleCol` is nil, then the schema of tableScan doesn't have handle column.
 		// This logic can be ensured in column pruning.
 		rowSize = ds.TblColHists.GetTableAvgRowSize(ds.ctx, ts.Schema().Columns, ts.StoreType, ds.handleCols != nil)
 	}
-	sessVars := ds.ctx.GetSessionVars()
 
 	if sessVars.CostVariant == 1 {
 		rowSize = math.Log2(rowSize)
