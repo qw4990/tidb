@@ -1882,6 +1882,19 @@ func (p *basePhysicalAgg) convertAvgForMPP() *PhysicalProjection {
 }
 
 func (p *basePhysicalAgg) newPartialAggregate(copTaskType kv.StoreType, isMPPTask bool) (partial, final PhysicalPlan) {
+	defer func() {
+		if partial != nil {
+			if trueCard, ok := partial.SCtx().GetSessionVars().StmtCtx.FindTrueCard(partial.ExplainID().String()); ok {
+				partial.Stats().ScaleSelfTo(trueCard)
+			}
+		}
+		if final != nil {
+			if trueCard, ok := final.SCtx().GetSessionVars().StmtCtx.FindTrueCard(final.ExplainID().String()); ok {
+				final.Stats().ScaleSelfTo(trueCard)
+			}
+		}
+	}()
+
 	// Check if this aggregation can push down.
 	if !CheckAggCanPushCop(p.ctx, p.AggFuncs, p.GroupByItems, copTaskType) {
 		return nil, p.self
@@ -1924,14 +1937,6 @@ func (p *basePhysicalAgg) newPartialAggregate(copTaskType kv.StoreType, isMPPTas
 			MppRunMode:   p.MppRunMode,
 		}.initForStream(p.ctx, p.stats, p.blockOffset, prop)
 		finalAgg.schema = finalPref.Schema
-
-		if trueCard, ok := p.ctx.GetSessionVars().StmtCtx.FindTrueCard(finalAgg.ExplainID().String()); ok {
-			finalAgg.stats.ScaleSelfTo(trueCard)
-		}
-		if trueCard, ok := p.ctx.GetSessionVars().StmtCtx.FindTrueCard(partialAgg.ExplainID().String()); ok {
-			partialAgg.Stats().ScaleSelfTo(trueCard)
-		}
-
 		return partialAgg, finalAgg
 	}
 
