@@ -609,6 +609,9 @@ const (
 	// TiDBTmpTableMaxSize indicates the max memory size of temporary tables.
 	TiDBTmpTableMaxSize = "tidb_tmp_table_max_size"
 
+	// TiDBCostVariant ...
+	TiDBCostVariant = "tidb_cost_variant"
+
 	// TiDBTableCacheLease indicates the read lock lease of a cached table.
 	TiDBTableCacheLease = "tidb_table_cache_lease"
 

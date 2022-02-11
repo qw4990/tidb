@@ -2171,6 +2171,11 @@ func (ds *DataSource) getOriginalPhysicalTableScan(prop *property.PhysicalProper
 		rowSize = ds.TblColHists.GetTableAvgRowSize(ds.ctx, ts.Schema().Columns, ts.StoreType, ds.handleCols != nil)
 	}
 	sessVars := ds.ctx.GetSessionVars()
+
+	if sessVars.CostVariant == 1 {
+		rowSize = math.Log2(rowSize)
+	}
+
 	cost := rowCount * rowSize * sessVars.GetScanFactor(ds.tableInfo)
 	ts.AddCostWeight(Scan, rowCount*rowSize, fmt.Sprintf("tblScan-cnt(%v)*rowSize(%v)", rowCount, rowSize))
 	if ts.IsGlobalRead {
@@ -2236,6 +2241,11 @@ func (ds *DataSource) getOriginalPhysicalIndexScan(prop *property.PhysicalProper
 
 	rowSize := is.indexScanRowSize(idx, ds, true)
 	sessVars := ds.ctx.GetSessionVars()
+
+	if sessVars.CostVariant == 1 {
+		rowSize = math.Log2(rowSize)
+	}
+
 	cost := rowCount * rowSize * sessVars.GetScanFactor(ds.tableInfo)
 	is.AddCostWeight(Scan, rowCount*rowSize, fmt.Sprintf("idxScan-cnt(%v)*rowSize(%v)", rowCount, rowSize))
 	if isMatchProp {

@@ -184,6 +184,11 @@ func (t *copTask) finishIndexPlan() {
 	for p = t.indexPlan; len(p.Children()) > 0; p = p.Children()[0] {
 	}
 	rowSize = t.tblColHists.GetIndexAvgRowSize(t.indexPlan.SCtx(), t.tblCols, p.(*PhysicalIndexScan).Index.Unique)
+
+	if sessVars.CostVariant == 1 {
+		rowSize = math.Log2(rowSize)
+	}
+
 	t.cst += cnt * rowSize * sessVars.GetScanFactor(tableInfo)
 	t.tablePlan.AddCostWeight(Scan, cnt*rowSize, fmt.Sprintf("tblScan-cnt(%v)*rowSize(%v)", cnt, rowSize))
 }
@@ -1323,6 +1328,11 @@ func (p *PhysicalSort) GetCost(count float64, schema *expression.Schema) float64
 	} else {
 		memoryCost *= float64(memQuota) / (rowSize * count)
 	}
+
+	if p.ctx.GetSessionVars().CostVariant == 1 {
+		memoryCost = 0
+	}
+
 	p.AddCostWeight(Mem, memoryCost/sessVars.MemoryFactor, fmt.Sprintf("sort-mem-count(%v)", count))
 	return cpuCost + memoryCost + diskCost
 }
@@ -2310,6 +2320,11 @@ func (p *PhysicalHashAgg) GetCost(inputRows float64, isRoot bool, isMPP bool) fl
 	// When aggregation has distinct flag, we would allocate a map for each group to
 	// check duplication.
 	memoryCost += inputRows * distinctFactor * sessVars.MemoryFactor * float64(numDistinctFunc)
+
+	if p.ctx.GetSessionVars().CostVariant == 1 {
+		memoryCost = 0
+	}
+
 	return cpuCost + memoryCost
 }
 

@@ -962,6 +962,9 @@ type SessionVars struct {
 	// EnableStableResultMode if stabilize query results.
 	EnableStableResultMode bool
 
+	// CostVariant ...
+	CostVariant int
+
 	// EnablePseudoForOutdatedStats if using pseudo for outdated stats
 	EnablePseudoForOutdatedStats bool
 

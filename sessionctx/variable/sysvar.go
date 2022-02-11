@@ -1254,6 +1254,14 @@ var defaultSysVars = []*SysVar{
 		s.TMPTableSize = TidbOptInt64(val, DefTiDBTmpTableMaxSize)
 		return nil
 	}},
+	{Scope: ScopeSession, Name: TiDBCostVariant, Value: strconv.Itoa(0), Type: TypeInt, Hidden: true, MinValue: 0, MaxValue: 2, SetSession: func(s *SessionVars, v string) error {
+		val, err := strconv.ParseInt(v, 10, 64)
+		if err != nil {
+			return err
+		}
+		s.CostVariant = int(val)
+		return nil
+	}},
 	{Scope: ScopeGlobal, Name: TiDBTableCacheLease, Value: strconv.Itoa(DefTiDBTableCacheLease), Type: TypeUnsigned, MinValue: 1, MaxValue: 10, SetGlobal: func(s *SessionVars, sVal string) error {
 		var val int64
 		val, err := strconv.ParseInt(sVal, 10, 64)
