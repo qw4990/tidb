@@ -458,7 +458,7 @@ type basePhysicalPlan struct {
 
 // SetTrueCardinality ...
 func (p *basePhysicalPlan) SetTrueCardinality() (float64, bool) {
-	if trueCard, ok := p.SCtx().GetSessionVars().StmtCtx.FindTrueCard(p.ExplainID().String()); ok {
+	if trueCard, ok := p.SCtx().GetSessionVars().StmtCtx.FindTrueCard(p.self.ExplainID().String()); ok {
 		p.stats = p.stats.Scale(trueCard / p.stats.RowCount)
 		return trueCard, ok
 	}
