@@ -85,6 +85,8 @@ type nameValuePair struct {
 	param   *driver.ParamMarkerExpr
 }
 
+func (p *PointGetPlan) SetTrueCardinality() (float64, bool) { return 0, false }
+
 func (p *PointGetPlan) AddCostWeight(costType CostFactorType, weight float64, detail string) {
 }
 
@@ -305,6 +307,8 @@ type BatchPointGetPlan struct {
 	// PartTblID is the table ID for the specific table partition.
 	PartTblID int64
 }
+
+func (p *BatchPointGetPlan) SetTrueCardinality() (float64, bool) { return 0, false }
 
 func (p *BatchPointGetPlan) AddCostWeight(costType CostFactorType, weight float64, detail string) {
 }

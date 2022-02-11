@@ -1884,14 +1884,10 @@ func (p *basePhysicalAgg) convertAvgForMPP() *PhysicalProjection {
 func (p *basePhysicalAgg) newPartialAggregate(copTaskType kv.StoreType, isMPPTask bool) (partial, final PhysicalPlan) {
 	defer func() {
 		if partial != nil {
-			if trueCard, ok := partial.SCtx().GetSessionVars().StmtCtx.FindTrueCard(partial.ExplainID().String()); ok {
-				partial.Stats().ScaleSelfTo(trueCard)
-			}
+			partial.SetTrueCardinality()
 		}
 		if final != nil {
-			if trueCard, ok := final.SCtx().GetSessionVars().StmtCtx.FindTrueCard(final.ExplainID().String()); ok {
-				final.Stats().ScaleSelfTo(trueCard)
-			}
+			final.SetTrueCardinality()
 		}
 	}()
 

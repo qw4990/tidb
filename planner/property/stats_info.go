@@ -77,12 +77,6 @@ func (s *StatsInfo) Scale(factor float64) *StatsInfo {
 	return profile
 }
 
-// ScaleSelfTo ...
-func (s *StatsInfo) ScaleSelfTo(rowCount float64) {
-	tmp := s.Scale(rowCount / s.RowCount)
-	*s = *tmp
-}
-
 // ScaleByExpectCnt tries to Scale StatsInfo to an expectCnt which must be
 // smaller than the derived cnt.
 // TODO: try to use a better way to do this.

@@ -375,6 +375,7 @@ type PhysicalPlan interface {
 	// for cost calibration
 	AddCostWeight(costType CostFactorType, weight float64, detail string)
 	PlanCostWeight() (CostWeights, []string)
+	SetTrueCardinality() (float64, bool)
 
 	// attach2Task makes the current physical plan as the father of task's physicalPlan and updates the cost of
 	// current task. If the child's task is cop task, some operator may close this task and return a new rootTask.
@@ -453,6 +454,15 @@ type basePhysicalPlan struct {
 	// for cost calibration
 	weights     CostWeights
 	costDetails []string
+}
+
+// SetTrueCardinality ...
+func (p *basePhysicalPlan) SetTrueCardinality() (float64, bool) {
+	if trueCard, ok := p.SCtx().GetSessionVars().StmtCtx.FindTrueCard(p.ExplainID().String()); ok {
+		p.stats = p.stats.Scale(trueCard / p.stats.RowCount)
+		return trueCard, ok
+	}
+	return 0, false
 }
 
 // Cost implements PhysicalPlan interface.

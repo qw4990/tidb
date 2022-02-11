@@ -328,9 +328,7 @@ func (op *physicalOptimizeOp) appendCandidate(lp LogicalPlan, pp PhysicalPlan, p
 
 func (p *baseLogicalPlan) trueCardinality4PhysicalPlan(plans []PhysicalPlan) {
 	for _, plan := range plans {
-		if trueCard, ok := p.ctx.GetSessionVars().StmtCtx.FindTrueCard(plan.ExplainID().String()); ok {
-			plan.Stats().ScaleSelfTo(trueCard)
-		}
+		plan.SetTrueCardinality()
 	}
 }
 
@@ -372,9 +370,7 @@ func (p *baseLogicalPlan) findBestTask(prop *property.PhysicalProperty, planCoun
 	}
 	p.trueCardinality4PhysicalPlan(plansFitsProp)
 	for _, plan := range plansFitsProp {
-		if trueCard, ok := p.ctx.GetSessionVars().StmtCtx.FindTrueCard(plan.ExplainID().String()); ok {
-			plan.Stats().ScaleSelfTo(trueCard)
-		}
+		plan.SetTrueCardinality()
 	}
 	if !hintWorksWithProp && !newProp.IsEmpty() {
 		// If there is a hint in the plan and the hint cannot satisfy the property,
@@ -2162,8 +2158,7 @@ func (ds *DataSource) getOriginalPhysicalTableScan(prop *property.PhysicalProper
 	// for all columns now, as we do in `deriveStatsByFilter`.
 	ts.stats = ds.tableStats.ScaleByExpectCnt(rowCount)
 
-	if trueCard, ok := ds.ctx.GetSessionVars().StmtCtx.FindTrueCard(ts.ExplainID().String()); ok {
-		ts.stats.ScaleSelfTo(trueCard)
+	if trueCard, ok := ts.SetTrueCardinality(); ok {
 		rowCount = trueCard
 	}
 
@@ -2235,8 +2230,7 @@ func (ds *DataSource) getOriginalPhysicalIndexScan(prop *property.PhysicalProper
 	}
 	is.stats = ds.tableStats.ScaleByExpectCnt(rowCount)
 
-	if trueCard, ok := ds.ctx.GetSessionVars().StmtCtx.FindTrueCard(is.ExplainID().String()); ok {
-		is.stats.ScaleSelfTo(trueCard)
+	if trueCard, ok := is.SetTrueCardinality(); ok {
 		rowCount = trueCard
 	}
 
