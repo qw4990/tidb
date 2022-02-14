@@ -582,6 +582,14 @@ func (p *PhysicalHashJoin) GetCost(lCnt, rCnt float64) float64 {
 	} else {
 		diskCost = 0
 	}
+
+	if p.ctx.GetSessionVars().CostVariant == 1 {
+		memoryCost = 0
+	}
+	p.AddCostWeight(CPU, cpuCost/sessVars.CPUFactor, "hj-cpu")
+	p.AddCostWeight(Mem, memoryCost/sessVars.MemoryFactor, "hj-mem")
+	p.AddCostWeight(Mem, diskCost/sessVars.DiskFactor, "hj-disk")
+
 	return cpuCost + memoryCost + diskCost
 }
 
@@ -2335,7 +2343,6 @@ func (p *PhysicalHashAgg) GetCost(inputRows float64, isRoot bool, isMPP bool) fl
 	if p.ctx.GetSessionVars().CostVariant == 1 {
 		memoryCost = 0
 	}
-
 	p.AddCostWeight(CPU, cpuCost/sessVars.CPUFactor, "agg-cpu")
 	p.AddCostWeight(Mem, memoryCost/sessVars.MemoryFactor, "agg-mem")
 	return cpuCost + memoryCost
