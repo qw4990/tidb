@@ -2422,11 +2422,12 @@ func (t *mppTask) convertToRootTaskImpl(ctx sessionctx.Context) *rootTask {
 	p.SetTrueCardinality()
 	collectPartitionInfosFromMPPPlan(p, t.p)
 
+	p.AddCostWeight(Net, t.count(), "mpp-net")
 	cst := t.cst + t.count()*ctx.GetSessionVars().GetNetworkFactor(nil)
 	p.cost = cst / p.ctx.GetSessionVars().CopTiFlashConcurrencyFactor
-	if p.ctx.GetSessionVars().IsMPPEnforced() {
-		p.cost = cst / 1000000000
-	}
+	//if p.ctx.GetSessionVars().IsMPPEnforced() {
+	//	p.cost = cst / 1000000000
+	//}
 	rt := &rootTask{
 		p:   p,
 		cst: p.cost,

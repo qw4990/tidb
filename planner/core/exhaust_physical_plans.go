@@ -2654,6 +2654,10 @@ func (la *LogicalAggregation) getHashAggs(prop *property.PhysicalProperty) []Phy
 		taskTypes = []property.TaskType{prop.TaskTp}
 	}
 	for _, taskTp := range taskTypes {
+		if la.ctx.GetSessionVars().IsMPPEnforced() && taskTp != property.MppTaskType {
+			continue
+		}
+
 		if taskTp == property.MppTaskType {
 			mppAggs := la.tryToGetMppHashAggs(prop)
 			if len(mppAggs) > 0 {

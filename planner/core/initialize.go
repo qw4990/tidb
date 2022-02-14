@@ -509,6 +509,7 @@ func (p PhysicalExchangeSender) Init(ctx sessionctx.Context, stats *property.Sta
 func (p PhysicalExchangeReceiver) Init(ctx sessionctx.Context, stats *property.StatsInfo) *PhysicalExchangeReceiver {
 	p.basePhysicalPlan = newBasePhysicalPlan(ctx, plancodec.TypeExchangeReceiver, &p, 0)
 	p.stats = stats
+	p.SetTrueCardinality()
 	return &p
 }
 
