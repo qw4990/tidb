@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"math"
 	"strconv"
+	"strings"
 
 	"github.com/cznic/mathutil"
 	"github.com/pingcap/errors"
@@ -346,6 +347,14 @@ func (ct CostFactorType) String() string {
 }
 
 type CostWeights [NumFactorType]float64
+
+func (cw CostWeights) String() string {
+	ws := make([]string, 0, NumFactorType)
+	for _, v := range cw {
+		ws = append(ws, fmt.Sprintf("%.2f", v))
+	}
+	return "[" + strings.Join(ws, ",") + "]"
+}
 
 func GetCostFactors(sctx sessionctx.Context) [NumFactorType]float64 {
 	sv := sctx.GetSessionVars()
