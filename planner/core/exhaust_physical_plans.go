@@ -1793,7 +1793,7 @@ func (p *LogicalJoin) exhaustPhysicalPlans(prop *property.PhysicalProperty) ([]P
 	canPushToTiFlash := p.canPushToCop(kv.TiFlash)
 	if p.ctx.GetSessionVars().IsMPPAllowed() && canPushToTiFlash {
 		if p.shouldUseMPPBCJ() {
-			mppJoins := p.tryToGetMppHashJoin(prop, true)
+			mppJoins := p.tryToGetMppHashJoin(prop, p.ctx.GetSessionVars().AllowBCJ)
 			if (p.preferJoinType & preferBCJoin) > 0 {
 				return mppJoins, true, nil
 			}
