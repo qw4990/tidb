@@ -76,6 +76,7 @@ func (p PhysicalSelection) Init(ctx sessionctx.Context, stats *property.StatsInf
 	p.basePhysicalPlan = newBasePhysicalPlan(ctx, plancodec.TypeSel, &p, offset)
 	p.childrenReqProps = props
 	p.stats = stats
+	(&p).SetTrueCardinality()
 	return &p
 }
 
@@ -501,7 +502,7 @@ func (p PointGetPlan) Init(ctx sessionctx.Context, stats *property.StatsInfo, of
 func (p PhysicalExchangeSender) Init(ctx sessionctx.Context, stats *property.StatsInfo) *PhysicalExchangeSender {
 	p.basePhysicalPlan = newBasePhysicalPlan(ctx, plancodec.TypeExchangeSender, &p, 0)
 	p.stats = stats
-	p.SetTrueCardinality()
+	(&p).SetTrueCardinality()
 	return &p
 }
 
@@ -509,7 +510,7 @@ func (p PhysicalExchangeSender) Init(ctx sessionctx.Context, stats *property.Sta
 func (p PhysicalExchangeReceiver) Init(ctx sessionctx.Context, stats *property.StatsInfo) *PhysicalExchangeReceiver {
 	p.basePhysicalPlan = newBasePhysicalPlan(ctx, plancodec.TypeExchangeReceiver, &p, 0)
 	p.stats = stats
-	p.SetTrueCardinality()
+	(&p).SetTrueCardinality()
 	return &p
 }
 

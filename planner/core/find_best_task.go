@@ -2075,6 +2075,7 @@ func (ts *PhysicalTableScan) addPushedDownSelectionToMppTask(mpp *mppTask, stats
 		mpp.cst += mpp.count() * sessVars.CopCPUFactor
 		sel := PhysicalSelection{Conditions: ts.filterCondition}.Init(ts.ctx, stats, ts.blockOffset)
 		sel.SetChildren(ts)
+		sel.AddCostWeight(CopCPU, mpp.count(), "pushed-sel")
 		sel.cost = mpp.cst
 		mpp.p = sel
 	}
@@ -2092,6 +2093,7 @@ func (ts *PhysicalTableScan) addPushedDownSelection(copTask *copTask, stats *pro
 	if len(ts.filterCondition) > 0 {
 		copTask.cst += copTask.count() * sessVars.CopCPUFactor
 		sel := PhysicalSelection{Conditions: ts.filterCondition}.Init(ts.ctx, stats, ts.blockOffset)
+		sel.AddCostWeight(CopCPU, copTask.count(), "pushed-sel")
 		if len(copTask.rootTaskConds) != 0 {
 			selectivity, _, err := copTask.tblColHists.Selectivity(ts.ctx, ts.filterCondition, nil)
 			if err != nil {
@@ -2099,6 +2101,7 @@ func (ts *PhysicalTableScan) addPushedDownSelection(copTask *copTask, stats *pro
 				selectivity = SelectionFactor
 			}
 			sel.stats = ts.stats.Scale(selectivity)
+			sel.SetTrueCardinality()
 		}
 		sel.SetChildren(ts)
 		sel.cost = copTask.cst
