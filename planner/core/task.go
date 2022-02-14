@@ -2336,6 +2336,8 @@ func (p *PhysicalHashAgg) GetCost(inputRows float64, isRoot bool, isMPP bool) fl
 		memoryCost = 0
 	}
 
+	p.AddCostWeight(CPU, cpuCost/sessVars.CPUFactor, "agg-cpu")
+	p.AddCostWeight(Mem, memoryCost/sessVars.MemoryFactor, "agg-mem")
 	return cpuCost + memoryCost
 }
 
