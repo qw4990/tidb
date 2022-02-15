@@ -115,14 +115,16 @@ func doPhysicalProjectionElimination(p PhysicalPlan) (PhysicalPlan, float64) {
 	// eliminate projection in a coprocessor task
 	tableReader, isTableReader := p.(*PhysicalTableReader)
 	if isTableReader && tableReader.StoreType == kv.TiFlash {
-		tableReader.tablePlan = eliminatePhysicalProjection(tableReader.tablePlan)
+		var delta float64
+		tableReader.tablePlan, delta = eliminatePhysicalProjection(tableReader.tablePlan)
 		tableReader.TablePlans = flattenPushDownPlan(tableReader.tablePlan)
-		return p, 0
+		tableReader.cost -= delta
+		return p, deltaTotal + delta
 	}
 
 	proj, isProj := p.(*PhysicalProjection)
 	if !isProj || !canProjectionBeEliminatedStrict(proj) {
-		return p, 0
+		return p, deltaTotal
 	}
 	child := p.Children()[0]
 	if childProj, ok := child.(*PhysicalProjection); ok {
@@ -134,9 +136,9 @@ func doPhysicalProjectionElimination(p PhysicalPlan) (PhysicalPlan, float64) {
 
 // eliminatePhysicalProjection should be called after physical optimization to
 // eliminate the redundant projection left after logical projection elimination.
-func eliminatePhysicalProjection(p PhysicalPlan) PhysicalPlan {
+func eliminatePhysicalProjection(p PhysicalPlan) (PhysicalPlan, float64) {
 	oldSchema := p.Schema()
-	newRoot, _ := doPhysicalProjectionElimination(p)
+	newRoot, delta := doPhysicalProjectionElimination(p)
 	newCols := newRoot.Schema().Columns
 	for i, oldCol := range oldSchema.Columns {
 		oldCol.Index = newCols[i].Index
@@ -145,7 +147,7 @@ func eliminatePhysicalProjection(p PhysicalPlan) PhysicalPlan {
 		oldCol.VirtualExpr = newCols[i].VirtualExpr
 		newRoot.Schema().Columns[i] = oldCol
 	}
-	return newRoot
+	return newRoot, delta
 }
 
 type projectionEliminator struct {

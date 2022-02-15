@@ -350,7 +350,7 @@ func mergeContinuousSelections(p PhysicalPlan) {
 }
 
 func postOptimize(sctx sessionctx.Context, plan PhysicalPlan) PhysicalPlan {
-	plan = eliminatePhysicalProjection(plan)
+	plan, _ = eliminatePhysicalProjection(plan)
 	plan = InjectExtraProjection(plan)
 	mergeContinuousSelections(plan)
 	plan = eliminateUnionScanAndLock(sctx, plan)
