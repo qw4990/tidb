@@ -35,7 +35,6 @@ import (
 	"github.com/pingcap/tidb/testkit"
 	"github.com/pingcap/tidb/testkit/testdata"
 	"github.com/pingcap/tidb/types"
-	"github.com/pingcap/tidb/util/israce"
 	"github.com/pingcap/tidb/util/plancodec"
 	"github.com/stretchr/testify/require"
 )
@@ -171,9 +170,6 @@ func TestNormalizedPlanForDiffStore(t *testing.T) {
 }
 
 func TestEncodeDecodePlan(t *testing.T) {
-	if israce.RaceEnabled {
-		t.Skip("skip race test")
-	}
 	store, clean := testkit.CreateMockStore(t)
 	defer clean()
 	tk := testkit.NewTestKit(t, store)
