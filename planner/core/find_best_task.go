@@ -998,7 +998,6 @@ func (ds *DataSource) convertToIndexMergeScan(prop *property.PhysicalProperty, c
 		return invalidTask, nil
 	}
 	path := candidate.path
-	var totalCost float64
 	scans := make([]PhysicalPlan, 0, len(path.PartialIndexPaths))
 	cop := &copTask{
 		indexPlanFinished: true,
@@ -1012,27 +1011,23 @@ func (ds *DataSource) convertToIndexMergeScan(prop *property.PhysicalProperty, c
 	}
 	for _, partPath := range path.PartialIndexPaths {
 		var scan PhysicalPlan
-		var partialCost float64
 		if partPath.IsTablePath() {
-			scan, partialCost = ds.convertToPartialTableScan(prop, partPath)
+			scan = ds.convertToPartialTableScan(prop, partPath)
 		} else {
-			scan, partialCost = ds.convertToPartialIndexScan(prop, partPath)
+			scan = ds.convertToPartialIndexScan(prop, partPath)
 		}
 		scans = append(scans, scan)
-		totalCost += partialCost
 	}
 	totalRowCount := path.CountAfterAccess
 	if prop.ExpectedCnt < ds.stats.RowCount {
 		totalRowCount *= prop.ExpectedCnt / ds.stats.RowCount
 	}
-	ts, partialCost, remainingFilters, err := ds.buildIndexMergeTableScan(prop, path.TableFilters, totalRowCount)
+	ts, remainingFilters, err := ds.buildIndexMergeTableScan(prop, path.TableFilters, totalRowCount)
 	if err != nil {
 		return nil, err
 	}
-	totalCost += partialCost
 	cop.tablePlan = ts
 	cop.idxMergePartPlans = scans
-	cop.cst = totalCost
 	if remainingFilters != nil {
 		cop.rootTaskConds = remainingFilters
 	}
@@ -1041,9 +1036,7 @@ func (ds *DataSource) convertToIndexMergeScan(prop *property.PhysicalProperty, c
 	return task, nil
 }
 
-func (ds *DataSource) convertToPartialIndexScan(prop *property.PhysicalProperty, path *util.AccessPath) (
-	indexPlan PhysicalPlan,
-	partialCost float64) {
+func (ds *DataSource) convertToPartialIndexScan(prop *property.PhysicalProperty, path *util.AccessPath) (indexPlan PhysicalPlan) {
 	idx := path.Index
 	is, partialCost, rowCount := ds.getOriginalPhysicalIndexScan(prop, path, false, false)
 	rowSize := is.indexScanRowSize(idx, ds, false)
@@ -1065,11 +1058,12 @@ func (ds *DataSource) convertToPartialIndexScan(prop *property.PhysicalProperty,
 		indexPlan := PhysicalSelection{Conditions: indexConds}.Init(is.ctx, stats, ds.blockOffset)
 		indexPlan.SetChildren(is)
 		partialCost += rowCount * rowSize * sessVars.GetNetworkFactor(ds.tableInfo)
-		return indexPlan, partialCost
+		indexPlan.SetCost(partialCost)
+		return indexPlan
 	}
 	partialCost += rowCount * rowSize * sessVars.GetNetworkFactor(ds.tableInfo)
-	indexPlan = is
-	return indexPlan, partialCost
+	is.SetCost(partialCost)
+	return is
 }
 
 func checkColinSchema(cols []*expression.Column, schema *expression.Schema) bool {
@@ -1081,8 +1075,7 @@ func checkColinSchema(cols []*expression.Column, schema *expression.Schema) bool
 	return true
 }
 
-func (ds *DataSource) convertToPartialTableScan(prop *property.PhysicalProperty, path *util.AccessPath) (
-	tablePlan PhysicalPlan, partialCost float64) {
+func (ds *DataSource) convertToPartialTableScan(prop *property.PhysicalProperty, path *util.AccessPath) (tablePlan PhysicalPlan) {
 	ts, partialCost, rowCount := ds.getOriginalPhysicalTableScan(prop, path, false)
 	overwritePartialTableScanSchema(ds, ts)
 	// remove ineffetive filter condition after overwriting physicalscan schema
@@ -1106,11 +1099,11 @@ func (ds *DataSource) convertToPartialTableScan(prop *property.PhysicalProperty,
 		tablePlan.SetChildren(ts)
 		partialCost += rowCount * sessVars.CopCPUFactor
 		partialCost += selectivity * rowCount * rowSize * sessVars.GetNetworkFactor(ds.tableInfo)
-		return tablePlan, partialCost
+		tablePlan.SetCost(partialCost)
 	}
 	partialCost += rowCount * rowSize * sessVars.GetNetworkFactor(ds.tableInfo)
-	tablePlan = ts
-	return tablePlan, partialCost
+	ts.SetCost(partialCost)
+	return ts
 }
 
 // overwritePartialTableScanSchema change the schema of partial table scan to handle columns.
@@ -1150,7 +1143,7 @@ func setIndexMergeTableScanHandleCols(ds *DataSource, ts *PhysicalTableScan) (er
 // buildIndexMergeTableScan() returns Selection that will be pushed to TiKV.
 // Filters that cannot be pushed to TiKV are also returned, and an extra Selection above IndexMergeReader will be constructed later.
 func (ds *DataSource) buildIndexMergeTableScan(prop *property.PhysicalProperty, tableFilters []expression.Expression,
-	totalRowCount float64) (PhysicalPlan, float64, []expression.Expression, error) {
+	totalRowCount float64) (PhysicalPlan, []expression.Expression, error) {
 	var partialCost float64
 	sessVars := ds.ctx.GetSessionVars()
 	ts := PhysicalTableScan{
@@ -1165,7 +1158,7 @@ func (ds *DataSource) buildIndexMergeTableScan(prop *property.PhysicalProperty, 
 	ts.SetSchema(ds.schema.Clone())
 	err := setIndexMergeTableScanHandleCols(ds, ts)
 	if err != nil {
-		return nil, 0, nil, err
+		return nil, nil, err
 	}
 	if ts.Table.PKIsHandle {
 		if pkColInfo := ts.Table.GetPkColInfo(); pkColInfo != nil {
@@ -1194,11 +1187,14 @@ func (ds *DataSource) buildIndexMergeTableScan(prop *property.PhysicalProperty, 
 			}
 			sel := PhysicalSelection{Conditions: pushedFilters}.Init(ts.ctx, ts.stats.ScaleByExpectCnt(selectivity*totalRowCount), ts.blockOffset)
 			sel.SetChildren(ts)
-			return sel, partialCost, remainingFilters, nil
+			sel.SetCost(partialCost)
+			return sel, remainingFilters, nil
 		}
-		return ts, partialCost, remainingFilters, nil
+		ts.SetCost(partialCost)
+		return ts, remainingFilters, nil
 	}
-	return ts, partialCost, nil, nil
+	ts.SetCost(partialCost)
+	return ts, nil, nil
 }
 
 // extractFiltersForIndexMerge returns:
@@ -1326,7 +1322,6 @@ func (ds *DataSource) convertToIndexScan(prop *property.PhysicalProperty,
 		ts.stats = &property.StatsInfo{StatsVersion: ds.tableStats.StatsVersion}
 		cop.tablePlan = ts
 	}
-	cop.cst = cost
 	task = cop
 	if cop.tablePlan != nil && ds.tableInfo.IsCommonHandle {
 		cop.commonHandleCols = ds.commonHandleCols
@@ -1466,7 +1461,7 @@ func (is *PhysicalIndexScan) addPushedDownSelection(copTask *copTask, p *DataSou
 
 	sessVars := is.ctx.GetSessionVars()
 	if indexConds != nil {
-		copTask.cst += copTask.count() * sessVars.CopCPUFactor
+		filterCost := copTask.count() * sessVars.CopCPUFactor
 		var selectivity float64
 		if path.CountAfterAccess > 0 {
 			selectivity = path.CountAfterIndex / path.CountAfterAccess
@@ -1475,11 +1470,12 @@ func (is *PhysicalIndexScan) addPushedDownSelection(copTask *copTask, p *DataSou
 		stats := p.tableStats.ScaleByExpectCnt(count)
 		indexSel := PhysicalSelection{Conditions: indexConds}.Init(is.ctx, stats, is.blockOffset)
 		indexSel.SetChildren(is)
+		indexSel.SetCost(is.Cost() + filterCost)
 		copTask.indexPlan = indexSel
 	}
 	if len(tableConds) > 0 {
 		copTask.finishIndexPlan()
-		copTask.cst += copTask.count() * sessVars.CopCPUFactor
+		filterCost := copTask.count() * sessVars.CopCPUFactor
 		tableSel := PhysicalSelection{Conditions: tableConds}.Init(is.ctx, finalStats, is.blockOffset)
 		if len(copTask.rootTaskConds) != 0 {
 			selectivity, _, err := copTask.tblColHists.Selectivity(is.ctx, tableConds, nil)
@@ -1490,6 +1486,7 @@ func (is *PhysicalIndexScan) addPushedDownSelection(copTask *copTask, p *DataSou
 			tableSel.stats = copTask.plan().statsInfo().Scale(selectivity)
 		}
 		tableSel.SetChildren(copTask.tablePlan)
+		tableSel.SetCost(copTask.tablePlan.Cost() + filterCost)
 		copTask.tablePlan = tableSel
 	}
 }
@@ -1834,7 +1831,6 @@ func (ds *DataSource) convertToTableScan(prop *property.PhysicalProperty, candid
 		tablePlan:         ts,
 		indexPlanFinished: true,
 		tblColHists:       ds.TblColHists,
-		cst:               cost,
 	}
 	copTask.partitionInfo = PartitionInfo{
 		PruningConds:   ds.allConds,
@@ -2079,7 +2075,7 @@ func (ts *PhysicalTableScan) addPushedDownSelection(copTask *copTask, stats *pro
 	// Add filter condition to table plan now.
 	sessVars := ts.ctx.GetSessionVars()
 	if len(ts.filterCondition) > 0 {
-		copTask.cst += copTask.count() * sessVars.CopCPUFactor
+		filterCost := copTask.count() * sessVars.CopCPUFactor
 		sel := PhysicalSelection{Conditions: ts.filterCondition}.Init(ts.ctx, stats, ts.blockOffset)
 		if len(copTask.rootTaskConds) != 0 {
 			selectivity, _, err := copTask.tblColHists.Selectivity(ts.ctx, ts.filterCondition, nil)
@@ -2090,7 +2086,7 @@ func (ts *PhysicalTableScan) addPushedDownSelection(copTask *copTask, stats *pro
 			sel.stats = ts.stats.Scale(selectivity)
 		}
 		sel.SetChildren(ts)
-		sel.cost = copTask.cst
+		sel.SetCost(ts.Cost() + filterCost)
 		copTask.tablePlan = sel
 	}
 }
@@ -2172,6 +2168,7 @@ func (ds *DataSource) getOriginalPhysicalTableScan(prop *property.PhysicalProper
 	case kv.TiFlash:
 		cost += float64(len(ts.Ranges)) * float64(len(ts.Columns)) * sessVars.GetSeekFactor(ds.tableInfo)
 	}
+	ts.SetCost(cost)
 	return ts, cost, rowCount
 }
 

@@ -975,10 +975,10 @@ func (p *LogicalJoin) constructInnerTableScanTask(
 	}
 	rowSize := ds.TblColHists.GetTableAvgRowSize(p.ctx, ds.TblCols, ts.StoreType, true)
 	sessVars := ds.ctx.GetSessionVars()
+	ts.SetCost(sessVars.GetScanFactor(ts.Table) * rowSize * ts.stats.RowCount) // scanCost
 	copTask := &copTask{
 		tablePlan:         ts,
 		indexPlanFinished: true,
-		cst:               sessVars.GetScanFactor(ts.Table) * rowSize * ts.stats.RowCount,
 		tblColHists:       ds.TblColHists,
 		keepOrder:         ts.KeepOrder,
 	}
@@ -1140,7 +1140,7 @@ func (p *LogicalJoin) constructInnerIndexScanTask(
 	is.stats = ds.tableStats.ScaleByExpectCnt(tmpPath.CountAfterAccess)
 	rowSize := is.indexScanRowSize(path.Index, ds, true)
 	sessVars := ds.ctx.GetSessionVars()
-	cop.cst = tmpPath.CountAfterAccess * rowSize * sessVars.GetScanFactor(ds.tableInfo)
+	is.SetCost(tmpPath.CountAfterAccess * rowSize * sessVars.GetScanFactor(ds.tableInfo)) // scanCost
 	finalStats := ds.tableStats.ScaleByExpectCnt(rowCount)
 	is.addPushedDownSelection(cop, ds, tmpPath, finalStats)
 	t := cop.convertToRootTask(ds.ctx)

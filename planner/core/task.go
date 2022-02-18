@@ -64,7 +64,7 @@ type task interface {
 type copTask struct {
 	indexPlan PhysicalPlan
 	tablePlan PhysicalPlan
-	cst       float64
+	//cst       float64
 	// indexPlanFinished means we have finished index plan.
 	indexPlanFinished bool
 	// keepOrder indicates if the plan scans data by order.
@@ -112,11 +112,23 @@ func (t *copTask) count() float64 {
 }
 
 func (t *copTask) addCost(cst float64) {
-	t.cst += cst
+	panic("???")
 }
 
 func (t *copTask) cost() float64 {
-	return t.cst
+	var cst float64
+	if t.indexPlan != nil {
+		cst += t.indexPlan.Cost()
+	}
+	if t.tablePlan != nil {
+		cst += t.tablePlan.Cost()
+	}
+	if t.idxMergePartPlans != nil {
+		for _, indexPlan := range t.idxMergePartPlans {
+			cst += indexPlan.Cost()
+		}
+	}
+	return cst
 }
 
 func (t *copTask) copy() task {
@@ -171,7 +183,8 @@ func (t *copTask) finishIndexPlan() {
 		tableInfo = ts.Table
 	}
 	// Network cost of transferring rows of index scan to TiDB.
-	t.cst += cnt * sessVars.GetNetworkFactor(tableInfo) * t.tblColHists.GetAvgRowSize(t.indexPlan.SCtx(), t.indexPlan.Schema().Columns, true, false)
+	idxNetCost := cnt * sessVars.GetNetworkFactor(tableInfo) * t.tblColHists.GetAvgRowSize(t.indexPlan.SCtx(), t.indexPlan.Schema().Columns, true, false)
+	t.indexPlan.SetCost(t.indexPlan.Cost() + idxNetCost)
 	if t.tablePlan == nil {
 		return
 	}
@@ -181,7 +194,8 @@ func (t *copTask) finishIndexPlan() {
 	for p = t.indexPlan; len(p.Children()) > 0; p = p.Children()[0] {
 	}
 	rowSize := t.tblColHists.GetIndexAvgRowSize(t.indexPlan.SCtx(), t.tblCols, p.(*PhysicalIndexScan).Index.Unique)
-	t.cst += cnt * rowSize * sessVars.GetScanFactor(tableInfo)
+	tblScanCost := cnt * rowSize * sessVars.GetScanFactor(tableInfo)
+	t.tablePlan.SetCost(t.tablePlan.Cost() + tblScanCost)
 }
 
 func (t *copTask) getStoreType() kv.StoreType {
@@ -852,9 +866,8 @@ func (p *PhysicalHashJoin) attach2TaskForTiFlash(tasks ...task) task {
 		tblColHists:       rTask.tblColHists,
 		indexPlanFinished: true,
 		tablePlan:         p,
-		cst:               lCost + rCost + p.GetCost(lTask.count(), rTask.count()),
 	}
-	p.cost = task.cst
+	p.cost = lCost + rCost + p.GetCost(lTask.count(), rTask.count())
 	return task
 }
 
@@ -917,7 +930,7 @@ func (p *PhysicalMergeJoin) attach2Task(tasks ...task) task {
 }
 
 func buildIndexLookUpTask(ctx sessionctx.Context, t *copTask) *rootTask {
-	newTask := &rootTask{cst: t.cst}
+	newTask := &rootTask{cst: t.cost()}
 	sessVars := ctx.GetSessionVars()
 	p := PhysicalIndexLookUpReader{
 		tablePlan:        t.tablePlan,
@@ -1034,7 +1047,8 @@ func (t *copTask) convertToRootTaskImpl(ctx sessionctx.Context) *rootTask {
 	t.finishIndexPlan()
 	// Network cost of transferring rows of table scan to TiDB.
 	if t.tablePlan != nil {
-		t.cst += t.count() * sessVars.GetNetworkFactor(nil) * t.tblColHists.GetAvgRowSize(ctx, t.tablePlan.Schema().Columns, false, false)
+		tblNetCost := t.count() * sessVars.GetNetworkFactor(nil) * t.tblColHists.GetAvgRowSize(ctx, t.tablePlan.Schema().Columns, false, false)
+		t.tablePlan.SetCost(t.tablePlan.Cost() + tblNetCost)
 
 		tp := t.tablePlan
 		for len(tp.Children()) > 0 {
@@ -1055,9 +1069,8 @@ func (t *copTask) convertToRootTaskImpl(ctx sessionctx.Context) *rootTask {
 			t.originSchema = prevSchema
 		}
 	}
-	t.cst /= copIterWorkers
 	newTask := &rootTask{
-		cst: t.cst,
+		cst: t.cost() / copIterWorkers,
 	}
 	if t.idxMergePartPlans != nil {
 		p := PhysicalIndexMergeReader{
