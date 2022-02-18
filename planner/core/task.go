@@ -778,8 +778,8 @@ func (p *PhysicalHashJoin) convertPartitionKeysIfNeed(lTask, rTask *mppTask) (*m
 			MPPPartitionTp:   property.HashType,
 			MPPPartitionCols: lPartKeys,
 		})
-		nlTask.cst = lTask.cst
-		lProj.cost = nlTask.cst
+		nlTask.p.SetCost(lTask.cost())
+		lProj.SetCost(nlTask.cost())
 		lTask = nlTask
 	}
 	if rChanged {
@@ -790,8 +790,8 @@ func (p *PhysicalHashJoin) convertPartitionKeysIfNeed(lTask, rTask *mppTask) (*m
 			MPPPartitionTp:   property.HashType,
 			MPPPartitionCols: rPartKeys,
 		})
-		nrTask.cst = rTask.cst
-		rProj.cost = nrTask.cst
+		nrTask.p.SetCost(rTask.cost())
+		rProj.SetCost(nrTask.cost())
 		rTask = nrTask
 	}
 	return lTask, rTask
@@ -835,12 +835,11 @@ func (p *PhysicalHashJoin) attach2TaskForMpp(tasks ...task) task {
 		outerTask = rTask
 	}
 	task := &mppTask{
-		cst:      lCost + rCost + p.GetCost(lTask.count(), rTask.count()),
 		p:        p,
 		partTp:   outerTask.partTp,
 		hashCols: outerTask.hashCols,
 	}
-	p.cost = task.cst
+	p.cost = lCost + rCost + p.GetCost(lTask.count(), rTask.count())
 	return task
 }
 
@@ -1486,8 +1485,7 @@ func (p *PhysicalUnionAll) attach2MppTasks(tasks ...task) task {
 		return invalidTask
 	}
 	p.SetChildren(childPlans...)
-	t.cst = childMaxCost
-	p.cost = t.cost()
+	p.SetCost(childMaxCost)
 	return t
 }
 
@@ -2324,8 +2322,8 @@ func (p *PhysicalHashAgg) GetCost(inputRows float64, isRoot bool, isMPP bool) fl
 // 3. consider virtual columns.
 // 4. TODO: partition prune after close
 type mppTask struct {
-	p   PhysicalPlan
-	cst float64
+	p PhysicalPlan
+	//cst float64
 
 	partTp   property.MPPPartitionType
 	hashCols []*property.MPPPartitionColumn
@@ -2336,11 +2334,15 @@ func (t *mppTask) count() float64 {
 }
 
 func (t *mppTask) addCost(cst float64) {
-	t.cst += cst
+	panic("??")
 }
 
 func (t *mppTask) cost() float64 {
-	return t.cst
+	if t.invalid() {
+		return math.MaxFloat64
+	}
+
+	return t.p.Cost()
 }
 
 func (t *mppTask) copy() task {
@@ -2385,10 +2387,11 @@ func (t *mppTask) convertToRootTaskImpl(ctx sessionctx.Context) *rootTask {
 	p.stats = t.p.statsInfo()
 	collectPartitionInfosFromMPPPlan(p, t.p)
 
-	cst := t.cst + t.count()*ctx.GetSessionVars().GetNetworkFactor(nil)
-	p.cost = cst / p.ctx.GetSessionVars().CopTiFlashConcurrencyFactor
+	netCost := t.count() * ctx.GetSessionVars().GetNetworkFactor(nil)
+	totalCost := t.cost() + netCost
+	p.SetCost(totalCost / p.ctx.GetSessionVars().CopTiFlashConcurrencyFactor)
 	if p.ctx.GetSessionVars().IsMPPEnforced() {
-		p.cost = cst / 1000000000
+		p.cost /= 1000000000
 	}
 	rt := &rootTask{
 		p:   p,
@@ -2440,7 +2443,7 @@ func (t *mppTask) enforceExchangerImpl(prop *property.PhysicalProperty) *mppTask
 		for _, col := range prop.MPPPartitionCols {
 			if types.IsString(col.Col.RetType.Tp) {
 				t.p.SCtx().GetSessionVars().RaiseWarningWhenMPPEnforced("MPP mode may be blocked because when `new_collation_enabled` is true, HashJoin or HashAgg with string key is not supported now.")
-				return &mppTask{cst: math.MaxFloat64}
+				return &mppTask{} // invalid task
 			}
 		}
 	}
@@ -2452,12 +2455,12 @@ func (t *mppTask) enforceExchangerImpl(prop *property.PhysicalProperty) *mppTask
 	sender.SetChildren(t.p)
 	receiver := PhysicalExchangeReceiver{}.Init(ctx, t.p.statsInfo())
 	receiver.SetChildren(sender)
-	cst := t.cst + t.count()*ctx.GetSessionVars().GetNetworkFactor(nil)
-	sender.cost = cst
-	receiver.cost = cst
+	netCost := t.count() * ctx.GetSessionVars().GetNetworkFactor(nil)
+	totalCost := netCost + t.cost()
+	sender.cost = totalCost
+	receiver.cost = totalCost
 	return &mppTask{
 		p:        receiver,
-		cst:      cst,
 		partTp:   prop.MPPPartitionTp,
 		hashCols: prop.MPPPartitionCols,
 	}
