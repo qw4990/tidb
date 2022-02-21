@@ -1827,9 +1827,10 @@ func (ds *DataSource) convertToTableScan(prop *property.PhysicalProperty, candid
 			}
 		}
 		mppTask := &mppTask{
-			p:      ts,
-			cst:    cost,
-			partTp: property.AnyType,
+			p:           ts,
+			cst:         cost,
+			partTp:      property.AnyType,
+			tblColHists: ds.TblColHists,
 		}
 		ts.PartitionInfo = PartitionInfo{
 			PruningConds:   ds.allConds,

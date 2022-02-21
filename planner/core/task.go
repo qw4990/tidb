@@ -16,6 +16,8 @@ package core
 
 import (
 	"fmt"
+	"math"
+
 	"github.com/cznic/mathutil"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb/config"
@@ -38,7 +40,6 @@ import (
 	"github.com/pingcap/tidb/util/plancodec"
 	"github.com/pingcap/tipb/go-tipb"
 	"go.uber.org/zap"
-	"math"
 )
 
 var (
@@ -2377,8 +2378,9 @@ type mppTask struct {
 	p   PhysicalPlan
 	cst float64
 
-	partTp   property.MPPPartitionType
-	hashCols []*property.MPPPartitionColumn
+	tblColHists *statistics.HistColl
+	partTp      property.MPPPartitionType
+	hashCols    []*property.MPPPartitionColumn
 }
 
 func (t *mppTask) count() float64 {
@@ -2437,8 +2439,16 @@ func (t *mppTask) convertToRootTaskImpl(ctx sessionctx.Context) *rootTask {
 	collectPartitionInfosFromMPPPlan(p, t.p)
 
 	rowCount := p.stats.RowCount
-	p.AddCostWeight(Net, rowCount, "mpp-net")
-	cst := t.cst + rowCount*ctx.GetSessionVars().GetNetworkFactor(nil)
+	netCost := rowCount * ctx.GetSessionVars().GetNetworkFactor(nil)
+
+	if ctx.GetSessionVars().CostVariant == 1 {
+		rowWidth := t.tblColHists.GetIndexAvgRowSize(ctx, p.Schema().Columns, false)
+		rowWidth = math.Log2(rowWidth)
+		netCost = rowCount * rowWidth * ctx.GetSessionVars().GetNetworkFactor(nil)
+	}
+
+	p.AddCostWeight(Net, netCost/ctx.GetSessionVars().GetNetworkFactor(nil), "mpp-net")
+	cst := t.cst + netCost
 	p.cost = cst / p.ctx.GetSessionVars().CopTiFlashConcurrencyFactor
 	//if p.ctx.GetSessionVars().IsMPPEnforced() {
 	//	p.cost = cst / 1000000000
