@@ -261,6 +261,8 @@ const (
 	TiDBOptCopCPUFactor = "tidb_opt_copcpu_factor"
 	// tidb_opt_tiflash_concurrency_factor is concurrency number of tiflash computation.
 	TiDBOptTiFlashConcurrencyFactor = "tidb_opt_tiflash_concurrency_factor"
+	// TiDBOptTiFlashScanFactor ...
+	TiDBOptTiFlashScanFactor = "tidb_opt_tiflash_scan_factor"
 	// tidb_opt_network_factor is the network cost of transferring 1 byte data.
 	TiDBOptNetworkFactor = "tidb_opt_network_factor"
 	// tidb_opt_scan_factor is the IO cost of scanning 1 byte data on TiKV.

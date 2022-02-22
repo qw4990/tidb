@@ -2188,7 +2188,13 @@ func (ds *DataSource) getOriginalPhysicalTableScan(prop *property.PhysicalProper
 		rowSize = math.Log2(rowSize)
 	}
 
-	cost := rowCount * rowSize * sessVars.GetScanFactor(ds.tableInfo)
+	scanFactor := sessVars.GetScanFactor(ds.tableInfo)
+	if path.StoreType == kv.TiFlash {
+		scanFactor = sessVars.CopTiFlashScanFactor
+		ts.AddCostWeight(Scan, 0, fmt.Sprintf("tiflash-scan-fac(%v)", scanFactor))
+	}
+
+	cost := rowCount * rowSize * scanFactor
 	ts.AddCostWeight(Scan, rowCount*rowSize, fmt.Sprintf("tblScan-cnt(%v)*rowSize(%v)", rowCount, rowSize))
 	if ts.IsGlobalRead {
 		cost += rowCount * sessVars.GetNetworkFactor(ds.tableInfo) * rowSize
