@@ -322,8 +322,9 @@ const (
 	DescScan
 	Mem
 	Seek
+	TiFlashScan
 
-	NumFactorType int = 7
+	NumFactorType int = 8
 )
 
 func (ct CostFactorType) String() string {
@@ -342,6 +343,8 @@ func (ct CostFactorType) String() string {
 		return "Mem"
 	case Seek:
 		return "Seek"
+	case TiFlashScan:
+		return "TiFlashScan"
 	}
 	return "Unknown"
 }
@@ -366,6 +369,7 @@ func GetCostFactors(sctx sessionctx.Context) [NumFactorType]float64 {
 		sv.GetDescScanFactor(nil),
 		sv.MemoryFactor,
 		sv.GetSeekFactor(nil),
+		sv.CopTiFlashScanFactor,
 	}
 }
 

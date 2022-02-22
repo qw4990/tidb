@@ -2188,21 +2188,22 @@ func (ds *DataSource) getOriginalPhysicalTableScan(prop *property.PhysicalProper
 		rowSize = math.Log2(rowSize)
 	}
 
-	scanFactor := sessVars.GetScanFactor(ds.tableInfo)
+	factorFlag := Scan
+	factor := sessVars.GetScanFactor(ds.tableInfo)
 	if path.StoreType == kv.TiFlash {
-		scanFactor = sessVars.CopTiFlashScanFactor
-		ts.AddCostWeight(Scan, 0, fmt.Sprintf("tiflash-scan-fac(%v)", scanFactor))
+		factorFlag = TiFlashScan
+		factor = sessVars.CopTiFlashScanFactor
 	}
 
-	cost := rowCount * rowSize * scanFactor
-	ts.AddCostWeight(Scan, rowCount*rowSize, fmt.Sprintf("tblScan-cnt(%v)*rowSize(%v)", rowCount, rowSize))
+	cost := rowCount * rowSize * factor
+	ts.AddCostWeight(factorFlag, rowCount*rowSize, fmt.Sprintf("tblScan-cnt(%v)*rowSize(%v)", rowCount, rowSize))
 	if ts.IsGlobalRead {
 		cost += rowCount * sessVars.GetNetworkFactor(ds.tableInfo) * rowSize
 	}
 	if isMatchProp {
 		ts.Desc = prop.SortItems[0].Desc
 		if prop.SortItems[0].Desc && prop.ExpectedCnt >= smallScanThreshold {
-			cost = rowCount * rowSize * sessVars.GetDescScanFactor(ds.tableInfo)
+			cost = rowCount * rowSize * sessVars.GetDescScanFactor(ds.tableInfo) // TODO: Consider TiFlash Factor?
 			ts.AddCostWeight(DescScan, rowCount*rowSize, fmt.Sprintf("tblScan-cnt(%v)*rowSize(%v)", rowCount, rowSize))
 			ts.AddCostWeight(Scan, - rowCount*rowSize, fmt.Sprintf("tblScan-cnt(%v)*rowSize(%v)", rowCount, rowSize))
 		}
