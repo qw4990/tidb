@@ -602,8 +602,10 @@ func (p *PhysicalHashJoin) GetCost(lCnt, rCnt float64) float64 {
 		memoryCost = 0
 	}
 	p.AddCostWeight(CPU, cpuCost/sessVars.CPUFactor, "hj-cpu")
-	p.AddCostWeight(Mem, memoryCost/sessVars.MemoryFactor, "hj-mem")
 	p.AddCostWeight(Mem, diskCost/sessVars.DiskFactor, "hj-disk")
+	if sessVars.MemoryFactor > 0 {
+		p.AddCostWeight(Mem, memoryCost/sessVars.MemoryFactor, "hj-mem")
+	}
 
 	return cpuCost + memoryCost + diskCost
 }
@@ -924,7 +926,9 @@ func (p *PhysicalMergeJoin) GetCost(lCnt, rCnt float64) float64 {
 		memoryCost = 0
 	}
 	p.AddCostWeight(CPU, cpuCost/sessVars.CPUFactor, "mj-cpu")
-	p.AddCostWeight(Mem, memoryCost/sessVars.MemoryFactor, "mj-mem")
+	if sessVars.MemoryFactor > 0 {
+		p.AddCostWeight(Mem, memoryCost/sessVars.MemoryFactor, "mj-mem")
+	}
 	return cpuCost + memoryCost
 }
 
@@ -1362,7 +1366,9 @@ func (p *PhysicalSort) GetCost(count float64, schema *expression.Schema) float64
 		memoryCost = 0
 	}
 
-	p.AddCostWeight(Mem, memoryCost/sessVars.MemoryFactor, fmt.Sprintf("sort-mem-count(%v)", count))
+	if sessVars.MemoryFactor > 0 {
+		p.AddCostWeight(Mem, memoryCost/sessVars.MemoryFactor, fmt.Sprintf("sort-mem-count(%v)", count))
+	}
 	return cpuCost + memoryCost + diskCost
 }
 
@@ -2365,7 +2371,9 @@ func (p *PhysicalHashAgg) GetCost(inputRows float64, isRoot bool, isMPP bool) fl
 		memoryCost = 0
 	}
 	p.AddCostWeight(CPU, cpuCost/sessVars.CPUFactor, "agg-cpu")
-	p.AddCostWeight(Mem, memoryCost/sessVars.MemoryFactor, "agg-mem")
+	if sessVars.MemoryFactor > 0 { // memCost is ignored
+		p.AddCostWeight(Mem, memoryCost/sessVars.MemoryFactor, "agg-mem")
+	}
 	return cpuCost + memoryCost
 }
 
