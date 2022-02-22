@@ -298,7 +298,7 @@ func DoOptimize(ctx context.Context, sctx sessionctx.Context, flag uint64, logic
 		sctx.GetSessionVars().StmtCtx.AppendNote(errors.Errorf("[COST] CostWeights: %v", cw))
 		sv := sctx.GetSessionVars()
 		cf := GetCostFactors(sctx)
-		cfName := "[CPU, CopCPU, Net, Scan, DescScan, Mem, Seek]"
+		cfName := "[CPU, CopCPU, Net, Scan, DescScan, Mem, Seek, TiFlashScan]"
 		cost := CalCost(cf, cw)
 		sv.StmtCtx.AppendNote(errors.Errorf("[COST] CostCalculation: %v %v*%v = %v", cfName, cw, cf, cost))
 		for _, d := range details {
