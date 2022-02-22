@@ -2442,7 +2442,13 @@ func (t *mppTask) convertToRootTaskImpl(ctx sessionctx.Context) *rootTask {
 	netCost := rowCount * ctx.GetSessionVars().GetNetworkFactor(nil)
 
 	if ctx.GetSessionVars().CostVariant == 1 {
-		rowWidth := t.tblColHists.GetIndexAvgRowSize(ctx, p.Schema().Columns, false)
+		var rowWidth float64
+		if t.tblColHists != nil {
+			rowWidth = t.tblColHists.GetIndexAvgRowSize(ctx, p.Schema().Columns, false) // TiFlash Scan
+		} else {
+			// just calculate it approximately
+			rowWidth = float64(len(p.Schema().Columns) * 5)
+		}
 		rowWidth = math.Log2(rowWidth)
 		netCost = rowCount * rowWidth * ctx.GetSessionVars().GetNetworkFactor(nil)
 	}
