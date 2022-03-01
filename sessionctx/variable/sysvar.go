@@ -1412,6 +1412,12 @@ var defaultSysVars = []*SysVar{
 		}
 		return string(info), nil
 	}},
+	{Scope: ScopeGlobal, Name: TiDBCostCalculationMode, Value: strconv.FormatInt(DefTiDBCostCalculationMode, 10), Type: TypeUnsigned, MaxValue: math.MaxInt32, GetGlobal: func(sv *SessionVars) (string, error) {
+		return strconv.FormatInt(CostCalculationMode.Load(), 10), nil
+	}, SetGlobal: func(s *SessionVars, val string) error {
+		CostCalculationMode.Store(TidbOptInt64(val, DefTiDBMemQuotaBindCache))
+		return nil
+	}},
 }
 
 // FeedbackProbability points to the FeedbackProbability in statistics package.

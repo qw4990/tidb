@@ -657,6 +657,8 @@ const (
 	TiDBStatsLoadPseudoTimeout = "tidb_stats_load_pseudo_timeout"
 	// TiDBMemQuotaBindCache indicates the memory quota for the bind cache.
 	TiDBMemQuotaBindCache = "tidb_mem_quota_bind_cache"
+	// TiDBCostCalculationMode indicates how the optimizer calculates plan costs.
+	TiDBCostCalculationMode = "tidb_cost_calculation_mode"
 )
 
 // TiDB intentional limits
@@ -827,6 +829,7 @@ const (
 	DefSysdateIsNow                       = false
 	DefTiDBEnableMutationChecker          = false
 	DefTiDBTxnAssertionLevel              = AssertionOffStr
+	DefTiDBCostCalculationMode            = 0
 )
 
 // Process global variables.
@@ -862,4 +865,5 @@ var (
 	StatsLoadPseudoTimeout                = atomic.NewBool(DefTiDBStatsLoadPseudoTimeout)
 	GlobalSysdateIsNow                    = atomic.NewBool(DefSysdateIsNow)
 	MemQuotaBindCache                     = atomic.NewInt64(DefTiDBMemQuotaBindCache)
+	CostCalculationMode                   = atomic.NewInt64(DefTiDBCostCalculationMode)
 )

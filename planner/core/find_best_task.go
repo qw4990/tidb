@@ -16,6 +16,7 @@ package core
 
 import (
 	"fmt"
+	"github.com/pingcap/tidb/sessionctx/variable"
 	"math"
 	"strings"
 
@@ -416,8 +417,15 @@ func (p *baseLogicalPlan) findBestTask(prop *property.PhysicalProperty, planCoun
 		goto END
 	}
 	opt.appendCandidate(p, curTask.plan(), prop)
-	if curTask.cost() < bestTask.cost() || (bestTask.invalid() && !curTask.invalid()) {
-		bestTask = curTask
+
+	if variable.CostCalculationMode.Load() == 1 {
+		if curTask.plan().Cost() < bestTask.plan().Cost() || (bestTask.invalid() && !curTask.invalid()) {
+			bestTask = curTask
+		}
+	} else {
+		if curTask.cost() < bestTask.cost() || (bestTask.invalid() && !curTask.invalid()) {
+			bestTask = curTask
+		}
 	}
 
 END:
