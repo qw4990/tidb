@@ -13,3 +13,35 @@
 // limitations under the License.
 
 package core
+
+// Cost implements PhysicalPlan interface.
+func (p *PhysicalTableReader) Cost() float64 {
+	// just calculate net-cost here since scan-cost is calculated in TableScan[cop]
+	rowCount := p.tablePlan.StatsCount()
+	netFactor := p.ctx.GetSessionVars().GetNetworkFactor(nil)
+	rowWidth := p.stats.HistColl.GetAvgRowSize(p.ctx, p.tablePlan.Schema().Columns, false, false)
+	netCost := rowCount * rowWidth * netFactor
+	copIterWorkers := float64(p.ctx.GetSessionVars().DistSQLScanConcurrency())
+	return (p.tablePlan.Cost() + netCost) / copIterWorkers
+}
+
+// Cost implements PhysicalPlan interface.
+func (p *PhysicalIndexMergeReader) Cost() float64 {
+	var totCost float64
+	netFactor := p.ctx.GetSessionVars().GetNetworkFactor(nil)
+	if p.tablePlan != nil {
+		t := p.tablePlan
+		rowCount := t.StatsCount()
+		rowWidth := float64(0)                     // TODO: how to get rowWidth here?
+		netCost := rowCount * rowWidth * netFactor // accumulate net-cost
+		totCost += netCost + t.Cost()
+	}
+	for _, idxScan := range p.partialPlans {
+		rowCount := idxScan.StatsCount()
+		rowWidth := float64(0)                     // TODO: how to get rowWidth here?
+		netCost := rowCount * rowWidth * netFactor // accumulate net-cost
+		totCost += netCost + idxScan.Cost()
+	}
+	copIterWorkers := float64(p.ctx.GetSessionVars().DistSQLScanConcurrency())
+	return totCost / copIterWorkers
+}

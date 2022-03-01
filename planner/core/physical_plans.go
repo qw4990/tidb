@@ -334,6 +334,7 @@ type PhysicalIndexMergeReader struct {
 	partialPlans []PhysicalPlan
 	// tablePlan is a PhysicalTableScan to get the table tuples. Current, it must be not nil.
 	tablePlan PhysicalPlan
+	storeType kv.StoreType
 
 	// Used by partition table.
 	PartitionInfo PartitionInfo
