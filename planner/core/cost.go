@@ -45,3 +45,168 @@ func (p *PhysicalIndexMergeReader) Cost() float64 {
 	copIterWorkers := float64(p.ctx.GetSessionVars().DistSQLScanConcurrency())
 	return totCost / copIterWorkers
 }
+
+func (p *PhysicalProjection) Cost() float64 {
+	if p.availableCost {
+		return p.cost
+	}
+	p.SetCost(p.children[0].Cost() + p.GetCost(p.children[0].StatsCount()))
+	p.availableCost = true
+	return p.cost
+}
+
+func (p *PhysicalTopN) Cost() float64 {
+	if p.availableCost {
+		return p.cost
+	}
+	p.SetCost(p.children[0].Cost() + p.GetCost(p.children[0].StatsCount(), true))
+	p.availableCost = true
+	return p.cost
+}
+
+func (la *PhysicalApply) Cost() float64 {
+	if la.availableCost {
+		return la.cost
+	}
+	lChild := la.children[0]
+	rChild := la.children[1]
+	la.SetCost(la.GetCost(lChild.StatsCount(), rChild.StatsCount(), lChild.Cost(), rChild.Cost()))
+	la.availableCost = true
+	return la.cost
+}
+
+func (p *PhysicalHashJoin) Cost() float64 {
+	if p.availableCost {
+		return p.cost
+	}
+	lChild := p.children[0]
+	rChild := p.children[1]
+	p.SetCost(lChild.Cost() + rChild.Cost() + p.GetCost(lChild.StatsCount(), rChild.StatsCount()))
+	p.availableCost = true
+	return p.cost
+}
+
+func (p *PhysicalIndexJoin) Cost() float64 {
+	if p.availableCost {
+		return p.cost
+	}
+	innerPlan := p.children[p.InnerChildIdx]
+	outerPlan := p.children[1-p.InnerChildIdx]
+	p.SetCost(p.GetCost(outerPlan.StatsCount(), outerPlan.Cost(), innerPlan.StatsCount(), innerPlan.Cost()))
+	p.availableCost = true
+	return p.cost
+}
+
+func (p *PhysicalIndexMergeJoin) Cost() float64 {
+	if p.availableCost {
+		return p.cost
+	}
+	innerPlan := p.children[p.InnerChildIdx]
+	outerPlan := p.children[1-p.InnerChildIdx]
+	p.SetCost(p.GetCost(outerPlan.StatsCount(), outerPlan.Cost(), innerPlan.StatsCount(), innerPlan.Cost()))
+	p.availableCost = true
+	return p.cost
+}
+
+func (p *PhysicalIndexHashJoin) Cost() float64 {
+	if p.availableCost {
+		return p.cost
+	}
+	innerPlan := p.children[p.InnerChildIdx]
+	outerPlan := p.children[1-p.InnerChildIdx]
+	p.SetCost(p.GetCost(outerPlan.StatsCount(), outerPlan.Cost(), innerPlan.StatsCount(), innerPlan.Cost()))
+	p.availableCost = true
+	return p.cost
+}
+
+func (p *PhysicalMergeJoin) Cost() float64 {
+	if p.availableCost {
+		return p.cost
+	}
+	lChild := p.children[0]
+	rChild := p.children[1]
+	p.SetCost(lChild.Cost() + rChild.Cost() + p.GetCost(lChild.StatsCount(), rChild.StatsCount()))
+	p.availableCost = true
+	return p.cost
+}
+
+func (p *PhysicalLimit) Cost() float64 {
+	if p.availableCost {
+		return p.cost
+	}
+	p.SetCost(p.children[0].Cost())
+	p.availableCost = true
+	return p.cost
+}
+
+func (p *PhysicalUnionAll) Cost() float64 {
+	if p.availableCost {
+		return p.cost
+	}
+	var childMaxCost float64
+	for _, child := range p.children {
+		if childMaxCost < child.Cost() {
+			childMaxCost = child.Cost()
+		}
+	}
+	p.SetCost(p.GetCost(childMaxCost, len(p.children)))
+	p.availableCost = true
+	return p.cost
+}
+
+func (p *PhysicalUnionAll) GetCost(childMaxCost float64, taskNum int) float64 {
+	return childMaxCost + float64(1+taskNum)*p.ctx.GetSessionVars().ConcurrencyFactor
+}
+
+func (p *PhysicalHashAgg) Cost() float64 {
+	if p.availableCost {
+		return p.cost
+	}
+
+	// We may have 3-phase hash aggregation actually, strictly speaking, we'd better
+	// calculate cost of each phase and sum the results up, but in fact we don't have
+	// region level table stats, and the concurrency of the `partialAgg`,
+	// i.e, max(number_of_regions, DistSQLScanConcurrency) is unknown either, so it is hard
+	// to compute costs separately. We ignore region level parallelism for both hash
+	// aggregation and stream aggregation when calculating cost, though this would lead to inaccuracy,
+	// hopefully this inaccuracy would be imposed on both aggregation implementations,
+	// so they are still comparable horizontally.
+	// Also, we use the stats of `partialAgg` as the input of cost computing for TiDB layer
+	// hash aggregation, it would cause under-estimation as the reason mentioned in comment above.
+	// To make it simple, we also treat 2-phase parallel hash aggregation in TiDB layer as
+	// 1-phase when computing cost.
+	p.SetCost(p.children[0].Cost() + p.GetCost(p.children[0].StatsCount(), true, false))
+	p.availableCost = true
+	return p.cost
+}
+
+func (p *PhysicalStreamAgg) Cost() float64 {
+	if p.availableCost {
+		return p.cost
+	}
+	p.SetCost(p.children[0].Cost() + p.GetCost(p.children[0].StatsCount(), true))
+	p.availableCost = true
+	return p.cost
+}
+
+func (p *PhysicalSort) Cost() float64 {
+	if p.availableCost {
+		return p.cost
+	}
+	p.SetCost(p.children[0].Cost() + p.GetCost(p.children[0].StatsCount(), p.Schema()))
+	p.availableCost = true
+	return p.cost
+}
+
+func (p *PhysicalSelection) Cost() float64 {
+	if p.availableCost {
+		return p.cost
+	}
+	p.SetCost(p.children[0].Cost() + p.GetCost(p.children[0].StatsCount()))
+	p.availableCost = true
+	return p.cost
+}
+
+func (p *PhysicalSelection) GetCost(count float64) float64 {
+	return count * p.ctx.GetSessionVars().CPUFactor
+}

@@ -387,10 +387,17 @@ type basePhysicalPlan struct {
 	self             PhysicalPlan
 	children         []PhysicalPlan
 	cost             float64
+	availableCost    bool
 }
 
 // Cost implements PhysicalPlan interface.
 func (p *basePhysicalPlan) Cost() float64 {
+	if p.availableCost {
+		return p.cost
+	}
+	p.children[0].Cost()
+	p.SetCost(p.children[0].Cost())
+	p.availableCost = true
 	return p.cost
 }
 

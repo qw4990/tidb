@@ -286,16 +286,15 @@ func (p *PhysicalIndexMergeJoin) attach2Task(tasks ...task) task {
 	}
 	t := &rootTask{
 		p:   p,
-		cst: p.GetCost(outerTask, innerTask),
+		cst: p.GetCost(outerTask.count(), outerTask.cost(), innerTask.count(), innerTask.cost()),
 	}
 	p.cost = t.cost()
 	return t
 }
 
 // GetCost computes the cost of index merge join operator and its children.
-func (p *PhysicalIndexMergeJoin) GetCost(outerTask, innerTask task) float64 {
+func (p *PhysicalIndexMergeJoin) GetCost(outerCnt, outerCost, innerCnt, innerCost float64) float64 {
 	var cpuCost float64
-	outerCnt, innerCnt := outerTask.count(), innerTask.count()
 	sessVars := p.ctx.GetSessionVars()
 	// Add the cost of evaluating outer filter, since inner filter of index join
 	// is always empty, we can simply tell whether outer filter is empty using the
@@ -351,8 +350,8 @@ func (p *PhysicalIndexMergeJoin) GetCost(outerTask, innerTask task) float64 {
 	// So the memory cost consider the results size for each batch.
 	memoryCost := innerConcurrency * (batchSize * avgProbeCnt) * sessVars.MemoryFactor
 
-	innerPlanCost := outerCnt * innerTask.cost()
-	return outerTask.cost() + innerPlanCost + cpuCost + memoryCost
+	innerPlanCost := outerCnt * innerCost
+	return outerCost + innerPlanCost + cpuCost + memoryCost
 }
 
 func (p *PhysicalIndexHashJoin) attach2Task(tasks ...task) task {
@@ -365,16 +364,15 @@ func (p *PhysicalIndexHashJoin) attach2Task(tasks ...task) task {
 	}
 	t := &rootTask{
 		p:   p,
-		cst: p.GetCost(outerTask, innerTask),
+		cst: p.GetCost(outerTask.count(), outerTask.cost(), innerTask.count(), innerTask.cost()),
 	}
 	p.cost = t.cost()
 	return t
 }
 
 // GetCost computes the cost of index merge join operator and its children.
-func (p *PhysicalIndexHashJoin) GetCost(outerTask, innerTask task) float64 {
+func (p *PhysicalIndexHashJoin) GetCost(outerCnt, outerCost, innerCnt, innerCost float64) float64 {
 	var cpuCost float64
-	outerCnt, innerCnt := outerTask.count(), innerTask.count()
 	sessVars := p.ctx.GetSessionVars()
 	// Add the cost of evaluating outer filter, since inner filter of index join
 	// is always empty, we can simply tell whether outer filter is empty using the
@@ -428,8 +426,8 @@ func (p *PhysicalIndexHashJoin) GetCost(outerTask, innerTask task) float64 {
 	// since the executor is pipelined and not all workers are always in full load.
 	memoryCost := concurrency * (batchSize * distinctFactor) * innerCnt * sessVars.MemoryFactor
 	// Cost of inner child plan, i.e, mainly I/O and network cost.
-	innerPlanCost := outerCnt * innerTask.cost()
-	return outerTask.cost() + innerPlanCost + cpuCost + memoryCost
+	innerPlanCost := outerCnt * innerCost
+	return outerCost + innerPlanCost + cpuCost + memoryCost
 }
 
 func (p *PhysicalIndexJoin) attach2Task(tasks ...task) task {
@@ -442,16 +440,15 @@ func (p *PhysicalIndexJoin) attach2Task(tasks ...task) task {
 	}
 	t := &rootTask{
 		p:   p,
-		cst: p.GetCost(outerTask, innerTask),
+		cst: p.GetCost(outerTask.count(), outerTask.cost(), innerTask.count(), innerTask.cost()),
 	}
 	p.cost = t.cost()
 	return t
 }
 
 // GetCost computes the cost of index join operator and its children.
-func (p *PhysicalIndexJoin) GetCost(outerTask, innerTask task) float64 {
+func (p *PhysicalIndexJoin) GetCost(outerCnt, outerCost, innerCnt, innerCost float64) float64 {
 	var cpuCost float64
-	outerCnt, innerCnt := outerTask.count(), innerTask.count()
 	sessVars := p.ctx.GetSessionVars()
 	// Add the cost of evaluating outer filter, since inner filter of index join
 	// is always empty, we can simply tell whether outer filter is empty using the
@@ -494,8 +491,8 @@ func (p *PhysicalIndexJoin) GetCost(outerTask, innerTask task) float64 {
 	// since the executor is pipelined and not all workers are always in full load.
 	memoryCost := innerConcurrency * (batchSize * distinctFactor) * innerCnt * sessVars.MemoryFactor
 	// Cost of inner child plan, i.e, mainly I/O and network cost.
-	innerPlanCost := outerCnt * innerTask.cost()
-	return outerTask.cost() + innerPlanCost + cpuCost + memoryCost
+	innerPlanCost := outerCnt * innerCost
+	return outerCost + innerPlanCost + cpuCost + memoryCost
 }
 
 func getAvgRowSize(stats *property.StatsInfo, schema *expression.Schema) (size float64) {
