@@ -46,111 +46,71 @@ func (p *PhysicalIndexMergeReader) Cost() float64 {
 	return totCost / copIterWorkers
 }
 
-func (p *PhysicalProjection) Cost() float64 {
-	if p.availableCost {
-		return p.cost
-	}
-	p.SetCost(p.children[0].Cost() + p.GetCost(p.children[0].StatsCount()))
-	p.availableCost = true
+func (p *PhysicalProjection) CalCost() float64 {
+	p.SetCost(p.children[0].CalCost() + p.GetCost(p.children[0].StatsCount()))
 	return p.cost
 }
 
-func (p *PhysicalTopN) Cost() float64 {
-	if p.availableCost {
-		return p.cost
-	}
-	p.SetCost(p.children[0].Cost() + p.GetCost(p.children[0].StatsCount(), true))
-	p.availableCost = true
+func (p *PhysicalTopN) CalCost() float64 {
+	p.SetCost(p.children[0].CalCost() + p.GetCost(p.children[0].StatsCount(), true))
 	return p.cost
 }
 
-func (la *PhysicalApply) Cost() float64 {
-	if la.availableCost {
-		return la.cost
-	}
+func (la *PhysicalApply) CalCost() float64 {
 	lChild := la.children[0]
 	rChild := la.children[1]
-	la.SetCost(la.GetCost(lChild.StatsCount(), rChild.StatsCount(), lChild.Cost(), rChild.Cost()))
-	la.availableCost = true
+	la.SetCost(la.GetCost(lChild.StatsCount(), rChild.StatsCount(), lChild.CalCost(), rChild.CalCost()))
 	return la.cost
 }
 
-func (p *PhysicalHashJoin) Cost() float64 {
-	if p.availableCost {
-		return p.cost
-	}
+func (p *PhysicalHashJoin) CalCost() float64 {
 	lChild := p.children[0]
 	rChild := p.children[1]
-	p.SetCost(lChild.Cost() + rChild.Cost() + p.GetCost(lChild.StatsCount(), rChild.StatsCount()))
-	p.availableCost = true
+	p.SetCost(lChild.CalCost() + rChild.CalCost() + p.GetCost(lChild.StatsCount(), rChild.StatsCount()))
 	return p.cost
 }
 
-func (p *PhysicalIndexJoin) Cost() float64 {
-	if p.availableCost {
-		return p.cost
-	}
+func (p *PhysicalIndexJoin) CalCost() float64 {
 	innerPlan := p.children[p.InnerChildIdx]
 	outerPlan := p.children[1-p.InnerChildIdx]
-	p.SetCost(p.GetCost(outerPlan.StatsCount(), outerPlan.Cost(), innerPlan.StatsCount(), innerPlan.Cost()))
-	p.availableCost = true
+	p.SetCost(p.GetCost(outerPlan.StatsCount(), outerPlan.CalCost(), innerPlan.StatsCount(), innerPlan.CalCost()))
 	return p.cost
 }
 
-func (p *PhysicalIndexMergeJoin) Cost() float64 {
-	if p.availableCost {
-		return p.cost
-	}
+func (p *PhysicalIndexMergeJoin) CalCost() float64 {
 	innerPlan := p.children[p.InnerChildIdx]
 	outerPlan := p.children[1-p.InnerChildIdx]
-	p.SetCost(p.GetCost(outerPlan.StatsCount(), outerPlan.Cost(), innerPlan.StatsCount(), innerPlan.Cost()))
-	p.availableCost = true
+	p.SetCost(p.GetCost(outerPlan.StatsCount(), outerPlan.CalCost(), innerPlan.StatsCount(), innerPlan.CalCost()))
 	return p.cost
 }
 
-func (p *PhysicalIndexHashJoin) Cost() float64 {
-	if p.availableCost {
-		return p.cost
-	}
+func (p *PhysicalIndexHashJoin) CalCost() float64 {
 	innerPlan := p.children[p.InnerChildIdx]
 	outerPlan := p.children[1-p.InnerChildIdx]
-	p.SetCost(p.GetCost(outerPlan.StatsCount(), outerPlan.Cost(), innerPlan.StatsCount(), innerPlan.Cost()))
-	p.availableCost = true
+	p.SetCost(p.GetCost(outerPlan.StatsCount(), outerPlan.CalCost(), innerPlan.StatsCount(), innerPlan.CalCost()))
 	return p.cost
 }
 
-func (p *PhysicalMergeJoin) Cost() float64 {
-	if p.availableCost {
-		return p.cost
-	}
+func (p *PhysicalMergeJoin) CalCost() float64 {
 	lChild := p.children[0]
 	rChild := p.children[1]
-	p.SetCost(lChild.Cost() + rChild.Cost() + p.GetCost(lChild.StatsCount(), rChild.StatsCount()))
-	p.availableCost = true
+	p.SetCost(lChild.CalCost() + rChild.CalCost() + p.GetCost(lChild.StatsCount(), rChild.StatsCount()))
 	return p.cost
 }
 
-func (p *PhysicalLimit) Cost() float64 {
-	if p.availableCost {
-		return p.cost
-	}
-	p.SetCost(p.children[0].Cost())
-	p.availableCost = true
+func (p *PhysicalLimit) CalCost() float64 {
+	p.SetCost(p.children[0].CalCost())
 	return p.cost
 }
 
-func (p *PhysicalUnionAll) Cost() float64 {
-	if p.availableCost {
-		return p.cost
-	}
+func (p *PhysicalUnionAll) CalCost() float64 {
 	var childMaxCost float64
 	for _, child := range p.children {
-		if childMaxCost < child.Cost() {
-			childMaxCost = child.Cost()
+		if childMaxCost < child.CalCost() {
+			childMaxCost = child.CalCost()
 		}
 	}
 	p.SetCost(p.GetCost(childMaxCost, len(p.children)))
-	p.availableCost = true
 	return p.cost
 }
 
@@ -158,11 +118,7 @@ func (p *PhysicalUnionAll) GetCost(childMaxCost float64, taskNum int) float64 {
 	return childMaxCost + float64(1+taskNum)*p.ctx.GetSessionVars().ConcurrencyFactor
 }
 
-func (p *PhysicalHashAgg) Cost() float64 {
-	if p.availableCost {
-		return p.cost
-	}
-
+func (p *PhysicalHashAgg) CalCost() float64 {
 	// We may have 3-phase hash aggregation actually, strictly speaking, we'd better
 	// calculate cost of each phase and sum the results up, but in fact we don't have
 	// region level table stats, and the concurrency of the `partialAgg`,
@@ -175,38 +131,30 @@ func (p *PhysicalHashAgg) Cost() float64 {
 	// hash aggregation, it would cause under-estimation as the reason mentioned in comment above.
 	// To make it simple, we also treat 2-phase parallel hash aggregation in TiDB layer as
 	// 1-phase when computing cost.
-	p.SetCost(p.children[0].Cost() + p.GetCost(p.children[0].StatsCount(), true, false))
-	p.availableCost = true
+	p.SetCost(p.children[0].CalCost() + p.GetCost(p.children[0].StatsCount(), true, false))
 	return p.cost
 }
 
-func (p *PhysicalStreamAgg) Cost() float64 {
-	if p.availableCost {
-		return p.cost
-	}
-	p.SetCost(p.children[0].Cost() + p.GetCost(p.children[0].StatsCount(), true))
-	p.availableCost = true
+func (p *PhysicalStreamAgg) CalCost() float64 {
+	p.SetCost(p.children[0].CalCost() + p.GetCost(p.children[0].StatsCount(), true))
 	return p.cost
 }
 
-func (p *PhysicalSort) Cost() float64 {
-	if p.availableCost {
-		return p.cost
-	}
-	p.SetCost(p.children[0].Cost() + p.GetCost(p.children[0].StatsCount(), p.Schema()))
-	p.availableCost = true
+func (p *PhysicalSort) CalCost() float64 {
+	p.SetCost(p.children[0].CalCost() + p.GetCost(p.children[0].StatsCount(), p.Schema()))
 	return p.cost
 }
 
-func (p *PhysicalSelection) Cost() float64 {
-	if p.availableCost {
-		return p.cost
-	}
-	p.SetCost(p.children[0].Cost() + p.GetCost(p.children[0].StatsCount()))
-	p.availableCost = true
+func (p *PhysicalSelection) CalCost() float64 {
+	p.SetCost(p.children[0].CalCost() + p.GetCost(p.children[0].StatsCount()))
 	return p.cost
 }
 
 func (p *PhysicalSelection) GetCost(count float64) float64 {
 	return count * p.ctx.GetSessionVars().CPUFactor
+}
+
+func (p *basePhysicalPlan) CalCost() float64 {
+	p.SetCost(p.children[0].CalCost())
+	return p.cost
 }
