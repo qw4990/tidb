@@ -14,10 +14,12 @@
 
 package core
 
+import "github.com/pingcap/tidb/kv"
+
 type RowWidthType int
 
 const (
-	RowWidthNet RowWidthType = iota
+	RowWidthScan RowWidthType = iota
 	RowWidthMem
 )
 
@@ -27,4 +29,19 @@ func (p *basePhysicalPlan) RowWidth(widthType RowWidthType) float64 {
 		rowWidth += c.RowWidth(widthType)
 	}
 	return p.cost
+}
+
+func (p *PhysicalTableScan) RowWidth(widthType RowWidthType) float64 {
+	switch widthType {
+	case RowWidthScan:
+		if p.StoreType == kv.TiKV {
+			return p.Stats().HistColl.GetTableAvgRowSize(p.ctx, p.schema.Columns, p.StoreType, true)
+		} else {
+			// If `p.handleCol` is nil, then the schema of tableScan doesn't have handle column.
+			// This logic can be ensured in column pruning.
+			return p.Stats().HistColl.GetTableAvgRowSize(p.ctx, p.schema.Columns, p.StoreType, p.HandleCols != nil)
+		}
+	case RowWidthMem:
+	}
+	panic("???")
 }
