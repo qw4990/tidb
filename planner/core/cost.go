@@ -15,7 +15,7 @@
 package core
 
 // Cost implements PhysicalPlan interface.
-func (p *PhysicalTableReader) Cost() float64 {
+func (p *PhysicalTableReader) CalCost() float64 {
 	// just calculate net-cost here since scan-cost is calculated in TableScan[cop]
 	rowCount := p.tablePlan.StatsCount()
 	netFactor := p.ctx.GetSessionVars().GetNetworkFactor(nil)
@@ -26,7 +26,7 @@ func (p *PhysicalTableReader) Cost() float64 {
 }
 
 // Cost implements PhysicalPlan interface.
-func (p *PhysicalIndexMergeReader) Cost() float64 {
+func (p *PhysicalIndexMergeReader) CalCost() float64 {
 	var totCost float64
 	netFactor := p.ctx.GetSessionVars().GetNetworkFactor(nil)
 	if p.tablePlan != nil {
