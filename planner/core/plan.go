@@ -348,9 +348,6 @@ type PhysicalPlan interface {
 	// Cost returns the estimated cost of the subplan.
 	Cost() float64
 
-	// CalCost returns the estimated cost of the subplan without task.
-	CalCost() float64
-
 	// SetCost set the cost of the subplan.
 	SetCost(cost float64)
 
@@ -359,6 +356,12 @@ type PhysicalPlan interface {
 
 	// Clone clones this physical plan.
 	Clone() (PhysicalPlan, error)
+
+	// CalCost returns the estimated cost of the subplan without task.
+	CalCost() float64
+
+	// RowWidth ...
+	RowWidth(RowWidthType) float64
 }
 
 type baseLogicalPlan struct {
