@@ -20,7 +20,7 @@ type RowWidthType int
 
 const (
 	RowWidthScan RowWidthType = iota
-	RowWidthMem
+	RowWidthNet
 )
 
 func (p *basePhysicalPlan) RowWidth(widthType RowWidthType) float64 {
@@ -41,7 +41,18 @@ func (p *PhysicalTableScan) RowWidth(widthType RowWidthType) float64 {
 			// This logic can be ensured in column pruning.
 			return p.Stats().HistColl.GetTableAvgRowSize(p.ctx, p.schema.Columns, p.StoreType, p.HandleCols != nil)
 		}
-	case RowWidthMem:
+	case RowWidthNet:
+		return p.stats.HistColl.GetAvgRowSize(p.ctx, p.schema.Columns, false, false)
 	}
-	panic("???")
+	return 0 // TODO: return an error?
+}
+
+func (p *PhysicalIndexScan) RowWidth(widthType RowWidthType) float64 {
+	switch widthType {
+	case RowWidthScan:
+		return p.indexScanRowSize(p.Index, nil, true) // TODO: get the DS
+	case RowWidthNet:
+		return p.stats.HistColl.GetAvgRowSize(p.ctx, p.schema.Columns, true, false)
+	}
+	return 0 // TODO: return an error?
 }

@@ -19,7 +19,7 @@ func (p *PhysicalTableReader) CalCost() float64 {
 	// just calculate net-cost here since scan-cost is calculated in TableScan[cop]
 	rowCount := p.tablePlan.StatsCount()
 	netFactor := p.ctx.GetSessionVars().GetNetworkFactor(nil)
-	rowWidth := p.stats.HistColl.GetAvgRowSize(p.ctx, p.tablePlan.Schema().Columns, false, false)
+	rowWidth := p.tablePlan.RowWidth(RowWidthNet)
 	netCost := rowCount * rowWidth * netFactor
 	copIterWorkers := float64(p.ctx.GetSessionVars().DistSQLScanConcurrency())
 	return (p.tablePlan.Cost() + netCost) / copIterWorkers
@@ -32,13 +32,13 @@ func (p *PhysicalIndexMergeReader) CalCost() float64 {
 	if p.tablePlan != nil {
 		t := p.tablePlan
 		rowCount := t.StatsCount()
-		rowWidth := float64(0)                     // TODO: how to get rowWidth here?
+		rowWidth := t.RowWidth(RowWidthNet)
 		netCost := rowCount * rowWidth * netFactor // accumulate net-cost
 		totCost += netCost + t.Cost()
 	}
 	for _, idxScan := range p.partialPlans {
 		rowCount := idxScan.StatsCount()
-		rowWidth := float64(0)                     // TODO: how to get rowWidth here?
+		rowWidth := idxScan.RowWidth(RowWidthNet)
 		netCost := rowCount * rowWidth * netFactor // accumulate net-cost
 		totCost += netCost + idxScan.Cost()
 	}
