@@ -653,6 +653,8 @@ type SessionVars struct {
 	CopTiFlashConcurrencyFactor float64
 	// CopTiFlashScanFactor ...
 	CopTiFlashScanFactor float64
+	// CopTiFlashCPUFactor ...
+	CopTiFlashCPUFactor float64
 	// networkFactor is the network cost of transferring 1 byte data.
 	networkFactor float64
 	// ScanFactor is the IO cost of scanning 1 byte data on TiKV and TiFlash.

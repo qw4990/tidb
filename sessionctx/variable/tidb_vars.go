@@ -266,6 +266,8 @@ const (
 	TiDBOptTiFlashConcurrencyFactor = "tidb_opt_tiflash_concurrency_factor"
 	// TiDBOptTiFlashScanFactor ...
 	TiDBOptTiFlashScanFactor = "tidb_opt_tiflash_scan_factor"
+	// TiDBOptTiFlashCPUFactor ...
+	TiDBOptTiFlashCPUFactor = "tidb_opt_tiflash_cpu_factor"
 	// tidb_opt_network_factor is the network cost of transferring 1 byte data.
 	// TiDBOptNetworkFactor is the network cost of transferring 1 byte data.
 	TiDBOptNetworkFactor = "tidb_opt_network_factor"
