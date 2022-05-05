@@ -326,7 +326,7 @@ func (p *PhysicalTableScan) isFullScan() bool {
 
 // ExplainInfo implements Plan interface.
 func (p *PhysicalTableReader) ExplainInfo() string {
-	return "data:" + p.tablePlan.ExplainID().String()
+	return "data:" + p.tablePlan.ExplainID().String() + ", net row size:" + fmt.Sprintf("%v", getTblStats(p.tablePlan).GetAvgRowSize(p.ctx, p.tablePlan.Schema().Columns, false, false))
 }
 
 // ExplainNormalizedInfo implements Plan interface.
@@ -423,7 +423,7 @@ func partitionAccessObject(sctx sessionctx.Context, tbl table.PartitionedTable, 
 
 // OperatorInfo return other operator information to be explained.
 func (p *PhysicalTableReader) OperatorInfo(normalized bool) string {
-	return "data:" + p.tablePlan.ExplainID().String() + ", net row size: " + fmt.Sprintf("%v", getTblStats(p.tablePlan).GetAvgRowSize(p.ctx, p.tablePlan.Schema().Columns, false, false))
+	return "data:" + p.tablePlan.ExplainID().String()
 }
 
 // ExplainInfo implements Plan interface.
