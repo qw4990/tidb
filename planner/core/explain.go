@@ -293,7 +293,7 @@ func (p *PhysicalTableScan) OperatorInfo(normalized bool) string {
 	if p.StoreType == kv.TiFlash && p.Table.GetPartitionInfo() != nil && p.IsMPPOrBatchCop && p.ctx.GetSessionVars().UseDynamicPartitionPrune() {
 		buffer.WriteString(", PartitionTableScan:true")
 	}
-	buffer.WriteString(fmt.Sprintf(", row size:%v", p.getScanRowSize()))
+	buffer.WriteString(fmt.Sprintf(", scan row size:%v", p.getScanRowSize()))
 	return buffer.String()
 }
 
@@ -423,7 +423,7 @@ func partitionAccessObject(sctx sessionctx.Context, tbl table.PartitionedTable, 
 
 // OperatorInfo return other operator information to be explained.
 func (p *PhysicalTableReader) OperatorInfo(normalized bool) string {
-	return "data:" + p.tablePlan.ExplainID().String()
+	return "data:" + p.tablePlan.ExplainID().String() + ", net row size: " + fmt.Sprintf("%v", getTblStats(p.tablePlan).GetAvgRowSize(p.ctx, p.tablePlan.Schema().Columns, false, false))
 }
 
 // ExplainInfo implements Plan interface.
