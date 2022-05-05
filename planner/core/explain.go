@@ -293,6 +293,7 @@ func (p *PhysicalTableScan) OperatorInfo(normalized bool) string {
 	if p.StoreType == kv.TiFlash && p.Table.GetPartitionInfo() != nil && p.IsMPPOrBatchCop && p.ctx.GetSessionVars().UseDynamicPartitionPrune() {
 		buffer.WriteString(", PartitionTableScan:true")
 	}
+	buffer.WriteString(fmt.Sprintf(", row size:%v", p.getScanRowSize()))
 	return buffer.String()
 }
 
