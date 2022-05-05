@@ -537,12 +537,14 @@ func (p *PhysicalSelection) ExplainNormalizedInfo() string {
 
 // ExplainInfo implements Plan interface.
 func (p *PhysicalProjection) ExplainInfo() string {
-	return expression.ExplainExpressionList(p.Exprs, p.schema)
+	return expression.ExplainExpressionList(p.Exprs, p.schema) +
+		fmt.Sprintf(", concurrency:%v", p.SCtx().GetSessionVars().ProjectionConcurrency())
 }
 
 // ExplainNormalizedInfo implements Plan interface.
 func (p *PhysicalProjection) ExplainNormalizedInfo() string {
-	return string(expression.SortedExplainNormalizedExpressionList(p.Exprs))
+	return string(expression.SortedExplainNormalizedExpressionList(p.Exprs)) +
+		fmt.Sprintf(", concurrency:%v", p.SCtx().GetSessionVars().ProjectionConcurrency())
 }
 
 // ExplainInfo implements Plan interface.
