@@ -326,7 +326,9 @@ func (p *PhysicalTableScan) isFullScan() bool {
 
 // ExplainInfo implements Plan interface.
 func (p *PhysicalTableReader) ExplainInfo() string {
-	return "data:" + p.tablePlan.ExplainID().String() + ", net row size:" + fmt.Sprintf("%v", getTblStats(p.tablePlan).GetAvgRowSize(p.ctx, p.tablePlan.Schema().Columns, false, false))
+	return "data:" + p.tablePlan.ExplainID().String() +
+		", net row size:" + fmt.Sprintf("%v", getTblStats(p.tablePlan).GetAvgRowSize(p.ctx, p.tablePlan.Schema().Columns, false, false)) +
+		", concurrency:" + fmt.Sprintf("%v", p.ctx.GetSessionVars().DistSQLScanConcurrency())
 }
 
 // ExplainNormalizedInfo implements Plan interface.
