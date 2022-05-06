@@ -4694,6 +4694,14 @@ ExplainStmt:
 			Analyze: true,
 		}
 	}
+|	ExplainSym "ANALYZE" "FORMAT" "=" ExplainFormatType ExplainableStmt
+	{
+		$$ = &ast.ExplainStmt{
+			Stmt:    $3,
+			Format:  $5,
+			Analyze: true,
+		}
+	}
 
 ExplainFormatType:
 	"TRADITIONAL"
