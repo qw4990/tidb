@@ -44,15 +44,6 @@ func (p *basePhysicalPlan) GetPlanCost(taskType property.TaskType) (float64, err
 	return p.planCost, nil
 }
 
-// ResetPlanCost resets current plan's cost and then you can invoke GetPlanCost to calculate it again.
-func (p *basePhysicalPlan) ResetPlanCost() {
-	for _, child := range p.children {
-		child.ResetPlanCost()
-	}
-	p.planCostInit = false
-	p.planCost = 0
-}
-
 // GetPlanCost calculates the cost of the plan if it has not been calculated yet and returns the cost.
 func (p *PhysicalSelection) GetPlanCost(taskType property.TaskType) (float64, error) {
 	if p.planCostInit {
@@ -955,12 +946,6 @@ func (p *BatchPointGetPlan) GetPlanCost(taskType property.TaskType) (float64, er
 	return p.planCost, nil
 }
 
-// ResetPlanCost resets current plan's cost and then you can invoke GetPlanCost to calculate it again.
-func (p *BatchPointGetPlan) ResetPlanCost() {
-	p.planCostInit = false
-	p.planCost = 0
-}
-
 // GetCost returns cost of the PointGetPlan.
 func (p *PointGetPlan) GetCost() float64 {
 	cols := p.accessCols
@@ -989,12 +974,6 @@ func (p *PointGetPlan) GetPlanCost(taskType property.TaskType) (float64, error) 
 	p.planCost = p.GetCost()
 	p.planCostInit = true
 	return p.planCost, nil
-}
-
-// ResetPlanCost resets current plan's cost and then you can invoke GetPlanCost to calculate it again.
-func (p *PointGetPlan) ResetPlanCost() {
-	p.planCostInit = false
-	p.planCost = 0
 }
 
 // GetPlanCost calculates the cost of the plan if it has not been calculated yet and returns the cost.

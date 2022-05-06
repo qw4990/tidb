@@ -321,9 +321,6 @@ type PhysicalPlan interface {
 	// GetPlanCost calculates the cost of the plan if it has not been calculated yet and returns the cost.
 	GetPlanCost(taskType property.TaskType) (float64, error)
 
-	// ResetPlanCost resets current plan's cost and then you can invoke GetPlanCost to calculate it again.
-	ResetPlanCost()
-
 	// attach2Task makes the current physical plan as the father of task's physicalPlan and updates the cost of
 	// current task. If the child's task is cop task, some operator may close this task and return a new rootTask.
 	attach2Task(...task) task
