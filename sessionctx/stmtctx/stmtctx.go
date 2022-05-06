@@ -203,6 +203,8 @@ type StatementContext struct {
 	OptimInfo map[int]string
 	// InVerboseExplain indicates the statement is "explain format='verbose' ...".
 	InVerboseExplain bool
+	// InTrueCardCostExplain ...
+	InTrueCardCostExplain bool
 
 	// EnableOptimizeTrace indicates whether enable optimizer trace by 'trace plan statement'
 	EnableOptimizeTrace bool
