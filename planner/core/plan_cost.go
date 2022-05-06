@@ -72,7 +72,7 @@ func (p *PhysicalSelection) GetPlanCost(taskType property.TaskType) (float64, er
 		return 0, err
 	}
 	p.planCost = childCost
-	p.planCost += p.children[0].StatsCount() * cpuFactor // selection cost: rows * cpu-factor
+	p.planCost += getRowCount(p.children[0]) * cpuFactor // selection cost: rows * cpu-factor
 	p.planCostInit = true
 	return p.planCost, nil
 }
@@ -100,7 +100,7 @@ func (p *PhysicalProjection) GetPlanCost(taskType property.TaskType) (float64, e
 		return 0, err
 	}
 	p.planCost = childCost
-	p.planCost += p.GetCost(p.StatsCount()) // projection cost
+	p.planCost += p.GetCost(getRowCount(p)) // projection cost
 	p.planCostInit = true
 	return p.planCost, nil
 }
@@ -177,19 +177,19 @@ func (p *PhysicalIndexLookUpReader) GetPlanCost(taskType property.TaskType) (flo
 		return 0, err
 	}
 	p.planCost -= tblCost
-	p.planCost += p.indexPlan.StatsCount() * ts.getScanRowSize() * p.SCtx().GetSessionVars().GetScanFactor(ts.Table)
+	p.planCost += getRowCount(p.indexPlan) * ts.getScanRowSize() * p.SCtx().GetSessionVars().GetScanFactor(ts.Table)
 
 	// index-side net I/O cost: rows * row-size * net-factor
 	netFactor := getTableNetFactor(p.tablePlan)
 	rowSize := getTblStats(p.indexPlan).GetAvgRowSize(p.ctx, p.indexPlan.Schema().Columns, true, false)
-	p.planCost += p.indexPlan.StatsCount() * rowSize * netFactor
+	p.planCost += getRowCount(p.indexPlan) * rowSize * netFactor
 
 	// index-side net seek cost
 	p.planCost += estimateNetSeekCost(p.indexPlan)
 
 	// table-side net I/O cost: rows * row-size * net-factor
 	tblRowSize := getTblStats(p.tablePlan).GetAvgRowSize(p.ctx, p.tablePlan.Schema().Columns, false, false)
-	p.planCost += p.tablePlan.StatsCount() * tblRowSize * netFactor
+	p.planCost += getRowCount(p.tablePlan) * tblRowSize * netFactor
 
 	// table-side seek cost
 	p.planCost += estimateNetSeekCost(p.tablePlan)
@@ -217,7 +217,7 @@ func (p *PhysicalIndexReader) GetPlanCost(taskType property.TaskType) (float64, 
 	// net I/O cost: rows * row-size * net-factor
 	tblStats := getTblStats(p.indexPlan)
 	rowSize := tblStats.GetAvgRowSize(p.ctx, p.indexPlan.Schema().Columns, true, false)
-	p.planCost += p.indexPlan.StatsCount() * rowSize * getTableNetFactor(p.indexPlan)
+	p.planCost += getRowCount(p.indexPlan) * rowSize * getTableNetFactor(p.indexPlan)
 	// net seek cost
 	p.planCost += estimateNetSeekCost(p.indexPlan)
 	// consider concurrency
@@ -244,7 +244,7 @@ func (p *PhysicalTableReader) GetPlanCost(taskType property.TaskType) (float64, 
 		p.planCost = childCost
 		// net I/O cost: rows * row-size * net-factor
 		rowSize := getTblStats(p.tablePlan).GetAvgRowSize(p.ctx, p.tablePlan.Schema().Columns, false, false)
-		p.planCost += p.tablePlan.StatsCount() * rowSize * netFactor
+		p.planCost += getRowCount(p.tablePlan) * rowSize * netFactor
 		// net seek cost
 		p.planCost += estimateNetSeekCost(p.tablePlan)
 		// consider concurrency
@@ -271,7 +271,7 @@ func (p *PhysicalIndexMergeReader) GetPlanCost(taskType property.TaskType) (floa
 		p.planCost += childCost // child's cost
 		tblStats := getTblStats(tblScan)
 		rowSize := tblStats.GetAvgRowSize(p.ctx, tblScan.Schema().Columns, false, false)
-		p.planCost += tblScan.StatsCount() * rowSize * netFactor // net I/O cost
+		p.planCost += getRowCount(tblScan) * rowSize * netFactor // net I/O cost
 	}
 	for _, partialScan := range p.partialPlans {
 		childCost, err := partialScan.GetPlanCost(property.CopSingleReadTaskType)
@@ -290,7 +290,7 @@ func (p *PhysicalIndexMergeReader) GetPlanCost(taskType property.TaskType) (floa
 		p.planCost += childCost // child's cost
 		tblStats := getTblStats(partialScan)
 		rowSize := tblStats.GetAvgRowSize(p.ctx, partialScan.Schema().Columns, isIdxScan, false)
-		p.planCost += partialScan.StatsCount() * rowSize * netFactor // net I/O cost
+		p.planCost += getRowCount(partialScan) * rowSize * netFactor // net I/O cost
 	}
 
 	// TODO: accumulate table-side seek cost
@@ -312,7 +312,7 @@ func (p *PhysicalTableScan) GetPlanCost(taskType property.TaskType) (float64, er
 	if p.Desc {
 		scanFactor = p.ctx.GetSessionVars().GetDescScanFactor(p.Table)
 	}
-	p.planCost = p.StatsCount() * p.getScanRowSize() * scanFactor
+	p.planCost = getRowCount(p) * p.getScanRowSize() * scanFactor
 	p.planCostInit = true
 	return p.planCost, nil
 }
@@ -327,7 +327,7 @@ func (p *PhysicalIndexScan) GetPlanCost(taskType property.TaskType) (float64, er
 	if p.Desc {
 		scanFactor = p.ctx.GetSessionVars().GetDescScanFactor(p.Table)
 	}
-	p.planCost = p.StatsCount() * p.getScanRowSize() * scanFactor
+	p.planCost = getRowCount(p) * p.getScanRowSize() * scanFactor
 	p.planCostInit = true
 	return p.planCost, nil
 }
@@ -395,7 +395,7 @@ func (p *PhysicalIndexJoin) GetPlanCost(taskType property.TaskType) (float64, er
 	if err != nil {
 		return 0, err
 	}
-	p.planCost = p.GetCost(outerChild.StatsCount(), innerChild.StatsCount(), outerCost, innerCost)
+	p.planCost = p.GetCost(getRowCount(outerChild), getRowCount(innerChild), outerCost, innerCost)
 	p.planCostInit = true
 	return p.planCost, nil
 }
@@ -474,7 +474,7 @@ func (p *PhysicalIndexHashJoin) GetPlanCost(taskType property.TaskType) (float64
 	if err != nil {
 		return 0, err
 	}
-	p.planCost = p.GetCost(outerChild.StatsCount(), innerChild.StatsCount(), outerCost, innerCost)
+	p.planCost = p.GetCost(getRowCount(outerChild), getRowCount(innerChild), outerCost, innerCost)
 	p.planCostInit = true
 	return p.planCost, nil
 }
@@ -555,7 +555,7 @@ func (p *PhysicalIndexMergeJoin) GetPlanCost(taskType property.TaskType) (float6
 	if err != nil {
 		return 0, err
 	}
-	p.planCost = p.GetCost(outerChild.StatsCount(), innerChild.StatsCount(), outerCost, innerCost)
+	p.planCost = p.GetCost(getRowCount(outerChild), getRowCount(innerChild), outerCost, innerCost)
 	p.planCostInit = true
 	return p.planCost, nil
 }
@@ -601,7 +601,7 @@ func (p *PhysicalApply) GetPlanCost(taskType property.TaskType) (float64, error)
 	if err != nil {
 		return 0, err
 	}
-	p.planCost = p.GetCost(outerChild.StatsCount(), innerChild.StatsCount(), outerCost, innerCost)
+	p.planCost = p.GetCost(getRowCount(outerChild), getRowCount(innerChild), outerCost, innerCost)
 	p.planCostInit = true
 	return p.planCost, nil
 }
@@ -665,7 +665,7 @@ func (p *PhysicalMergeJoin) GetPlanCost(taskType property.TaskType) (float64, er
 		}
 		p.planCost += childCost
 	}
-	p.planCost += p.GetCost(p.children[0].StatsCount(), p.children[1].StatsCount())
+	p.planCost += p.GetCost(getRowCount(p.children[0]), getRowCount(p.children[1]))
 	p.planCostInit = true
 	return p.planCost, nil
 }
@@ -762,7 +762,7 @@ func (p *PhysicalHashJoin) GetPlanCost(taskType property.TaskType) (float64, err
 		}
 		p.planCost += childCost
 	}
-	p.planCost += p.GetCost(p.children[0].StatsCount(), p.children[1].StatsCount())
+	p.planCost += p.GetCost(getRowCount(p.children[0]), getRowCount(p.children[1]))
 	p.planCostInit = true
 	return p.planCost, nil
 }
@@ -792,7 +792,7 @@ func (p *PhysicalStreamAgg) GetPlanCost(taskType property.TaskType) (float64, er
 		return 0, err
 	}
 	p.planCost = childCost
-	p.planCost += p.GetCost(p.children[0].StatsCount(), taskType == property.RootTaskType)
+	p.planCost += p.GetCost(getRowCount(p.children[0]), taskType == property.RootTaskType)
 	p.planCostInit = true
 	return p.planCost, nil
 }
@@ -834,9 +834,9 @@ func (p *PhysicalHashAgg) GetPlanCost(taskType property.TaskType) (float64, erro
 	p.planCost = childCost
 	switch taskType {
 	case property.RootTaskType:
-		p.planCost += p.GetCost(p.children[0].StatsCount(), true, false)
+		p.planCost += p.GetCost(getRowCount(p.children[0]), true, false)
 	case property.CopSingleReadTaskType, property.CopDoubleReadTaskType:
-		p.planCost += p.GetCost(p.children[0].StatsCount(), false, false)
+		p.planCost += p.GetCost(getRowCount(p.children[0]), false, false)
 	case property.MppTaskType:
 		return 0, errors.New("not implemented")
 	default:
@@ -878,7 +878,7 @@ func (p *PhysicalSort) GetPlanCost(taskType property.TaskType) (float64, error) 
 		return 0, err
 	}
 	p.planCost = childCost
-	p.planCost += p.GetCost(p.children[0].StatsCount(), p.Schema())
+	p.planCost += p.GetCost(getRowCount(p.children[0]), p.Schema())
 	p.planCostInit = true
 	return p.planCost, nil
 }
@@ -916,7 +916,7 @@ func (p *PhysicalTopN) GetPlanCost(taskType property.TaskType) (float64, error) 
 		return 0, err
 	}
 	p.planCost = childCost
-	p.planCost += p.GetCost(p.children[0].StatsCount(), taskType == property.RootTaskType)
+	p.planCost += p.GetCost(getRowCount(p.children[0]), taskType == property.RootTaskType)
 	p.planCostInit = true
 	return p.planCost, nil
 }
@@ -1060,4 +1060,14 @@ func getTableNetFactor(copTaskPlan PhysicalPlan) float64 {
 		}
 		return getTableNetFactor(x.Children()[0])
 	}
+}
+
+func getRowCount(p PhysicalPlan) float64 {
+	sctx := p.SCtx().GetSessionVars().StmtCtx
+	if sctx.InTrueCardCostExplain {
+		// use true cardinality
+		return float64(sctx.RuntimeStatsColl.GetRootStats(p.ID()).GetActRows())
+	}
+	// use estimated cardinality
+	return p.StatsCount()
 }
