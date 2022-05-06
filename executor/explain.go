@@ -16,7 +16,7 @@ package executor
 
 import (
 	"context"
-	"fmt"
+	"github.com/pingcap/tidb/planner/property"
 	"github.com/pingcap/tidb/types"
 
 	"github.com/pingcap/errors"
@@ -111,6 +111,11 @@ func (e *ExplainExec) generateExplainInfo(ctx context.Context) (rows [][]string,
 	if e.explain.Format == types.ExplainFormatTrueCardCost {
 		e.ctx.GetSessionVars().StmtCtx.InTrueCardCostExplain = true
 		pp := e.explain.TargetPlan.(core.PhysicalPlan)
+		pp.ResetPlanCost()
+		_, err := pp.GetPlanCost(property.RootTaskType)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	if err = e.explain.RenderResult(); err != nil {
