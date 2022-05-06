@@ -16,6 +16,7 @@ package executor
 
 import (
 	"context"
+	"fmt"
 	"github.com/pingcap/tidb/planner/property"
 	"github.com/pingcap/tidb/types"
 
@@ -121,6 +122,10 @@ func (e *ExplainExec) generateExplainInfo(ctx context.Context) (rows [][]string,
 	if err = e.explain.RenderResult(); err != nil {
 		return nil, err
 	}
+	for _, r := range e.explain.Rows {
+		fmt.Println(">>> ", r)
+	}
+
 	return e.explain.Rows, nil
 }
 
