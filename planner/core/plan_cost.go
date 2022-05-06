@@ -114,7 +114,7 @@ func (p *PhysicalIndexLookUpReader) GetCost() (cost float64) {
 	// each handle is a range, the CPU cost of building copTasks should be:
 	// (indexRows / batchSize) * batchSize * CPUFactor
 	// Since we don't know the number of copTasks built, ignore these network cost now.
-	indexRows := indexPlan.statsInfo().RowCount
+	indexRows := getRowCount(indexPlan)
 	idxCst := indexRows * sessVars.CPUFactor
 	// if the expectCnt is below the paging threshold, using paging API, recalculate idxCst.
 	// paging API reduces the count of index and table rows, however introduces more seek cost.
@@ -141,7 +141,7 @@ func (p *PhysicalIndexLookUpReader) GetCost() (cost float64) {
 	// Also, we need to sort the retrieved rows if index lookup reader is expected to return
 	// ordered results. Note that row count of these two sorts can be different, if there are
 	// operators above table scan.
-	tableRows := tablePlan.statsInfo().RowCount
+	tableRows := getRowCount(tablePlan)
 	selectivity := tableRows / indexRows
 	batchSize = math.Min(indexLookupSize*selectivity, tableRows)
 	if p.keepOrder && batchSize > 2 {
@@ -612,11 +612,13 @@ func (p *PhysicalMergeJoin) GetCost(lCnt, rCnt float64) float64 {
 	innerKeys := p.RightJoinKeys
 	innerSchema := p.children[1].Schema()
 	innerStats := p.children[1].statsInfo()
+	innerCnt := rCnt
 	if p.JoinType == RightOuterJoin {
 		outerCnt = rCnt
 		innerKeys = p.LeftJoinKeys
 		innerSchema = p.children[0].Schema()
 		innerStats = p.children[0].statsInfo()
+		innerCnt = lCnt
 	}
 	helper := &fullJoinRowCountHelper{
 		cartesian:     false,
@@ -648,7 +650,7 @@ func (p *PhysicalMergeJoin) GetCost(lCnt, rCnt float64) float64 {
 	// For merge join, only one group of rows with same join key(not null) are cached,
 	// we compute average memory cost using estimated group size.
 	NDV := getColsNDV(innerKeys, innerSchema, innerStats)
-	memoryCost := (innerStats.RowCount / NDV) * sessVars.MemoryFactor
+	memoryCost := (innerCnt / NDV) * sessVars.MemoryFactor
 	return cpuCost + memoryCost
 }
 
@@ -777,7 +779,7 @@ func (p *PhysicalStreamAgg) GetCost(inputRows float64, isRoot bool) float64 {
 	} else {
 		cpuCost = inputRows * sessVars.CopCPUFactor * aggFuncFactor
 	}
-	rowsPerGroup := inputRows / p.statsInfo().RowCount
+	rowsPerGroup := inputRows / getRowCount(p)
 	memoryCost := rowsPerGroup * distinctFactor * sessVars.MemoryFactor * float64(p.numDistinctFunc())
 	return cpuCost + memoryCost
 }
@@ -799,7 +801,7 @@ func (p *PhysicalStreamAgg) GetPlanCost(taskType property.TaskType) (float64, er
 
 // GetCost computes the cost of hash aggregation considering CPU/memory.
 func (p *PhysicalHashAgg) GetCost(inputRows float64, isRoot bool, isMPP bool) float64 {
-	cardinality := p.statsInfo().RowCount
+	cardinality := getRowCount(p)
 	numDistinctFunc := p.numDistinctFunc()
 	aggFuncFactor := p.getAggFuncCostFactor(isMPP)
 	var cpuCost float64
