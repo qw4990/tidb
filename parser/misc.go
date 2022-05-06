@@ -742,6 +742,7 @@ var tokenMap = map[string]int{
 	"TOPN":                     topn,
 	"TRACE":                    trace,
 	"TRADITIONAL":              traditional,
+	"TRUE_CARD_COST":           trueCardCost,
 	"TRAILING":                 trailing,
 	"TRANSACTION":              transaction,
 	"TRIGGER":                  trigger,

@@ -604,6 +604,7 @@ import (
 	tp                    "TYPE"
 	trace                 "TRACE"
 	traditional           "TRADITIONAL"
+	trueCardCost          "TRUE_CARD_COST"
 	transaction           "TRANSACTION"
 	triggers              "TRIGGERS"
 	truncate              "TRUNCATE"
@@ -4710,6 +4711,7 @@ ExplainFormatType:
 |	"DOT"
 |	"BRIEF"
 |	"VERBOSE"
+|	"TRUE_CARD_COST"
 
 /*******************************************************************
  * Backup / restore / import statements
@@ -6014,6 +6016,7 @@ UnReservedKeyword:
 |	"SWAPS"
 |	"SOURCE"
 |	"TRADITIONAL"
+|	"TRUE_CARD_COST"
 |	"SQL_BUFFER_RESULT"
 |	"DIRECTORY"
 |	"HISTOGRAM"
