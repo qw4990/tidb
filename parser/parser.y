@@ -4697,7 +4697,7 @@ ExplainStmt:
 |	ExplainSym "ANALYZE" "FORMAT" "=" ExplainFormatType ExplainableStmt
 	{
 		$$ = &ast.ExplainStmt{
-			Stmt:    $3,
+			Stmt:    $6,
 			Format:  $5,
 			Analyze: true,
 		}
