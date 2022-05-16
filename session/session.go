@@ -2341,6 +2341,8 @@ func (s *session) IsCachedExecOk(ctx context.Context, preparedStmt *plannercore.
 
 // ExecutePreparedStmt executes a prepared statement.
 func (s *session) ExecutePreparedStmt(ctx context.Context, stmtID uint32, args []types.Datum) (sqlexec.RecordSet, error) {
+	fmt.Println(">>>>> binary ExecutePreparedStmt ", stmtID, args)
+
 	var err error
 	if err = s.PrepareTxnCtx(ctx); err != nil {
 		return nil, err

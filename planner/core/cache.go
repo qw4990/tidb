@@ -15,6 +15,7 @@
 package core
 
 import (
+	"bytes"
 	"math"
 	"sync/atomic"
 	"time"
@@ -195,11 +196,13 @@ type PlanCacheValue struct {
 	OutPutNames       []*types.FieldName
 	TblInfo2UnionScan map[*model.TableInfo]bool
 	UserVarTypes      FieldSlice
+	BinVarTypes       []byte
+	IsBinProto        bool
 	BindSQL           string
 }
 
 // NewPlanCacheValue creates a SQLCacheValue.
-func NewPlanCacheValue(plan Plan, names []*types.FieldName, srcMap map[*model.TableInfo]bool, userVarTps []*types.FieldType, bindSQL string) *PlanCacheValue {
+func NewPlanCacheValue(plan Plan, names []*types.FieldName, srcMap map[*model.TableInfo]bool, isBinProto bool, binVarTps []byte, userVarTps []*types.FieldType, bindSQL string) *PlanCacheValue {
 	dstMap := make(map[*model.TableInfo]bool)
 	for k, v := range srcMap {
 		dstMap[k] = v
@@ -214,7 +217,16 @@ func NewPlanCacheValue(plan Plan, names []*types.FieldName, srcMap map[*model.Ta
 		TblInfo2UnionScan: dstMap,
 		UserVarTypes:      userVarTypes,
 		BindSQL:           bindSQL,
+		IsBinProto:        isBinProto,
+		BinVarTypes:       binVarTps,
 	}
+}
+
+func (v *PlanCacheValue) checkVarTypes(binVarTps []byte, varTps []*types.FieldType) bool {
+	if v.IsBinProto {
+		return bytes.Equal(v.BinVarTypes, binVarTps)
+	}
+	return v.UserVarTypes.CheckTypesCompatibility4PC(varTps)
 }
 
 // CachedPrepareStmt store prepared ast from PrepareExec and other related fields
