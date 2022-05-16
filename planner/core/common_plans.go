@@ -245,6 +245,7 @@ func (e *Execute) OptimizePreparedPlan(ctx context.Context, sctx sessionctx.Cont
 		vars.PreparedParams = e.BinaryParams
 		for i, val := range vars.PreparedParams {
 			param := prepared.Params[i].(*driver.ParamMarkerExpr)
+			fmt.Println(">>>> kind >>> ", val.Kind())
 			param.Datum = val
 			param.InExecute = true
 		}
@@ -467,6 +468,7 @@ func (e *Execute) getPhysicalPlan(ctx context.Context, sctx sessionctx.Context, 
 		for _, param := range e.BinaryParams {
 			binVarTypes = append(binVarTypes, param.Kind())
 		}
+		fmt.Println(">>>> binary proto types >>> ", binVarTypes)
 	} else {
 		// txt protocol
 		varsNum = len(e.UsingVars)
@@ -478,6 +480,7 @@ func (e *Execute) getPhysicalPlan(ctx context.Context, sctx sessionctx.Context, 
 			}
 			varTypes = append(varTypes, tp)
 		}
+		fmt.Println(">>>> txt proto types >>> ", varTypes)
 	}
 
 	if prepared.CachedPlan != nil {

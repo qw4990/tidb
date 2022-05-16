@@ -17,6 +17,7 @@ package types
 import (
 	"fmt"
 	"math"
+	"runtime/debug"
 	"sort"
 	"strconv"
 	"strings"
@@ -325,6 +326,11 @@ func (d *Datum) GetMysqlBit() BinaryLiteral {
 
 // SetBinaryLiteral sets Bit value
 func (d *Datum) SetBinaryLiteral(b BinaryLiteral) {
+
+	if len(b) == 6 {
+		debug.PrintStack()
+	}
+
 	d.k = KindBinaryLiteral
 	d.b = b
 	d.collation = charset.CollationBin

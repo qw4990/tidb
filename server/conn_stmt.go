@@ -359,6 +359,8 @@ func parseExecArgs(sc *stmtctx.StatementContext, args []types.Datum, boundParams
 		tp := paramTypes[i<<1]
 		isUnsigned := (paramTypes[(i<<1)+1] & 0x80) > 0
 
+		fmt.Println(">>>>>>>>>> param type >>> ", tp)
+
 		switch tp {
 		case mysql.TypeNull:
 			var nilDatum types.Datum
