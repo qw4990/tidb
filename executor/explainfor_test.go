@@ -236,14 +236,11 @@ func TestInspectionRuleTable(t *testing.T) {
 func TestExplainForConnPlanCache(t *testing.T) {
 	t.Skip("unstable")
 
-	orgEnable := core.PreparedPlanCacheEnabled()
-	defer func() {
-		core.SetPreparedPlanCache(orgEnable)
-	}()
-	core.SetPreparedPlanCache(true)
-
 	store, clean := testkit.CreateMockStore(t)
 	defer clean()
+	tmp := testkit.NewTestKit(t, store)
+	defer tmp.MustExec(`set global tidb_enable_prepared_plan_cache=` + variable.BoolToOnOff(variable.EnablePreparedPlanCache.Load()))
+	tmp.MustExec(`set global tidb_enable_prepared_plan_cache=ON`)
 
 	tk1 := testkit.NewTestKit(t, store)
 	se, err := session.CreateSession4TestWithOpt(store, &session.Opt{
@@ -308,14 +305,12 @@ func TestExplainForConnPlanCache(t *testing.T) {
 }
 
 func TestSavedPlanPanicPlanCache(t *testing.T) {
-	orgEnable := core.PreparedPlanCacheEnabled()
-	defer func() {
-		core.SetPreparedPlanCache(orgEnable)
-	}()
-	core.SetPreparedPlanCache(true)
-
 	store, clean := testkit.CreateMockStore(t)
 	defer clean()
+	tmp := testkit.NewTestKit(t, store)
+	defer tmp.MustExec(`set global tidb_enable_prepared_plan_cache=` + variable.BoolToOnOff(variable.EnablePreparedPlanCache.Load()))
+	tmp.MustExec(`set global tidb_enable_prepared_plan_cache=ON`)
+
 	tk := testkit.NewTestKit(t, store)
 	se, err := session.CreateSession4TestWithOpt(store, &session.Opt{
 		PreparedPlanCache: kvcache.NewSimpleLRUCache(100, 0.1, math.MaxUint64),
@@ -474,14 +469,12 @@ func TestExplainTiFlashSystemTables(t *testing.T) {
 }
 
 func TestPointGetUserVarPlanCache(t *testing.T) {
-	orgEnable := core.PreparedPlanCacheEnabled()
-	defer func() {
-		core.SetPreparedPlanCache(orgEnable)
-	}()
-	core.SetPreparedPlanCache(true)
-
 	store, clean := testkit.CreateMockStore(t)
 	defer clean()
+	tmp := testkit.NewTestKit(t, store)
+	defer tmp.MustExec(`set global tidb_enable_prepared_plan_cache=` + variable.BoolToOnOff(variable.EnablePreparedPlanCache.Load()))
+	tmp.MustExec(`set global tidb_enable_prepared_plan_cache=ON`)
+
 	tk := testkit.NewTestKit(t, store)
 	tk.Session().Auth(&auth.UserIdentity{Username: "root", Hostname: "localhost", CurrentUser: true, AuthUsername: "root", AuthHostname: "%"}, nil, []byte("012345678901234567890"))
 
@@ -534,14 +527,11 @@ func TestPointGetUserVarPlanCache(t *testing.T) {
 func TestExpressionIndexPreparePlanCache(t *testing.T) {
 	store, clean := testkit.CreateMockStore(t)
 	defer clean()
+	tmp := testkit.NewTestKit(t, store)
+	defer tmp.MustExec(`set global tidb_enable_prepared_plan_cache=` + variable.BoolToOnOff(variable.EnablePreparedPlanCache.Load()))
+	tmp.MustExec(`set global tidb_enable_prepared_plan_cache=ON`)
+
 	tk := testkit.NewTestKit(t, store)
-
-	orgEnable := core.PreparedPlanCacheEnabled()
-	defer func() {
-		core.SetPreparedPlanCache(orgEnable)
-	}()
-	core.SetPreparedPlanCache(true)
-
 	se, err := session.CreateSession4TestWithOpt(store, &session.Opt{
 		PreparedPlanCache: kvcache.NewSimpleLRUCache(100, 0.1, math.MaxUint64),
 	})
@@ -575,14 +565,11 @@ func TestExpressionIndexPreparePlanCache(t *testing.T) {
 func TestIssue28259(t *testing.T) {
 	store, clean := testkit.CreateMockStore(t)
 	defer clean()
+	tmp := testkit.NewTestKit(t, store)
+	defer tmp.MustExec(`set global tidb_enable_prepared_plan_cache=` + variable.BoolToOnOff(variable.EnablePreparedPlanCache.Load()))
+	tmp.MustExec(`set global tidb_enable_prepared_plan_cache=ON`)
+
 	tk := testkit.NewTestKit(t, store)
-
-	orgEnable := core.PreparedPlanCacheEnabled()
-	defer func() {
-		core.SetPreparedPlanCache(orgEnable)
-	}()
-	core.SetPreparedPlanCache(true)
-
 	se, err := session.CreateSession4TestWithOpt(store, &session.Opt{
 		PreparedPlanCache: kvcache.NewSimpleLRUCache(100, 0.1, math.MaxUint64),
 	})
@@ -786,14 +773,11 @@ func TestIssue28259(t *testing.T) {
 func TestIssue28696(t *testing.T) {
 	store, clean := testkit.CreateMockStore(t)
 	defer clean()
+	tmp := testkit.NewTestKit(t, store)
+	defer tmp.MustExec(`set global tidb_enable_prepared_plan_cache=` + variable.BoolToOnOff(variable.EnablePreparedPlanCache.Load()))
+	tmp.MustExec(`set global tidb_enable_prepared_plan_cache=ON`)
+
 	tk := testkit.NewTestKit(t, store)
-
-	orgEnable := core.PreparedPlanCacheEnabled()
-	defer func() {
-		core.SetPreparedPlanCache(orgEnable)
-	}()
-	core.SetPreparedPlanCache(true)
-
 	se, err := session.CreateSession4TestWithOpt(store, &session.Opt{
 		PreparedPlanCache: kvcache.NewSimpleLRUCache(100, 0.1, math.MaxUint64),
 	})
@@ -832,14 +816,11 @@ func TestIssue28696(t *testing.T) {
 func TestIndexMerge4PlanCache(t *testing.T) {
 	store, clean := testkit.CreateMockStore(t)
 	defer clean()
+	tmp := testkit.NewTestKit(t, store)
+	defer tmp.MustExec(`set global tidb_enable_prepared_plan_cache=` + variable.BoolToOnOff(variable.EnablePreparedPlanCache.Load()))
+	tmp.MustExec(`set global tidb_enable_prepared_plan_cache=ON`)
+
 	tk := testkit.NewTestKit(t, store)
-
-	orgEnable := core.PreparedPlanCacheEnabled()
-	defer func() {
-		core.SetPreparedPlanCache(orgEnable)
-	}()
-	core.SetPreparedPlanCache(true)
-
 	se, err := session.CreateSession4TestWithOpt(store, &session.Opt{
 		PreparedPlanCache: kvcache.NewSimpleLRUCache(100, 0.1, math.MaxUint64),
 	})
@@ -1003,14 +984,11 @@ func TestIndexMerge4PlanCache(t *testing.T) {
 func TestSetOperations4PlanCache(t *testing.T) {
 	store, clean := testkit.CreateMockStore(t)
 	defer clean()
+	tmp := testkit.NewTestKit(t, store)
+	defer tmp.MustExec(`set global tidb_enable_prepared_plan_cache=` + variable.BoolToOnOff(variable.EnablePreparedPlanCache.Load()))
+	tmp.MustExec(`set global tidb_enable_prepared_plan_cache=ON`)
+
 	tk := testkit.NewTestKit(t, store)
-
-	orgEnable := core.PreparedPlanCacheEnabled()
-	defer func() {
-		core.SetPreparedPlanCache(orgEnable)
-	}()
-	core.SetPreparedPlanCache(true)
-
 	se, err := session.CreateSession4TestWithOpt(store, &session.Opt{
 		PreparedPlanCache: kvcache.NewSimpleLRUCache(100, 0.1, math.MaxUint64),
 	})
@@ -1082,14 +1060,11 @@ func TestSetOperations4PlanCache(t *testing.T) {
 func TestSPM4PlanCache(t *testing.T) {
 	store, clean := testkit.CreateMockStore(t)
 	defer clean()
+	tmp := testkit.NewTestKit(t, store)
+	defer tmp.MustExec(`set global tidb_enable_prepared_plan_cache=` + variable.BoolToOnOff(variable.EnablePreparedPlanCache.Load()))
+	tmp.MustExec(`set global tidb_enable_prepared_plan_cache=ON`)
+
 	tk := testkit.NewTestKit(t, store)
-
-	orgEnable := core.PreparedPlanCacheEnabled()
-	defer func() {
-		core.SetPreparedPlanCache(orgEnable)
-	}()
-	core.SetPreparedPlanCache(true)
-
 	se, err := session.CreateSession4TestWithOpt(store, &session.Opt{
 		PreparedPlanCache: kvcache.NewSimpleLRUCache(100, 0.1, math.MaxUint64),
 	})
@@ -1147,14 +1122,11 @@ func TestSPM4PlanCache(t *testing.T) {
 func TestHint4PlanCache(t *testing.T) {
 	store, clean := testkit.CreateMockStore(t)
 	defer clean()
+	tmp := testkit.NewTestKit(t, store)
+	defer tmp.MustExec(`set global tidb_enable_prepared_plan_cache=` + variable.BoolToOnOff(variable.EnablePreparedPlanCache.Load()))
+	tmp.MustExec(`set global tidb_enable_prepared_plan_cache=ON`)
+
 	tk := testkit.NewTestKit(t, store)
-
-	orgEnable := core.PreparedPlanCacheEnabled()
-	defer func() {
-		core.SetPreparedPlanCache(orgEnable)
-	}()
-	core.SetPreparedPlanCache(true)
-
 	se, err := session.CreateSession4TestWithOpt(store, &session.Opt{
 		PreparedPlanCache: kvcache.NewSimpleLRUCache(100, 0.1, math.MaxUint64),
 	})
@@ -1180,14 +1152,11 @@ func TestHint4PlanCache(t *testing.T) {
 func TestSelectView4PlanCache(t *testing.T) {
 	store, clean := testkit.CreateMockStore(t)
 	defer clean()
+	tmp := testkit.NewTestKit(t, store)
+	defer tmp.MustExec(`set global tidb_enable_prepared_plan_cache=` + variable.BoolToOnOff(variable.EnablePreparedPlanCache.Load()))
+	tmp.MustExec(`set global tidb_enable_prepared_plan_cache=ON`)
+
 	tk := testkit.NewTestKit(t, store)
-
-	orgEnable := core.PreparedPlanCacheEnabled()
-	defer func() {
-		core.SetPreparedPlanCache(orgEnable)
-	}()
-	core.SetPreparedPlanCache(true)
-
 	se, err := session.CreateSession4TestWithOpt(store, &session.Opt{
 		PreparedPlanCache: kvcache.NewSimpleLRUCache(100, 0.1, math.MaxUint64),
 	})
@@ -1301,14 +1270,11 @@ func TestSelectView4PlanCache(t *testing.T) {
 func TestInvisibleIndex4PlanCache(t *testing.T) {
 	store, clean := testkit.CreateMockStore(t)
 	defer clean()
+	tmp := testkit.NewTestKit(t, store)
+	defer tmp.MustExec(`set global tidb_enable_prepared_plan_cache=` + variable.BoolToOnOff(variable.EnablePreparedPlanCache.Load()))
+	tmp.MustExec(`set global tidb_enable_prepared_plan_cache=ON`)
+
 	tk := testkit.NewTestKit(t, store)
-
-	orgEnable := core.PreparedPlanCacheEnabled()
-	defer func() {
-		core.SetPreparedPlanCache(orgEnable)
-	}()
-	core.SetPreparedPlanCache(true)
-
 	se, err := session.CreateSession4TestWithOpt(store, &session.Opt{
 		PreparedPlanCache: kvcache.NewSimpleLRUCache(100, 0.1, math.MaxUint64),
 	})
@@ -1337,14 +1303,11 @@ func TestCTE4PlanCache(t *testing.T) {
 	// CTE can not be cached, because part of it will be treated as a subquery.
 	store, clean := testkit.CreateMockStore(t)
 	defer clean()
+	tmp := testkit.NewTestKit(t, store)
+	defer tmp.MustExec(`set global tidb_enable_prepared_plan_cache=` + variable.BoolToOnOff(variable.EnablePreparedPlanCache.Load()))
+	tmp.MustExec(`set global tidb_enable_prepared_plan_cache=ON`)
+
 	tk := testkit.NewTestKit(t, store)
-
-	orgEnable := core.PreparedPlanCacheEnabled()
-	defer func() {
-		core.SetPreparedPlanCache(orgEnable)
-	}()
-	core.SetPreparedPlanCache(true)
-
 	se, err := session.CreateSession4TestWithOpt(store, &session.Opt{
 		PreparedPlanCache: kvcache.NewSimpleLRUCache(100, 0.1, math.MaxUint64),
 	})
@@ -1413,14 +1376,11 @@ func TestCTE4PlanCache(t *testing.T) {
 func TestValidity4PlanCache(t *testing.T) {
 	store, clean := testkit.CreateMockStore(t)
 	defer clean()
+	tmp := testkit.NewTestKit(t, store)
+	defer tmp.MustExec(`set global tidb_enable_prepared_plan_cache=` + variable.BoolToOnOff(variable.EnablePreparedPlanCache.Load()))
+	tmp.MustExec(`set global tidb_enable_prepared_plan_cache=ON`)
+
 	tk := testkit.NewTestKit(t, store)
-
-	orgEnable := core.PreparedPlanCacheEnabled()
-	defer func() {
-		core.SetPreparedPlanCache(orgEnable)
-	}()
-	core.SetPreparedPlanCache(true)
-
 	se, err := session.CreateSession4TestWithOpt(store, &session.Opt{
 		PreparedPlanCache: kvcache.NewSimpleLRUCache(100, 0.1, math.MaxUint64),
 	})
@@ -1460,14 +1420,11 @@ func TestValidity4PlanCache(t *testing.T) {
 func TestListPartition4PlanCache(t *testing.T) {
 	store, clean := testkit.CreateMockStore(t)
 	defer clean()
+	tmp := testkit.NewTestKit(t, store)
+	defer tmp.MustExec(`set global tidb_enable_prepared_plan_cache=` + variable.BoolToOnOff(variable.EnablePreparedPlanCache.Load()))
+	tmp.MustExec(`set global tidb_enable_prepared_plan_cache=ON`)
+
 	tk := testkit.NewTestKit(t, store)
-
-	orgEnable := core.PreparedPlanCacheEnabled()
-	defer func() {
-		core.SetPreparedPlanCache(orgEnable)
-	}()
-	core.SetPreparedPlanCache(true)
-
 	se, err := session.CreateSession4TestWithOpt(store, &session.Opt{
 		PreparedPlanCache: kvcache.NewSimpleLRUCache(100, 0.1, math.MaxUint64),
 	})
@@ -1491,15 +1448,12 @@ func TestListPartition4PlanCache(t *testing.T) {
 func TestMoreSessions4PlanCache(t *testing.T) {
 	store, clean := testkit.CreateMockStore(t)
 	defer clean()
+	tmp := testkit.NewTestKit(t, store)
+	defer tmp.MustExec(`set global tidb_enable_prepared_plan_cache=` + variable.BoolToOnOff(variable.EnablePreparedPlanCache.Load()))
+	tmp.MustExec(`set global tidb_enable_prepared_plan_cache=ON`)
+
 	tk := testkit.NewTestKit(t, store)
 	tk2 := testkit.NewTestKit(t, store)
-
-	orgEnable := core.PreparedPlanCacheEnabled()
-	defer func() {
-		core.SetPreparedPlanCache(orgEnable)
-	}()
-	core.SetPreparedPlanCache(true)
-
 	se, err := session.CreateSession4TestWithOpt(store, &session.Opt{
 		PreparedPlanCache: kvcache.NewSimpleLRUCache(100, 0.1, math.MaxUint64),
 	})

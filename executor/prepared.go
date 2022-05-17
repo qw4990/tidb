@@ -16,6 +16,7 @@ package executor
 
 import (
 	"context"
+	"github.com/pingcap/tidb/sessionctx/variable"
 	"math"
 	"sort"
 	"time"
@@ -206,7 +207,7 @@ func (e *PrepareExec) Next(ctx context.Context, req *chunk.Chunk) error {
 		normalizedSQL4PC, digest4PC string
 		selectStmtNode              ast.StmtNode
 	)
-	if !plannercore.PreparedPlanCacheEnabled() {
+	if !variable.EnablePreparedPlanCache.Load() {
 		prepared.UseCache = false
 	} else {
 		prepared.UseCache = plannercore.CacheableWithCtx(e.ctx, stmt, ret.InfoSchema)
@@ -334,7 +335,7 @@ func (e *DeallocateExec) Next(ctx context.Context, req *chunk.Chunk) error {
 	}
 	prepared := preparedObj.PreparedAst
 	delete(vars.PreparedStmtNameToID, e.Name)
-	if plannercore.PreparedPlanCacheEnabled() {
+	if variable.EnablePreparedPlanCache.Load() {
 		cacheKey, err := plannercore.NewPlanCacheKey(vars, preparedObj.StmtText, preparedObj.StmtDB, prepared.SchemaVersion)
 		if err != nil {
 			return err

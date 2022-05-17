@@ -28,6 +28,7 @@ import (
 	"github.com/pingcap/tidb/planner/core"
 	"github.com/pingcap/tidb/session"
 	"github.com/pingcap/tidb/sessionctx/stmtctx"
+	"github.com/pingcap/tidb/sessionctx/variable"
 	"github.com/pingcap/tidb/types"
 	"github.com/pingcap/tidb/util/chunk"
 	"github.com/pingcap/tidb/util/sqlexec"
@@ -159,7 +160,7 @@ func (ts *TiDBStatement) Close() error {
 			return err
 		}
 	} else {
-		if core.PreparedPlanCacheEnabled() {
+		if variable.EnablePreparedPlanCache.Load() {
 			preparedPointer := ts.ctx.GetSessionVars().PreparedStmts[ts.id]
 			preparedObj, ok := preparedPointer.(*core.CachedPrepareStmt)
 			if !ok {

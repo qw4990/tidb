@@ -18,6 +18,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"github.com/pingcap/tidb/sessionctx/variable"
 	"math"
 	"testing"
 	"time"
@@ -41,16 +42,13 @@ import (
 func TestPrepared(t *testing.T) {
 	store, clean := testkit.CreateMockStore(t)
 	defer clean()
-
-	orgEnable := plannercore.PreparedPlanCacheEnabled()
-	defer func() {
-		plannercore.SetPreparedPlanCache(orgEnable)
-	}()
+	tmp := testkit.NewTestKit(t, store)
+	defer tmp.MustExec(`set global tidb_enable_prepared_plan_cache=` + variable.BoolToOnOff(variable.EnablePreparedPlanCache.Load()))
 
 	flags := []bool{false, true}
 	ctx := context.Background()
 	for _, flag := range flags {
-		plannercore.SetPreparedPlanCache(flag)
+		tmp.MustExec(`set global tidb_enable_prepared_plan_cache=` + variable.BoolToOnOff(flag))
 
 		tk := testkit.NewTestKit(t, store)
 		se, err := session.CreateSession4TestWithOpt(store, &session.Opt{
@@ -294,14 +292,13 @@ func TestPrepared(t *testing.T) {
 func TestPreparedLimitOffset(t *testing.T) {
 	store, clean := testkit.CreateMockStore(t)
 	defer clean()
-	orgEnable := plannercore.PreparedPlanCacheEnabled()
-	defer func() {
-		plannercore.SetPreparedPlanCache(orgEnable)
-	}()
+	tmp := testkit.NewTestKit(t, store)
+	defer tmp.MustExec(`set global tidb_enable_prepared_plan_cache=` + variable.BoolToOnOff(variable.EnablePreparedPlanCache.Load()))
+
 	flags := []bool{false, true}
 	ctx := context.Background()
 	for _, flag := range flags {
-		plannercore.SetPreparedPlanCache(flag)
+		tmp.MustExec(`set global tidb_enable_prepared_plan_cache=` + variable.BoolToOnOff(flag))
 
 		tk := testkit.NewTestKit(t, store)
 		se, err := session.CreateSession4TestWithOpt(store, &session.Opt{
@@ -336,13 +333,11 @@ func TestPreparedLimitOffset(t *testing.T) {
 func TestPreparedNullParam(t *testing.T) {
 	store, clean := testkit.CreateMockStore(t)
 	defer clean()
-	orgEnable := plannercore.PreparedPlanCacheEnabled()
-	defer func() {
-		plannercore.SetPreparedPlanCache(orgEnable)
-	}()
+	tmp := testkit.NewTestKit(t, store)
+	defer tmp.MustExec(`set global tidb_enable_prepared_plan_cache=` + variable.BoolToOnOff(variable.EnablePreparedPlanCache.Load()))
 	flags := []bool{false, true}
 	for _, flag := range flags {
-		plannercore.SetPreparedPlanCache(flag)
+		tmp.MustExec(`set global tidb_enable_prepared_plan_cache=` + variable.BoolToOnOff(flag))
 		tk := testkit.NewTestKit(t, store)
 
 		se, err := session.CreateSession4TestWithOpt(store, &session.Opt{
@@ -378,13 +373,11 @@ func TestPreparedNullParam(t *testing.T) {
 func TestPrepareWithAggregation(t *testing.T) {
 	store, clean := testkit.CreateMockStore(t)
 	defer clean()
-	orgEnable := plannercore.PreparedPlanCacheEnabled()
-	defer func() {
-		plannercore.SetPreparedPlanCache(orgEnable)
-	}()
+	tmp := testkit.NewTestKit(t, store)
+	defer tmp.MustExec(`set global tidb_enable_prepared_plan_cache=` + variable.BoolToOnOff(variable.EnablePreparedPlanCache.Load()))
 	flags := []bool{false, true}
 	for _, flag := range flags {
-		plannercore.SetPreparedPlanCache(flag)
+		tmp.MustExec(`set global tidb_enable_prepared_plan_cache=` + variable.BoolToOnOff(flag))
 		tk := testkit.NewTestKit(t, store)
 
 		se, err := session.CreateSession4TestWithOpt(store, &session.Opt{
@@ -411,13 +404,11 @@ func TestPrepareWithAggregation(t *testing.T) {
 func TestPreparedIssue7579(t *testing.T) {
 	store, clean := testkit.CreateMockStore(t)
 	defer clean()
-	orgEnable := plannercore.PreparedPlanCacheEnabled()
-	defer func() {
-		plannercore.SetPreparedPlanCache(orgEnable)
-	}()
+	tmp := testkit.NewTestKit(t, store)
+	defer tmp.MustExec(`set global tidb_enable_prepared_plan_cache=` + variable.BoolToOnOff(variable.EnablePreparedPlanCache.Load()))
 	flags := []bool{false, true}
 	for _, flag := range flags {
-		plannercore.SetPreparedPlanCache(flag)
+		tmp.MustExec(`set global tidb_enable_prepared_plan_cache=` + variable.BoolToOnOff(flag))
 		tk := testkit.NewTestKit(t, store)
 
 		se, err := session.CreateSession4TestWithOpt(store, &session.Opt{
@@ -460,17 +451,16 @@ func TestPreparedIssue7579(t *testing.T) {
 func TestPreparedInsert(t *testing.T) {
 	store, clean := testkit.CreateMockStore(t)
 	defer clean()
-	orgEnable := plannercore.PreparedPlanCacheEnabled()
-	defer func() {
-		plannercore.SetPreparedPlanCache(orgEnable)
-	}()
+	tmp := testkit.NewTestKit(t, store)
+	defer tmp.MustExec(`set global tidb_enable_prepared_plan_cache=` + variable.BoolToOnOff(variable.EnablePreparedPlanCache.Load()))
+
 	metrics.ResettablePlanCacheCounterFortTest = true
 	metrics.PlanCacheCounter.Reset()
 	counter := metrics.PlanCacheCounter.WithLabelValues("prepare")
 	pb := &dto.Metric{}
 	flags := []bool{false, true}
 	for _, flag := range flags {
-		plannercore.SetPreparedPlanCache(flag)
+		tmp.MustExec(`set global tidb_enable_prepared_plan_cache=` + variable.BoolToOnOff(flag))
 		tk := testkit.NewTestKit(t, store)
 
 		se, err := session.CreateSession4TestWithOpt(store, &session.Opt{
@@ -547,17 +537,16 @@ func TestPreparedInsert(t *testing.T) {
 func TestPreparedUpdate(t *testing.T) {
 	store, clean := testkit.CreateMockStore(t)
 	defer clean()
-	orgEnable := plannercore.PreparedPlanCacheEnabled()
-	defer func() {
-		plannercore.SetPreparedPlanCache(orgEnable)
-	}()
+	tmp := testkit.NewTestKit(t, store)
+	defer tmp.MustExec(`set global tidb_enable_prepared_plan_cache=` + variable.BoolToOnOff(variable.EnablePreparedPlanCache.Load()))
+
 	metrics.ResettablePlanCacheCounterFortTest = true
 	metrics.PlanCacheCounter.Reset()
 	counter := metrics.PlanCacheCounter.WithLabelValues("prepare")
 	pb := &dto.Metric{}
 	flags := []bool{false, true}
 	for _, flag := range flags {
-		plannercore.SetPreparedPlanCache(flag)
+		tmp.MustExec(`set global tidb_enable_prepared_plan_cache=` + variable.BoolToOnOff(flag))
 		tk := testkit.NewTestKit(t, store)
 
 		se, err := session.CreateSession4TestWithOpt(store, &session.Opt{
@@ -608,11 +597,9 @@ func TestPreparedUpdate(t *testing.T) {
 func TestIssue21884(t *testing.T) {
 	store, clean := testkit.CreateMockStore(t)
 	defer clean()
-	orgEnable := plannercore.PreparedPlanCacheEnabled()
-	defer func() {
-		plannercore.SetPreparedPlanCache(orgEnable)
-	}()
-	plannercore.SetPreparedPlanCache(false)
+	tmp := testkit.NewTestKit(t, store)
+	defer tmp.MustExec(`set global tidb_enable_prepared_plan_cache=` + variable.BoolToOnOff(variable.EnablePreparedPlanCache.Load()))
+	tmp.MustExec(`set global tidb_enable_prepared_plan_cache=ON`)
 
 	tk := testkit.NewTestKit(t, store)
 
@@ -634,17 +621,15 @@ func TestIssue21884(t *testing.T) {
 func TestPreparedDelete(t *testing.T) {
 	store, clean := testkit.CreateMockStore(t)
 	defer clean()
-	orgEnable := plannercore.PreparedPlanCacheEnabled()
-	defer func() {
-		plannercore.SetPreparedPlanCache(orgEnable)
-	}()
+	tmp := testkit.NewTestKit(t, store)
+	defer tmp.MustExec(`set global tidb_enable_prepared_plan_cache=` + variable.BoolToOnOff(variable.EnablePreparedPlanCache.Load()))
 	metrics.ResettablePlanCacheCounterFortTest = true
 	metrics.PlanCacheCounter.Reset()
 	counter := metrics.PlanCacheCounter.WithLabelValues("prepare")
 	pb := &dto.Metric{}
 	flags := []bool{false, true}
 	for _, flag := range flags {
-		plannercore.SetPreparedPlanCache(flag)
+		tmp.MustExec(`set global tidb_enable_prepared_plan_cache=` + variable.BoolToOnOff(flag))
 		tk := testkit.NewTestKit(t, store)
 
 		se, err := session.CreateSession4TestWithOpt(store, &session.Opt{
@@ -695,11 +680,9 @@ func TestPreparedDelete(t *testing.T) {
 func TestPrepareDealloc(t *testing.T) {
 	store, clean := testkit.CreateMockStore(t)
 	defer clean()
-	orgEnable := plannercore.PreparedPlanCacheEnabled()
-	defer func() {
-		plannercore.SetPreparedPlanCache(orgEnable)
-	}()
-	plannercore.SetPreparedPlanCache(true)
+	tmp := testkit.NewTestKit(t, store)
+	defer tmp.MustExec(`set global tidb_enable_prepared_plan_cache=` + variable.BoolToOnOff(variable.EnablePreparedPlanCache.Load()))
+	tmp.MustExec(`set global tidb_enable_prepared_plan_cache=ON`)
 
 	tk := testkit.NewTestKit(t, store)
 
@@ -749,13 +732,11 @@ func TestPrepareDealloc(t *testing.T) {
 func TestPreparedIssue8153(t *testing.T) {
 	store, clean := testkit.CreateMockStore(t)
 	defer clean()
-	orgEnable := plannercore.PreparedPlanCacheEnabled()
-	defer func() {
-		plannercore.SetPreparedPlanCache(orgEnable)
-	}()
+	tmp := testkit.NewTestKit(t, store)
+	defer tmp.MustExec(`set global tidb_enable_prepared_plan_cache=` + variable.BoolToOnOff(variable.EnablePreparedPlanCache.Load()))
 	flags := []bool{false, true}
 	for _, flag := range flags {
-		plannercore.SetPreparedPlanCache(flag)
+		tmp.MustExec(`set global tidb_enable_prepared_plan_cache=` + variable.BoolToOnOff(flag))
 		tk := testkit.NewTestKit(t, store)
 
 		se, err := session.CreateSession4TestWithOpt(store, &session.Opt{
@@ -805,13 +786,11 @@ func TestPreparedIssue8153(t *testing.T) {
 func TestPreparedIssue8644(t *testing.T) {
 	store, clean := testkit.CreateMockStore(t)
 	defer clean()
-	orgEnable := plannercore.PreparedPlanCacheEnabled()
-	defer func() {
-		plannercore.SetPreparedPlanCache(orgEnable)
-	}()
+	tmp := testkit.NewTestKit(t, store)
+	defer tmp.MustExec(`set global tidb_enable_prepared_plan_cache=` + variable.BoolToOnOff(variable.EnablePreparedPlanCache.Load()))
 	flags := []bool{false, true}
 	for _, flag := range flags {
-		plannercore.SetPreparedPlanCache(flag)
+		tmp.MustExec(`set global tidb_enable_prepared_plan_cache=` + variable.BoolToOnOff(flag))
 		tk := testkit.NewTestKit(t, store)
 
 		se, err := session.CreateSession4TestWithOpt(store, &session.Opt{

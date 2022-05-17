@@ -17,6 +17,7 @@ package bindinfo_test
 import (
 	"context"
 	"fmt"
+	"github.com/pingcap/tidb/sessionctx/variable"
 	"strconv"
 	"testing"
 
@@ -36,11 +37,9 @@ import (
 func TestPrepareCacheWithBinding(t *testing.T) {
 	store, clean := testkit.CreateMockStore(t)
 	defer clean()
-	orgEnable := plannercore.PreparedPlanCacheEnabled()
-	defer func() {
-		plannercore.SetPreparedPlanCache(orgEnable)
-	}()
-	plannercore.SetPreparedPlanCache(true)
+	tmp := testkit.NewTestKit(t, store)
+	defer tmp.MustExec(`set global tidb_enable_prepared_plan_cache=` + variable.BoolToOnOff(variable.EnablePreparedPlanCache.Load()))
+	tmp.MustExec(`set global tidb_enable_prepared_plan_cache=ON`)
 
 	tk := testkit.NewTestKit(t, store)
 	tk.MustExec("use test")

@@ -26,7 +26,6 @@ import (
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/tidb/parser/mysql"
 	"github.com/pingcap/tidb/parser/terror"
-	plannercore "github.com/pingcap/tidb/planner/core"
 	"github.com/pingcap/tidb/session"
 	"github.com/pingcap/tidb/sessionctx/variable"
 	"github.com/pingcap/tidb/testkit"
@@ -39,13 +38,11 @@ import (
 func TestIssue17727(t *testing.T) {
 	store, clean := testkit.CreateMockStore(t)
 	defer clean()
+	tmp := testkit.NewTestKit(t, store)
+	defer tmp.MustExec(`set global tidb_enable_prepared_plan_cache=` + variable.BoolToOnOff(variable.EnablePreparedPlanCache.Load()))
+	tmp.MustExec(`set global tidb_enable_prepared_plan_cache=ON`)
 
 	tk := testkit.NewTestKit(t, store)
-	orgEnable := plannercore.PreparedPlanCacheEnabled()
-	defer func() {
-		plannercore.SetPreparedPlanCache(orgEnable)
-	}()
-	plannercore.SetPreparedPlanCache(true)
 	var err error
 	se, err := session.CreateSession4TestWithOpt(store, &session.Opt{
 		PreparedPlanCache: kvcache.NewSimpleLRUCache(100, 0.1, math.MaxUint64),
@@ -3749,17 +3746,12 @@ func TestSetVariables(t *testing.T) {
 func TestPreparePlanCache(t *testing.T) {
 	store, clean := testkit.CreateMockStore(t)
 	defer clean()
+	tmp := testkit.NewTestKit(t, store)
+	defer tmp.MustExec(`set global tidb_enable_prepared_plan_cache=` + variable.BoolToOnOff(variable.EnablePreparedPlanCache.Load()))
+	tmp.MustExec(`set global tidb_enable_prepared_plan_cache=ON`)
 
 	tk := testkit.NewTestKit(t, store)
 
-	// Plan cache should now be off by default
-	require.False(t, plannercore.PreparedPlanCacheEnabled())
-
-	orgEnable := plannercore.PreparedPlanCacheEnabled()
-	defer func() {
-		plannercore.SetPreparedPlanCache(orgEnable)
-	}()
-	plannercore.SetPreparedPlanCache(true)
 	var err error
 	se, err := session.CreateSession4TestWithOpt(store, &session.Opt{
 		PreparedPlanCache: kvcache.NewSimpleLRUCache(100, 0.1, math.MaxUint64),
@@ -3782,10 +3774,11 @@ func TestPreparePlanCacheOnCachedTable(t *testing.T) {
 	store, clean := testkit.CreateMockStore(t)
 	defer clean()
 
-	tk := testkit.NewTestKit(t, store)
+	tmp := testkit.NewTestKit(t, store)
+	defer tmp.MustExec(`set global tidb_enable_prepared_plan_cache=` + variable.BoolToOnOff(variable.EnablePreparedPlanCache.Load()))
+	tmp.MustExec(`set global tidb_enable_prepared_plan_cache=ON`)
 
-	plannercore.SetPreparedPlanCache(true)
-	require.True(t, plannercore.PreparedPlanCacheEnabled())
+	tk := testkit.NewTestKit(t, store)
 
 	var err error
 	se, err := session.CreateSession4TestWithOpt(store, &session.Opt{
@@ -3823,13 +3816,11 @@ func TestPreparePlanCacheOnCachedTable(t *testing.T) {
 func TestIssue16205(t *testing.T) {
 	store, clean := testkit.CreateMockStore(t)
 	defer clean()
+	tmp := testkit.NewTestKit(t, store)
+	defer tmp.MustExec(`set global tidb_enable_prepared_plan_cache=` + variable.BoolToOnOff(variable.EnablePreparedPlanCache.Load()))
+	tmp.MustExec(`set global tidb_enable_prepared_plan_cache=ON`)
 
 	tk := testkit.NewTestKit(t, store)
-	orgEnable := plannercore.PreparedPlanCacheEnabled()
-	defer func() {
-		plannercore.SetPreparedPlanCache(orgEnable)
-	}()
-	plannercore.SetPreparedPlanCache(true)
 	var err error
 	se, err := session.CreateSession4TestWithOpt(store, &session.Opt{
 		PreparedPlanCache: kvcache.NewSimpleLRUCache(100, 0.1, math.MaxUint64),
@@ -3849,13 +3840,11 @@ func TestIssue16205(t *testing.T) {
 func TestRowCountPlanCache(t *testing.T) {
 	store, clean := testkit.CreateMockStore(t)
 	defer clean()
+	tmp := testkit.NewTestKit(t, store)
+	defer tmp.MustExec(`set global tidb_enable_prepared_plan_cache=` + variable.BoolToOnOff(variable.EnablePreparedPlanCache.Load()))
+	tmp.MustExec(`set global tidb_enable_prepared_plan_cache=ON`)
 
 	tk := testkit.NewTestKit(t, store)
-	orgEnable := plannercore.PreparedPlanCacheEnabled()
-	defer func() {
-		plannercore.SetPreparedPlanCache(orgEnable)
-	}()
-	plannercore.SetPreparedPlanCache(true)
 	var err error
 	se, err := session.CreateSession4TestWithOpt(store, &session.Opt{
 		PreparedPlanCache: kvcache.NewSimpleLRUCache(100, 0.1, math.MaxUint64),
@@ -3880,13 +3869,11 @@ func TestRowCountPlanCache(t *testing.T) {
 func TestCacheRegexpr(t *testing.T) {
 	store, clean := testkit.CreateMockStore(t)
 	defer clean()
+	tmp := testkit.NewTestKit(t, store)
+	defer tmp.MustExec(`set global tidb_enable_prepared_plan_cache=` + variable.BoolToOnOff(variable.EnablePreparedPlanCache.Load()))
+	tmp.MustExec(`set global tidb_enable_prepared_plan_cache=ON`)
 
 	tk := testkit.NewTestKit(t, store)
-	orgEnable := plannercore.PreparedPlanCacheEnabled()
-	defer func() {
-		plannercore.SetPreparedPlanCache(orgEnable)
-	}()
-	plannercore.SetPreparedPlanCache(true)
 	var err error
 	se, err := session.CreateSession4TestWithOpt(store, &session.Opt{
 		PreparedPlanCache: kvcache.NewSimpleLRUCache(100, 0.1, math.MaxUint64),
@@ -3908,13 +3895,11 @@ func TestCacheRegexpr(t *testing.T) {
 func TestCacheRefineArgs(t *testing.T) {
 	store, clean := testkit.CreateMockStore(t)
 	defer clean()
+	tmp := testkit.NewTestKit(t, store)
+	defer tmp.MustExec(`set global tidb_enable_prepared_plan_cache=` + variable.BoolToOnOff(variable.EnablePreparedPlanCache.Load()))
+	tmp.MustExec(`set global tidb_enable_prepared_plan_cache=ON`)
 
 	tk := testkit.NewTestKit(t, store)
-	orgEnable := plannercore.PreparedPlanCacheEnabled()
-	defer func() {
-		plannercore.SetPreparedPlanCache(orgEnable)
-	}()
-	plannercore.SetPreparedPlanCache(true)
 	var err error
 	se, err := session.CreateSession4TestWithOpt(store, &session.Opt{
 		PreparedPlanCache: kvcache.NewSimpleLRUCache(100, 0.1, math.MaxUint64),
@@ -3945,13 +3930,11 @@ func TestCacheRefineArgs(t *testing.T) {
 func TestCacheConstEval(t *testing.T) {
 	store, clean := testkit.CreateMockStore(t)
 	defer clean()
+	tmp := testkit.NewTestKit(t, store)
+	defer tmp.MustExec(`set global tidb_enable_prepared_plan_cache=` + variable.BoolToOnOff(variable.EnablePreparedPlanCache.Load()))
+	tmp.MustExec(`set global tidb_enable_prepared_plan_cache=ON`)
 
 	tk := testkit.NewTestKit(t, store)
-	orgEnable := plannercore.PreparedPlanCacheEnabled()
-	defer func() {
-		plannercore.SetPreparedPlanCache(orgEnable)
-	}()
-	plannercore.SetPreparedPlanCache(true)
 	var err error
 	se, err := session.CreateSession4TestWithOpt(store, &session.Opt{
 		PreparedPlanCache: kvcache.NewSimpleLRUCache(100, 0.1, math.MaxUint64),

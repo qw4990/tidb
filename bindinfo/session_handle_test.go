@@ -17,6 +17,7 @@ package bindinfo_test
 import (
 	"context"
 	"crypto/tls"
+	"github.com/pingcap/tidb/sessionctx/variable"
 	"strconv"
 	"testing"
 	"time"
@@ -26,7 +27,6 @@ import (
 	"github.com/pingcap/tidb/metrics"
 	"github.com/pingcap/tidb/parser"
 	"github.com/pingcap/tidb/parser/auth"
-	plannercore "github.com/pingcap/tidb/planner/core"
 	"github.com/pingcap/tidb/session/txninfo"
 	"github.com/pingcap/tidb/testkit"
 	"github.com/pingcap/tidb/util"
@@ -522,11 +522,9 @@ func TestPreparedStmt(t *testing.T) {
 
 	tk := testkit.NewTestKit(t, store)
 
-	orgEnable := plannercore.PreparedPlanCacheEnabled()
-	defer func() {
-		plannercore.SetPreparedPlanCache(orgEnable)
-	}()
-	plannercore.SetPreparedPlanCache(false) // requires plan cache disabled, or the IndexNames = 1 on first test.
+	tmp := testkit.NewTestKit(t, store)
+	defer tmp.MustExec(`set global tidb_enable_prepared_plan_cache=` + variable.BoolToOnOff(variable.EnablePreparedPlanCache.Load()))
+	tmp.MustExec(`set global tidb_enable_prepared_plan_cache=OFF`)
 
 	tk.MustExec("use test")
 	tk.MustExec("drop table if exists t")
