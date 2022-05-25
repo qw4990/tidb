@@ -32,6 +32,9 @@ const (
 
 	// CostFlagUseTrueCardinality indicates the optimizer to use true cardinality to calculate the cost.
 	CostFlagUseTrueCardinality
+
+	// CostFlagAdjustEstCardinality ...
+	CostFlagAdjustEstCardinality
 )
 
 func hasCostFlag(costFlag, flag uint64) bool {
@@ -40,6 +43,7 @@ func hasCostFlag(costFlag, flag uint64) bool {
 
 // GetPlanCost calculates the cost of the plan if it has not been calculated yet and returns the cost.
 func (p *basePhysicalPlan) GetPlanCost(taskType property.TaskType, costFlag uint64) (float64, error) {
+	defer adjustCardinality(p, costFlag)
 	if p.planCostInit && !hasCostFlag(costFlag, CostFlagRecalculate) {
 		// just calculate the cost once and always reuse it
 		return p.planCost, nil
@@ -58,6 +62,7 @@ func (p *basePhysicalPlan) GetPlanCost(taskType property.TaskType, costFlag uint
 
 // GetPlanCost calculates the cost of the plan if it has not been calculated yet and returns the cost.
 func (p *PhysicalSelection) GetPlanCost(taskType property.TaskType, costFlag uint64) (float64, error) {
+	defer adjustCardinality(p, costFlag)
 	if p.planCostInit && !hasCostFlag(costFlag, CostFlagRecalculate) {
 		return p.planCost, nil
 	}
@@ -95,6 +100,7 @@ func (p *PhysicalProjection) GetCost(count float64) float64 {
 
 // GetPlanCost calculates the cost of the plan if it has not been calculated yet and returns the cost.
 func (p *PhysicalProjection) GetPlanCost(taskType property.TaskType, costFlag uint64) (float64, error) {
+	defer adjustCardinality(p, costFlag)
 	if p.planCostInit && !hasCostFlag(costFlag, CostFlagRecalculate) {
 		return p.planCost, nil
 	}
@@ -156,6 +162,7 @@ func (p *PhysicalIndexLookUpReader) GetCost(costFlag uint64) (cost float64) {
 
 // GetPlanCost calculates the cost of the plan if it has not been calculated yet and returns the cost.
 func (p *PhysicalIndexLookUpReader) GetPlanCost(taskType property.TaskType, costFlag uint64) (float64, error) {
+	defer adjustCardinality(p, costFlag)
 	if p.planCostInit && !hasCostFlag(costFlag, CostFlagRecalculate) {
 		return p.planCost, nil
 	}
@@ -208,6 +215,7 @@ func (p *PhysicalIndexLookUpReader) GetPlanCost(taskType property.TaskType, cost
 
 // GetPlanCost calculates the cost of the plan if it has not been calculated yet and returns the cost.
 func (p *PhysicalIndexReader) GetPlanCost(taskType property.TaskType, costFlag uint64) (float64, error) {
+	defer adjustCardinality(p, costFlag)
 	if p.planCostInit && !hasCostFlag(costFlag, CostFlagRecalculate) {
 		return p.planCost, nil
 	}
@@ -232,6 +240,7 @@ func (p *PhysicalIndexReader) GetPlanCost(taskType property.TaskType, costFlag u
 
 // GetPlanCost calculates the cost of the plan if it has not been calculated yet and returns the cost.
 func (p *PhysicalTableReader) GetPlanCost(taskType property.TaskType, costFlag uint64) (float64, error) {
+	defer adjustCardinality(p, costFlag)
 	if p.planCostInit && !hasCostFlag(costFlag, CostFlagRecalculate) {
 		return p.planCost, nil
 	}
@@ -294,6 +303,7 @@ func (p *PhysicalTableReader) GetPlanCost(taskType property.TaskType, costFlag u
 
 // GetPlanCost calculates the cost of the plan if it has not been calculated yet and returns the cost.
 func (p *PhysicalIndexMergeReader) GetPlanCost(taskType property.TaskType, costFlag uint64) (float64, error) {
+	defer adjustCardinality(p, costFlag)
 	if p.planCostInit && !hasCostFlag(costFlag, CostFlagRecalculate) {
 		return p.planCost, nil
 	}
@@ -340,6 +350,7 @@ func (p *PhysicalIndexMergeReader) GetPlanCost(taskType property.TaskType, costF
 
 // GetPlanCost calculates the cost of the plan if it has not been calculated yet and returns the cost.
 func (p *PhysicalTableScan) GetPlanCost(taskType property.TaskType, costFlag uint64) (float64, error) {
+	defer adjustCardinality(p, costFlag)
 	if p.planCostInit && !hasCostFlag(costFlag, CostFlagRecalculate) {
 		return p.planCost, nil
 	}
@@ -355,6 +366,7 @@ func (p *PhysicalTableScan) GetPlanCost(taskType property.TaskType, costFlag uin
 
 // GetPlanCost calculates the cost of the plan if it has not been calculated yet and returns the cost.
 func (p *PhysicalIndexScan) GetPlanCost(taskType property.TaskType, costFlag uint64) (float64, error) {
+	defer adjustCardinality(p, costFlag)
 	if p.planCostInit && !hasCostFlag(costFlag, CostFlagRecalculate) {
 		return p.planCost, nil
 	}
@@ -419,6 +431,7 @@ func (p *PhysicalIndexJoin) GetCost(outerCnt, innerCnt float64, outerCost, inner
 
 // GetPlanCost calculates the cost of the plan if it has not been calculated yet and returns the cost.
 func (p *PhysicalIndexJoin) GetPlanCost(taskType property.TaskType, costFlag uint64) (float64, error) {
+	defer adjustCardinality(p, costFlag)
 	if p.planCostInit && !hasCostFlag(costFlag, CostFlagRecalculate) {
 		return p.planCost, nil
 	}
@@ -500,6 +513,7 @@ func (p *PhysicalIndexHashJoin) GetCost(outerCnt, innerCnt, outerCost, innerCost
 
 // GetPlanCost calculates the cost of the plan if it has not been calculated yet and returns the cost.
 func (p *PhysicalIndexHashJoin) GetPlanCost(taskType property.TaskType, costFlag uint64) (float64, error) {
+	defer adjustCardinality(p, costFlag)
 	if p.planCostInit && !hasCostFlag(costFlag, CostFlagRecalculate) {
 		return p.planCost, nil
 	}
@@ -583,6 +597,7 @@ func (p *PhysicalIndexMergeJoin) GetCost(outerCnt, innerCnt, outerCost, innerCos
 
 // GetPlanCost calculates the cost of the plan if it has not been calculated yet and returns the cost.
 func (p *PhysicalIndexMergeJoin) GetPlanCost(taskType property.TaskType, costFlag uint64) (float64, error) {
+	defer adjustCardinality(p, costFlag)
 	if p.planCostInit && !hasCostFlag(costFlag, CostFlagRecalculate) {
 		return p.planCost, nil
 	}
@@ -631,6 +646,7 @@ func (p *PhysicalApply) GetCost(lCount, rCount, lCost, rCost float64) float64 {
 
 // GetPlanCost calculates the cost of the plan if it has not been calculated yet and returns the cost.
 func (p *PhysicalApply) GetPlanCost(taskType property.TaskType, costFlag uint64) (float64, error) {
+	defer adjustCardinality(p, costFlag)
 	if p.planCostInit && !hasCostFlag(costFlag, CostFlagRecalculate) {
 		return p.planCost, nil
 	}
@@ -700,6 +716,7 @@ func (p *PhysicalMergeJoin) GetCost(lCnt, rCnt float64) float64 {
 
 // GetPlanCost calculates the cost of the plan if it has not been calculated yet and returns the cost.
 func (p *PhysicalMergeJoin) GetPlanCost(taskType property.TaskType, costFlag uint64) (float64, error) {
+	defer adjustCardinality(p, costFlag)
 	if p.planCostInit && !hasCostFlag(costFlag, CostFlagRecalculate) {
 		return p.planCost, nil
 	}
@@ -797,6 +814,7 @@ func (p *PhysicalHashJoin) GetCost(lCnt, rCnt float64) float64 {
 
 // GetPlanCost calculates the cost of the plan if it has not been calculated yet and returns the cost.
 func (p *PhysicalHashJoin) GetPlanCost(taskType property.TaskType, costFlag uint64) (float64, error) {
+	defer adjustCardinality(p, costFlag)
 	if p.planCostInit && !hasCostFlag(costFlag, CostFlagRecalculate) {
 		return p.planCost, nil
 	}
@@ -830,6 +848,7 @@ func (p *PhysicalStreamAgg) GetCost(inputRows float64, isRoot bool, costFlag uin
 
 // GetPlanCost calculates the cost of the plan if it has not been calculated yet and returns the cost.
 func (p *PhysicalStreamAgg) GetPlanCost(taskType property.TaskType, costFlag uint64) (float64, error) {
+	defer adjustCardinality(p, costFlag)
 	if p.planCostInit && !hasCostFlag(costFlag, CostFlagRecalculate) {
 		return p.planCost, nil
 	}
@@ -870,6 +889,7 @@ func (p *PhysicalHashAgg) GetCost(inputRows float64, isRoot, isMPP bool, costFla
 
 // GetPlanCost calculates the cost of the plan if it has not been calculated yet and returns the cost.
 func (p *PhysicalHashAgg) GetPlanCost(taskType property.TaskType, costFlag uint64) (float64, error) {
+	defer adjustCardinality(p, costFlag)
 	if p.planCostInit && !hasCostFlag(costFlag, CostFlagRecalculate) {
 		return p.planCost, nil
 	}
@@ -917,6 +937,7 @@ func (p *PhysicalSort) GetCost(count float64, schema *expression.Schema) float64
 
 // GetPlanCost calculates the cost of the plan if it has not been calculated yet and returns the cost.
 func (p *PhysicalSort) GetPlanCost(taskType property.TaskType, costFlag uint64) (float64, error) {
+	defer adjustCardinality(p, costFlag)
 	if p.planCostInit && !hasCostFlag(costFlag, CostFlagRecalculate) {
 		return p.planCost, nil
 	}
@@ -955,6 +976,7 @@ func (p *PhysicalTopN) GetCost(count float64, isRoot bool) float64 {
 
 // GetPlanCost calculates the cost of the plan if it has not been calculated yet and returns the cost.
 func (p *PhysicalTopN) GetPlanCost(taskType property.TaskType, costFlag uint64) (float64, error) {
+	defer adjustCardinality(p, costFlag)
 	if p.planCostInit && !hasCostFlag(costFlag, CostFlagRecalculate) {
 		return p.planCost, nil
 	}
@@ -992,6 +1014,7 @@ func (p *BatchPointGetPlan) GetCost() float64 {
 
 // GetPlanCost calculates the cost of the plan if it has not been calculated yet and returns the cost.
 func (p *BatchPointGetPlan) GetPlanCost(taskType property.TaskType, costFlag uint64) (float64, error) {
+	defer adjustCardinality(p, costFlag)
 	if p.planCostInit && !hasCostFlag(costFlag, CostFlagRecalculate) {
 		return p.planCost, nil
 	}
@@ -1022,6 +1045,7 @@ func (p *PointGetPlan) GetCost() float64 {
 
 // GetPlanCost calculates the cost of the plan if it has not been calculated yet and returns the cost.
 func (p *PointGetPlan) GetPlanCost(taskType property.TaskType, costFlag uint64) (float64, error) {
+	defer adjustCardinality(p, costFlag)
 	if p.planCostInit && !hasCostFlag(costFlag, CostFlagRecalculate) {
 		return p.planCost, nil
 	}
@@ -1032,6 +1056,7 @@ func (p *PointGetPlan) GetPlanCost(taskType property.TaskType, costFlag uint64) 
 
 // GetPlanCost calculates the cost of the plan if it has not been calculated yet and returns the cost.
 func (p *PhysicalUnionAll) GetPlanCost(taskType property.TaskType, costFlag uint64) (float64, error) {
+	defer adjustCardinality(p, costFlag)
 	if p.planCostInit && !hasCostFlag(costFlag, CostFlagRecalculate) {
 		return p.planCost, nil
 	}
@@ -1050,6 +1075,7 @@ func (p *PhysicalUnionAll) GetPlanCost(taskType property.TaskType, costFlag uint
 
 // GetPlanCost calculates the cost of the plan if it has not been calculated yet and returns the cost.
 func (p *PhysicalExchangeReceiver) GetPlanCost(taskType property.TaskType, costFlag uint64) (float64, error) {
+	defer adjustCardinality(p, costFlag)
 	if p.planCostInit && !hasCostFlag(costFlag, CostFlagRecalculate) {
 		return p.planCost, nil
 	}
@@ -1065,6 +1091,23 @@ func (p *PhysicalExchangeReceiver) GetPlanCost(taskType property.TaskType, costF
 	return p.planCost, nil
 }
 
+func adjustCardinality(operator PhysicalPlan, costFlag uint64) {
+	if !hasCostFlag(costFlag, CostFlagAdjustEstCardinality) || !hasCostFlag(costFlag, CostFlagUseTrueCardinality) {
+		return
+	}
+	runtimeInfo := operator.SCtx().GetSessionVars().StmtCtx.RuntimeStatsColl
+	id := operator.ID()
+	actRows := 0.0
+	if runtimeInfo.ExistsRootStats(id) {
+		actRows = float64(runtimeInfo.GetRootStats(id).GetActRows())
+	} else if runtimeInfo.ExistsCopStats(id) {
+		actRows = float64(runtimeInfo.GetCopStats(id).GetActRows())
+	} else {
+		panic(errors.Errorf("cannot act-rows for %v", operator.ExplainID().String()))
+	}
+	operator.setStatsInfo(operator.Stats().Scale(actRows))
+}
+
 func getCardinality(operator PhysicalPlan, costFlag uint64) float64 {
 	if hasCostFlag(costFlag, CostFlagUseTrueCardinality) {
 		runtimeInfo := operator.SCtx().GetSessionVars().StmtCtx.RuntimeStatsColl
@@ -1078,8 +1121,6 @@ func getCardinality(operator PhysicalPlan, costFlag uint64) float64 {
 			operator.SCtx().GetSessionVars().StmtCtx.AppendWarning(errors.Errorf("cannot act-rows for %v", operator.ExplainID().String()))
 			return operator.StatsCount()
 		}
-		operator.statsInfo()
-		operator.setStatsInfo(operator.Stats().Scale(actRows))
 		return actRows
 	}
 	return operator.StatsCount()
