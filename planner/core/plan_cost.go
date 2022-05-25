@@ -1103,7 +1103,7 @@ func adjustCardinality(operator PhysicalPlan, costFlag uint64) {
 	} else if runtimeInfo.ExistsCopStats(id) {
 		actRows = float64(runtimeInfo.GetCopStats(id).GetActRows())
 	} else {
-		panic(errors.Errorf("cannot act-rows for %v", operator.ExplainID().String()))
+		actRows = 0.0 // no data in this case
 	}
 	operator.setStatsInfo(operator.Stats().Scale(actRows / operator.StatsCount()))
 }
@@ -1118,8 +1118,7 @@ func getCardinality(operator PhysicalPlan, costFlag uint64) float64 {
 		} else if runtimeInfo.ExistsCopStats(id) {
 			actRows = float64(runtimeInfo.GetCopStats(id).GetActRows())
 		} else {
-			operator.SCtx().GetSessionVars().StmtCtx.AppendWarning(errors.Errorf("cannot act-rows for %v", operator.ExplainID().String()))
-			return operator.StatsCount()
+			actRows = 0.0 // no data in this case
 		}
 		return actRows
 	}
