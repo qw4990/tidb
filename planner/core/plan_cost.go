@@ -1067,7 +1067,16 @@ func (p *PhysicalExchangeReceiver) GetPlanCost(taskType property.TaskType, costF
 
 func getCardinality(operator PhysicalPlan, costFlag uint64) float64 {
 	if hasCostFlag(costFlag, CostFlagUseTrueCardinality) {
-		// TODO: return the true cardinality of this operator
+		runtimeInfo := operator.SCtx().GetSessionVars().StmtCtx.RuntimeStatsColl
+		id := operator.ID()
+		if runtimeInfo.ExistsRootStats(id) {
+			return float64(runtimeInfo.GetRootStats(id).GetActRows())
+		} else if runtimeInfo.ExistsCopStats(id) {
+			return float64(runtimeInfo.GetCopStats(id).GetActRows())
+		} else {
+			operator.SCtx().GetSessionVars().StmtCtx.AppendWarning(errors.Errorf("cannot act-rows for %v", operator.ExplainID().String()))
+			return operator.StatsCount()
+		}
 	}
 	return operator.StatsCount()
 }
