@@ -1105,7 +1105,7 @@ func adjustCardinality(operator PhysicalPlan, costFlag uint64) {
 	} else {
 		panic(errors.Errorf("cannot act-rows for %v", operator.ExplainID().String()))
 	}
-	operator.setStatsInfo(operator.Stats().Scale(actRows))
+	operator.setStatsInfo(operator.Stats().Scale(actRows / operator.StatsCount()))
 }
 
 func getCardinality(operator PhysicalPlan, costFlag uint64) float64 {
