@@ -60,6 +60,9 @@ type Plan interface {
 	// property.StatsInfo will return the property.StatsInfo for this plan.
 	statsInfo() *property.StatsInfo
 
+	// setStatsInfo ...
+	setStatsInfo(info *property.StatsInfo)
+
 	// OutputNames returns the outputting names of each column.
 	OutputNames() types.NameSlice
 
@@ -659,6 +662,11 @@ func (p *basePlan) ID() int {
 // property.StatsInfo implements the Plan interface.
 func (p *basePlan) statsInfo() *property.StatsInfo {
 	return p.stats
+}
+
+// SetStats ...
+func (p *basePlan) setStatsInfo(stats *property.StatsInfo) {
+	p.stats = stats
 }
 
 // ExplainInfo implements Plan interface.
