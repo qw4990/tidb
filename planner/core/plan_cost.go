@@ -1105,7 +1105,11 @@ func adjustCardinality(operator PhysicalPlan, costFlag uint64) {
 	} else {
 		actRows = 0.0 // no data in this case
 	}
-	operator.setStatsInfo(operator.Stats().Scale(actRows / operator.StatsCount()))
+	if operator.StatsCount() == 0 {
+		operator.setStatsInfo(operator.Stats().Scale(0))
+	} else {
+		operator.setStatsInfo(operator.Stats().Scale(actRows / operator.StatsCount()))
+	}
 }
 
 func getCardinality(operator PhysicalPlan, costFlag uint64) float64 {
