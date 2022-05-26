@@ -1588,6 +1588,14 @@ func (e *Explain) getOperatorInfo(p Plan, id string) (string, string, string, st
 		}
 		operatorInfo = p.ExplainInfo()
 	}
+
+	rowSize := getAvgRowSize(p.statsInfo(), p.Schema())
+	if operatorInfo == "" {
+		operatorInfo = fmt.Sprintf("row_size: %v", int(rowSize))
+	} else {
+		operatorInfo = fmt.Sprintf("%v, row_size: %v", operatorInfo, int(rowSize))
+	}
+
 	return estRows, estCost, accessObject, operatorInfo
 }
 

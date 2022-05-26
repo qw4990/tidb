@@ -169,7 +169,6 @@ func (p *PhysicalIndexScan) OperatorInfo(normalized bool) string {
 	if p.stats.StatsVersion == statistics.PseudoVersion && !normalized {
 		buffer.WriteString(", stats:pseudo")
 	}
-	buffer.WriteString(fmt.Sprintf(", scan_row_size:%v", p.getScanRowSize()))
 	return buffer.String()
 }
 
@@ -294,7 +293,6 @@ func (p *PhysicalTableScan) OperatorInfo(normalized bool) string {
 	if p.StoreType == kv.TiFlash && p.Table.GetPartitionInfo() != nil && p.IsMPPOrBatchCop && p.ctx.GetSessionVars().UseDynamicPartitionPrune() {
 		buffer.WriteString(", PartitionTableScan:true")
 	}
-	buffer.WriteString(fmt.Sprintf(", scan_row_size:%v", p.getScanRowSize()))
 	return buffer.String()
 }
 
@@ -327,8 +325,7 @@ func (p *PhysicalTableScan) isFullScan() bool {
 
 // ExplainInfo implements Plan interface.
 func (p *PhysicalTableReader) ExplainInfo() string {
-	netRowSize := getTblStats(p.tablePlan).GetAvgRowSize(p.ctx, p.tablePlan.Schema().Columns, false, false)
-	return fmt.Sprintf("data:%v, net_row_size:%v", p.tablePlan.ExplainID().String(), netRowSize)
+	return fmt.Sprintf("data:%v", p.tablePlan.ExplainID().String())
 }
 
 // ExplainNormalizedInfo implements Plan interface.
@@ -430,8 +427,7 @@ func (p *PhysicalTableReader) OperatorInfo(normalized bool) string {
 
 // ExplainInfo implements Plan interface.
 func (p *PhysicalIndexReader) ExplainInfo() string {
-	netRowSize := getTblStats(p.indexPlan).GetAvgRowSize(p.ctx, p.indexPlan.Schema().Columns, true, false)
-	return fmt.Sprintf("index:%v, net_row_size:%v", p.indexPlan.ExplainID().String(), netRowSize)
+	return fmt.Sprintf("index:%v", p.indexPlan.ExplainID().String())
 }
 
 // ExplainNormalizedInfo implements Plan interface.
