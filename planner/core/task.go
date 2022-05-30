@@ -305,7 +305,7 @@ func (p *PhysicalIndexJoin) attach2Task(tasks ...task) task {
 }
 
 func getAvgRowSize(stats *property.StatsInfo, schema *expression.Schema) (size float64) {
-	if stats.HistColl != nil {
+	if stats != nil && stats.HistColl != nil {
 		size = stats.HistColl.GetAvgRowSizeListInDisk(schema.Columns)
 	} else {
 		// Estimate using just the type info.

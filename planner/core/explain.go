@@ -472,6 +472,11 @@ func (p *PhysicalIndexLookUpReader) ExplainInfo() string {
 		}
 		str.WriteString("paging:true")
 	}
+	if str.Len() > 0 {
+		str.WriteString(fmt.Sprintf(", batch_size=%v", p.ctx.GetSessionVars().IndexLookupSize))
+	} else {
+		str.WriteString(fmt.Sprintf("batch_size=%v", p.ctx.GetSessionVars().IndexLookupSize))
+	}
 	return str.String()
 }
 
