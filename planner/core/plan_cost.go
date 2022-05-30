@@ -187,7 +187,7 @@ func (p *PhysicalIndexLookUpReader) GetPlanCost(taskType property.TaskType, cost
 		return 0, err
 	}
 	p.planCost -= tblCost
-	p.planCost += getCardinality(p.indexPlan, costFlag) * ts.getScanRowSize() * p.SCtx().GetSessionVars().GetScanFactor(ts.Table)
+	p.planCost += getCardinality(p.indexPlan, costFlag) * math.Log2(ts.getScanRowSize()) * p.SCtx().GetSessionVars().GetScanFactor(ts.Table)
 
 	// index-side net I/O cost: rows * row-size * net-factor
 	netFactor := getTableNetFactor(p.tablePlan)
@@ -359,7 +359,7 @@ func (p *PhysicalTableScan) GetPlanCost(taskType property.TaskType, costFlag uin
 	if p.Desc {
 		scanFactor = p.ctx.GetSessionVars().GetDescScanFactor(p.Table)
 	}
-	p.planCost = getCardinality(p, costFlag) * p.getScanRowSize() * scanFactor
+	p.planCost = getCardinality(p, costFlag) * math.Log2(p.getScanRowSize()) * scanFactor
 	p.planCostInit = true
 	return p.planCost, nil
 }
@@ -375,7 +375,7 @@ func (p *PhysicalIndexScan) GetPlanCost(taskType property.TaskType, costFlag uin
 	if p.Desc {
 		scanFactor = p.ctx.GetSessionVars().GetDescScanFactor(p.Table)
 	}
-	p.planCost = getCardinality(p, costFlag) * p.getScanRowSize() * scanFactor
+	p.planCost = getCardinality(p, costFlag) * math.Log2(p.getScanRowSize()) * scanFactor
 	p.planCostInit = true
 	return p.planCost, nil
 }
