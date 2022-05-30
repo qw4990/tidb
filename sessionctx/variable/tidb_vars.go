@@ -721,8 +721,8 @@ const (
 	DefIndexLookupConcurrency                    = ConcurrencyUnset
 	DefIndexLookupJoinConcurrency                = ConcurrencyUnset
 	DefIndexSerialScanConcurrency                = 1
-	DefIndexJoinBatchSize                        = 25000
-	DefIndexLookupSize                           = 20000
+	DefIndexJoinBatchSize                        = 4096
+	DefIndexLookupSize                           = 4096
 	DefDistSQLScanConcurrency                    = 15
 	DefBuildStatsConcurrency                     = 4
 	DefAutoAnalyzeRatio                          = 0.5
