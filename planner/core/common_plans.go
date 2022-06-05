@@ -1585,7 +1585,17 @@ func (e *Explain) getOperatorInfo(p Plan, id string) (string, string, string, st
 	estCost := "N/A"
 	if pp, ok := p.(PhysicalPlan); ok {
 		if p.SCtx().GetSessionVars().EnableNewCostInterface {
-			planCost, _ := pp.GetPlanCost(property.RootTaskType, 0)
+			var planCost float64
+			var err error
+			if p.SCtx().GetSessionVars().ExternalCostEstimatorAddress != "" {
+				planCost, err = callExternalCostEstimator(p.SCtx(), p.(PhysicalPlan))
+			} else {
+				planCost, err = pp.GetPlanCost(property.RootTaskType, 0)
+			}
+			if err != nil {
+				p.SCtx().GetSessionVars().StmtCtx.AppendWarning(fmt.Errorf("cannot get cost from external cost estimator %v: %v",
+					p.SCtx().GetSessionVars().ExternalCostEstimatorAddress, err))
+			}
 			estCost = strconv.FormatFloat(planCost, 'f', 2, 64)
 		} else {
 			estCost = strconv.FormatFloat(pp.Cost(), 'f', 2, 64)

@@ -22,9 +22,14 @@ import (
 	"github.com/pingcap/tidb/expression"
 	"github.com/pingcap/tidb/kv"
 	"github.com/pingcap/tidb/planner/property"
+	"github.com/pingcap/tidb/sessionctx"
 	"github.com/pingcap/tidb/statistics"
 	"github.com/pingcap/tidb/util/paging"
 )
+
+func callExternalCostEstimator(ctx sessionctx.Context, p PhysicalPlan) (float64, error) {
+	return 0, errors.New("not support")
+}
 
 const (
 	// CostFlagRecalculate indicates the optimizer to ignore cached cost and recalculate it again.

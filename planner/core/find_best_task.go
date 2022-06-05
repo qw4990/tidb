@@ -287,10 +287,6 @@ func (p *baseLogicalPlan) enumeratePhysicalPlans4Task(physicalPlans []PhysicalPl
 	return bestTask, cntPlan, nil
 }
 
-func callExternalCostEstimator(ctx sessionctx.Context, p PhysicalPlan) (float64, error) {
-	return 0, errors.New("not support")
-}
-
 // compareTaskCost compares cost of curTask and bestTask and returns whether curTask's cost is smaller than bestTask's.
 func compareTaskCost(ctx sessionctx.Context, curTask, bestTask task) (curIsBetter bool, err error) {
 	if curTask.invalid() {
