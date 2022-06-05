@@ -54,6 +54,10 @@ func callExternalCostEstimator(ctx sessionctx.Context, p PhysicalPlan) (cost flo
 	if fallbackToInternalCostEstimator(ctx, p) {
 		return 0, true, nil
 	}
+
+	// YOUR CODE HERE
+	addr := ctx.GetSessionVars().ExternalCostEstimatorAddress
+
 	return 0, false, errors.New("not support")
 }
 

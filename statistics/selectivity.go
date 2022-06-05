@@ -220,6 +220,10 @@ func callExternalCardinalityEstimator(ctx sessionctx.Context, exprs []expression
 			return 0, true, nil
 		}
 	}
+
+	// YOUR CODE HERE
+	addr := ctx.GetSessionVars().ExternalCardinalityEstimatorAddress
+
 	return 0, false, errors.New("not support")
 }
 
