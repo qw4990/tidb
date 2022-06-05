@@ -27,7 +27,7 @@ import (
 	"github.com/pingcap/tidb/util/paging"
 )
 
-// for simplicity, the external estimator only consider HashAgg, HashJoin, Sort, Selection, Projection,
+// for simplicity, we only considered HashAgg, HashJoin, Sort, Selection, Projection,
 // TableReader, TableScan, IndexReader, IndexScan, IndexLookup in lab2.
 func fallbackToInternalCostEstimator(ctx sessionctx.Context, p PhysicalPlan) (fallback bool) {
 	switch x := p.(type) {

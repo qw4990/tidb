@@ -20,6 +20,7 @@ import (
 	"math"
 	"math/bits"
 	"sort"
+	"strings"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb/expression"
@@ -176,8 +177,46 @@ func isColEqCorCol(filter expression.Expression) *expression.Column {
 	return nil
 }
 
-func callExternalCardinalityEstimator(ctx sessionctx.Context, exprs []expression.Expression) (float64, error) {
-	return 0, errors.New("not support")
+func fallbackToInternalCardinalityEstimator(ctx sessionctx.Context, expr expression.Expression) (fallback bool) {
+	switch x := expr.(type) {
+	case *expression.Column:
+		switch strings.ToLower(x.OrigName) {
+		case "kind_id", "production_year", "imdb_id", "episode_of_id", "season_nr", "episode_nr":
+			// for simplicity, we only considered these columns above in lab1
+		default:
+			return true
+		}
+
+	case *expression.Constant:
+		if x.RetType.EvalType() != types.ETInt {
+			// for simplicity, we only considered INT in lab1
+			return true
+		}
+	case *expression.ScalarFunction:
+		switch x.FuncName.L {
+		case ast.LT, ast.GT, ast.LogicAnd:
+			// for simplicity, we only considered '>', '<', 'and' in lab1
+		default:
+			return true
+		}
+		for _, expr := range x.GetArgs() {
+			if fallbackToInternalCardinalityEstimator(ctx, expr) {
+				return true
+			}
+		}
+	default:
+		return true
+	}
+	return false
+}
+
+func callExternalCardinalityEstimator(ctx sessionctx.Context, exprs []expression.Expression) (selectivity float64, fallback bool, err error) {
+	for _, expr := range exprs {
+		if fallbackToInternalCardinalityEstimator(ctx, expr) {
+			return 0, true, nil
+		}
+	}
+	return 0, false, errors.New("not support")
 }
 
 // Selectivity is a function calculate the selectivity of the expressions.
@@ -191,12 +230,14 @@ func (coll *HistColl) Selectivity(ctx sessionctx.Context, exprs []expression.Exp
 	}
 
 	if ctx.GetSessionVars().ExternalCardinalityEstimatorAddress != "" {
-		sel, err := callExternalCardinalityEstimator(ctx, exprs)
+		sel, fallback, err := callExternalCardinalityEstimator(ctx, exprs)
+		if !fallback && err == nil {
+			return sel, nil, nil
+		}
 		if err != nil {
 			ctx.GetSessionVars().StmtCtx.AppendWarning(fmt.Errorf("cannot get selectivity of %v from the external estimator %v: %v",
 				exprs, ctx.GetSessionVars().ExternalCardinalityEstimatorAddress, err))
 		}
-		return sel, nil, err
 	}
 
 	ret := 1.0
