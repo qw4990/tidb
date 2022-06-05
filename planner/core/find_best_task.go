@@ -287,6 +287,10 @@ func (p *baseLogicalPlan) enumeratePhysicalPlans4Task(physicalPlans []PhysicalPl
 	return bestTask, cntPlan, nil
 }
 
+func callExternalCostEstimator(ctx sessionctx.Context, p PhysicalPlan) (float64, error) {
+	return 0, errors.New("not support")
+}
+
 // compareTaskCost compares cost of curTask and bestTask and returns whether curTask's cost is smaller than bestTask's.
 func compareTaskCost(ctx sessionctx.Context, curTask, bestTask task) (curIsBetter bool, err error) {
 	if curTask.invalid() {
@@ -296,13 +300,25 @@ func compareTaskCost(ctx sessionctx.Context, curTask, bestTask task) (curIsBette
 		return true, nil
 	}
 	if ctx.GetSessionVars().EnableNewCostInterface { // use the new cost interface
-		curCost, err := getTaskPlanCost(curTask)
-		if err != nil {
-			return false, err
-		}
-		bestCost, err := getTaskPlanCost(bestTask)
-		if err != nil {
-			return false, err
+		var curCost, bestCost float64
+		if ctx.GetSessionVars().ExternalCostEstimatorAddress == "" {
+			curCost, err = callExternalCostEstimator(ctx, curTask.plan())
+			if err != nil {
+				return false, err
+			}
+			bestCost, err = callExternalCostEstimator(ctx, bestTask.plan())
+			if err != nil {
+				return false, err
+			}
+		} else {
+			curCost, err = getTaskPlanCost(curTask)
+			if err != nil {
+				return false, err
+			}
+			bestCost, err = getTaskPlanCost(bestTask)
+			if err != nil {
+				return false, err
+			}
 		}
 		return curCost < bestCost, nil
 	}
