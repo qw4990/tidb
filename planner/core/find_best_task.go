@@ -301,7 +301,7 @@ func compareTaskCost(ctx sessionctx.Context, curTask, bestTask task) (curIsBette
 	}
 	if ctx.GetSessionVars().EnableNewCostInterface { // use the new cost interface
 		var curCost, bestCost float64
-		if ctx.GetSessionVars().ExternalCostEstimatorAddress == "" {
+		if ctx.GetSessionVars().ExternalCostEstimatorAddress != "" {
 			curCost, err = callExternalCostEstimator(ctx, curTask.plan())
 			if err != nil {
 				return false, err
