@@ -184,8 +184,8 @@ func fallbackToInternalCardinalityEstimator(ctx sessionctx.Context, expr express
 		if len(tmp) != 3 {
 			return true
 		}
-		switch strings.ToLower(tmp[2]) {
-		case "kind_id", "production_year", "imdb_id", "episode_of_id", "season_nr", "episode_nr":
+		switch strings.ToLower(tmp[1] + "." + tmp[2]) {
+		case "title.kind_id", "title.production_year", "title.imdb_id", "title.episode_of_id", "title.season_nr", "title.episode_nr":
 			// for simplicity, we only considered these columns above in lab1
 		default:
 			return true
