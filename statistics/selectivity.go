@@ -217,7 +217,6 @@ func fallbackToInternalCardinalityEstimator(ctx sessionctx.Context, expr express
 func callExternalCardinalityEstimator(ctx sessionctx.Context, exprs []expression.Expression) (selectivity float64, fallback bool, err error) {
 	for _, expr := range exprs {
 		if fallbackToInternalCardinalityEstimator(ctx, expr) {
-			fmt.Println("=========>>>>>>>>> fallback >>> ", expr)
 			return 0, true, nil
 		}
 	}
