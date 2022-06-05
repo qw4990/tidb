@@ -27,8 +27,34 @@ import (
 	"github.com/pingcap/tidb/util/paging"
 )
 
-func callExternalCostEstimator(ctx sessionctx.Context, p PhysicalPlan) (float64, error) {
-	return 0, errors.New("not support")
+// for simplicity, the external estimator only consider HashAgg, HashJoin, Sort, Selection, Projection,
+// TableReader, TableScan, IndexReader, IndexScan, IndexLookup in lab2.
+func fallbackToInternalCostEstimator(ctx sessionctx.Context, p PhysicalPlan) (fallback bool) {
+	switch x := p.(type) {
+	case *PhysicalHashAgg, *PhysicalHashJoin, *PhysicalSort, *PhysicalSelection,
+		*PhysicalProjection, *PhysicalTableScan, *PhysicalIndexScan:
+		for _, child := range p.Children() {
+			if fallbackToInternalCostEstimator(ctx, child) {
+				return true
+			}
+		}
+		return false
+	case *PhysicalTableReader:
+		return fallbackToInternalCostEstimator(ctx, x.tablePlan)
+	case *PhysicalIndexReader:
+		return fallbackToInternalCostEstimator(ctx, x.indexPlan)
+	case *PhysicalIndexLookUpReader:
+	default:
+		return true // unexpected operator
+	}
+	return false
+}
+
+func callExternalCostEstimator(ctx sessionctx.Context, p PhysicalPlan) (cost float64, fallback bool, err error) {
+	if fallbackToInternalCostEstimator(ctx, p) {
+		return 0, true, nil
+	}
+	return 0, false, errors.New("not support")
 }
 
 const (

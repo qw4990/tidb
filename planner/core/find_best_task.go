@@ -296,25 +296,13 @@ func compareTaskCost(ctx sessionctx.Context, curTask, bestTask task) (curIsBette
 		return true, nil
 	}
 	if ctx.GetSessionVars().EnableNewCostInterface { // use the new cost interface
-		var curCost, bestCost float64
-		if ctx.GetSessionVars().ExternalCostEstimatorAddress != "" {
-			curCost, err = callExternalCostEstimator(ctx, curTask.plan())
-			if err != nil {
-				return false, err
-			}
-			bestCost, err = callExternalCostEstimator(ctx, bestTask.plan())
-			if err != nil {
-				return false, err
-			}
-		} else {
-			curCost, err = getTaskPlanCost(curTask)
-			if err != nil {
-				return false, err
-			}
-			bestCost, err = getTaskPlanCost(bestTask)
-			if err != nil {
-				return false, err
-			}
+		curCost, err := getTaskPlanCost(curTask)
+		if err != nil {
+			return false, err
+		}
+		bestCost, err := getTaskPlanCost(bestTask)
+		if err != nil {
+			return false, err
 		}
 		return curCost < bestCost, nil
 	}
@@ -336,6 +324,21 @@ func getTaskPlanCost(t task) (float64, error) {
 	default:
 		return 0, errors.New("unknown task type")
 	}
+
+	p := t.plan()
+	if p.SCtx().GetSessionVars().ExternalCostEstimatorAddress != "" {
+		cost, fallback, err := callExternalCostEstimator(p.SCtx(), p)
+		if err != nil {
+			p.SCtx().GetSessionVars().StmtCtx.AppendWarning(fmt.Errorf("cannot get cost from the external cost estimator %v: %v",
+				p.SCtx().GetSessionVars().ExternalCostEstimatorAddress, err))
+			return t.plan().GetPlanCost(taskType, 0)
+		}
+		if fallback {
+			return t.plan().GetPlanCost(taskType, 0)
+		}
+		return cost, nil
+	}
+
 	return t.plan().GetPlanCost(taskType, 0)
 }
 
