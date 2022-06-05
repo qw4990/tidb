@@ -16,6 +16,7 @@ package statistics
 
 import (
 	"bytes"
+	"fmt"
 	"math"
 	"math/bits"
 	"sort"
@@ -175,6 +176,10 @@ func isColEqCorCol(filter expression.Expression) *expression.Column {
 	return nil
 }
 
+func callExternalCardinalityEstimator(ctx sessionctx.Context, exprs []expression.Expression) (float64, error) {
+	return 0, errors.New("not support")
+}
+
 // Selectivity is a function calculate the selectivity of the expressions.
 // The definition of selectivity is (row count after filter / row count before filter).
 // And exprs must be CNF now, in other words, `exprs[0] and exprs[1] and ... and exprs[len - 1]` should be held when you call this.
@@ -184,6 +189,16 @@ func (coll *HistColl) Selectivity(ctx sessionctx.Context, exprs []expression.Exp
 	if coll.Count == 0 || len(exprs) == 0 {
 		return 1, nil, nil
 	}
+
+	if ctx.GetSessionVars().ExternalCardinalityEstimatorAddress != "" {
+		sel, err := callExternalCardinalityEstimator(ctx, exprs)
+		if err != nil {
+			ctx.GetSessionVars().StmtCtx.AppendWarning(fmt.Errorf("cannot get selectivity of %v from the external estimator %v: %v",
+				exprs, ctx.GetSessionVars().ExternalCardinalityEstimatorAddress, err))
+		}
+		return sel, nil, err
+	}
+
 	ret := 1.0
 	sc := ctx.GetSessionVars().StmtCtx
 	tableID := coll.PhysicalID
