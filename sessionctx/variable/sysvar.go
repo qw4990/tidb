@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"net/netip"
 	"runtime"
 	"strconv"
 	"strings"
@@ -1550,6 +1551,24 @@ var defaultSysVars = []*SysVar{
 	{Scope: ScopeGlobal | ScopeSession, Name: TiDBEnableNewCostInterface, Value: BoolToOnOff(true), Hidden: true, Type: TypeBool,
 		SetSession: func(vars *SessionVars, s string) error {
 			vars.EnableNewCostInterface = TiDBOptOn(s)
+			return nil
+		},
+	},
+	{Scope: ScopeGlobal | ScopeSession, Name: TiDBExternalCardinalityEstimatorAddress, Value: "", Hidden: false, Type: TypeStr,
+		SetSession: func(vars *SessionVars, s string) error {
+			if _, err := netip.ParseAddrPort(s); err != nil {
+				return err
+			}
+			vars.ExternalCardinalityEstimatorAddress = s
+			return nil
+		},
+	},
+	{Scope: ScopeGlobal | ScopeSession, Name: TiDBExternalCostEstimatorAddress, Value: "", Hidden: false, Type: TypeStr,
+		SetSession: func(vars *SessionVars, s string) error {
+			if _, err := netip.ParseAddrPort(s); err != nil {
+				return err
+			}
+			vars.ExternalCostEstimatorAddress = s
 			return nil
 		},
 	},

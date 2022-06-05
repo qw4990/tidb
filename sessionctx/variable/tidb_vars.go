@@ -637,6 +637,12 @@ const (
 	// TiDBEnableNewCostInterface is a internal switch to indicates whether to use the new cost calculation interface.
 	TiDBEnableNewCostInterface = "tidb_enable_new_cost_interface"
 
+	// TiDBExternalCardinalityEstimatorAddress indicates the optimizer to use an external cardinality estimator.
+	TiDBExternalCardinalityEstimatorAddress = "tidb_external_cardinality_estimator_address"
+
+	// TiDBExternalCostEstimatorAddress indicates the optimizer to use an external cost estimator.
+	TiDBExternalCostEstimatorAddress = "tidb_external_cost_estimator_address"
+
 	// TiDBBatchPendingTiFlashCount indicates the maximum count of non-available TiFlash tables.
 	TiDBBatchPendingTiFlashCount = "tidb_batch_pending_tiflash_count"
 
