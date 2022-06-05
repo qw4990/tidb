@@ -180,7 +180,11 @@ func isColEqCorCol(filter expression.Expression) *expression.Column {
 func fallbackToInternalCardinalityEstimator(ctx sessionctx.Context, expr expression.Expression) (fallback bool) {
 	switch x := expr.(type) {
 	case *expression.Column:
-		switch strings.ToLower(x.OrigName) {
+		tmp := strings.Split(x.OrigName, ".") // db.table.colum
+		if len(tmp) != 3 {
+			return true
+		}
+		switch strings.ToLower(tmp[2]) {
 		case "kind_id", "production_year", "imdb_id", "episode_of_id", "season_nr", "episode_nr":
 			// for simplicity, we only considered these columns above in lab1
 		default:
@@ -213,6 +217,7 @@ func fallbackToInternalCardinalityEstimator(ctx sessionctx.Context, expr express
 func callExternalCardinalityEstimator(ctx sessionctx.Context, exprs []expression.Expression) (selectivity float64, fallback bool, err error) {
 	for _, expr := range exprs {
 		if fallbackToInternalCardinalityEstimator(ctx, expr) {
+			fmt.Println("=========>>>>>>>>> fallback >>> ", expr)
 			return 0, true, nil
 		}
 	}
