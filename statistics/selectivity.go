@@ -215,14 +215,14 @@ func fallbackToInternalCardinalityEstimator(ctx sessionctx.Context, expr express
 	return false
 }
 
-func wrapCNFExprsAsRequest(exprs expression.CNFExprs) []byte {
+func wrapCNFExprsAsRequest(exprs expression.CNFExprs) ([]byte, error) {
 	// YOUR CODE HERE: wrap these CNF expressions into a raw request
-	return nil
+	return nil, errors.New("not support")
 }
 
 func parseResponseAsSelectivity(respData []byte) (float64, error) {
 	// YOUR CODE HERE: wrap response data into a selectivity
-	return 0, nil
+	return 0, errors.New("not support")
 }
 
 func callExternalCardinalityEstimator(ctx sessionctx.Context, exprs expression.CNFExprs) (selectivity float64, fallback bool, err error) {
@@ -232,7 +232,10 @@ func callExternalCardinalityEstimator(ctx sessionctx.Context, exprs expression.C
 		}
 	}
 
-	conds := wrapCNFExprsAsRequest(exprs)
+	conds, err := wrapCNFExprsAsRequest(exprs)
+	if err != nil {
+		return 0, false, err
+	}
 	resp, err := postTo(ctx.GetSessionVars().ExternalCardinalityEstimatorAddress, conds)
 	if err != nil {
 		return 0, false, err
