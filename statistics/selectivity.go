@@ -215,7 +215,7 @@ func fallbackToInternalCardinalityEstimator(ctx sessionctx.Context, expr express
 	return false
 }
 
-func wrapCNFExprsAsRequest(exprs expression.CNFExprs) string {
+func wrapCNFExprsAsRequest(exprs expression.CNFExprs) []byte {
 	var conds []string
 	for _, expr := range exprs {
 		f := expr.(*expression.ScalarFunction)
@@ -227,7 +227,7 @@ func wrapCNFExprsAsRequest(exprs expression.CNFExprs) string {
 		}
 		conds = append(conds, fmt.Sprintf("%v %v %v", col, op, con))
 	}
-	return strings.Join(conds, " and ")
+	return []byte(strings.Join(conds, " and "))
 }
 
 func callExternalCardinalityEstimator(ctx sessionctx.Context, exprs expression.CNFExprs) (selectivity float64, fallback bool, err error) {
@@ -239,7 +239,7 @@ func callExternalCardinalityEstimator(ctx sessionctx.Context, exprs expression.C
 
 	// YOUR CODE HERE
 	conds := wrapCNFExprsAsRequest(exprs)
-	resp, err := postTo(ctx.GetSessionVars().ExternalCardinalityEstimatorAddress, []byte(conds))
+	resp, err := postTo(ctx.GetSessionVars().ExternalCardinalityEstimatorAddress, conds)
 	if err != nil {
 		return 0, false, err
 	}

@@ -16,9 +16,11 @@ package core
 
 import (
 	"bytes"
+	"encoding/json"
 	"io/ioutil"
 	"math"
 	"net/http"
+	"strconv"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb/config"
@@ -29,6 +31,53 @@ import (
 	"github.com/pingcap/tidb/statistics"
 	"github.com/pingcap/tidb/util/paging"
 )
+
+//   def __init__(self, id, est_rows, est_cost, act_rows, task, acc_obj, exec_info, op_info, mem, disk)
+//   `execution info`,`memory`, `disk` 和 `actRows` 字
+
+// Operator ..
+type Operator struct {
+	ID            string      `json:"id"`
+	EstRows       string      `json:"est_rows"`
+	Task          string      `json:"task"`
+	AccessObjects string      `json:"acc_obj"`
+	OperatorInfo  string      `json:"op_info"`
+	Children      []*Operator `json:"children"`
+}
+
+func wrapPhysicalPlanAsOperator(p PhysicalPlan, taskType string) *Operator {
+	op := &Operator{
+		ID:      p.ExplainID().String(),
+		EstRows: strconv.FormatFloat(p.StatsCount(), 'f', 2, 64),
+		Task:    taskType,
+	}
+	if accesser, ok := p.(dataAccesser); ok {
+		op.AccessObjects = accesser.AccessObject(false)
+		op.OperatorInfo = accesser.OperatorInfo(false)
+	} else {
+		op.OperatorInfo = p.ExplainInfo()
+	}
+
+	switch x := p.(type) {
+	case *PhysicalTableReader:
+		op.Children = append(op.Children, wrapPhysicalPlanAsOperator(x.tablePlan, "cop"))
+	case *PhysicalIndexReader:
+		op.Children = append(op.Children, wrapPhysicalPlanAsOperator(x.indexPlan, "cop"))
+	case *PhysicalIndexLookUpReader:
+		op.Children = append(op.Children, wrapPhysicalPlanAsOperator(x.tablePlan, "cop"))
+		op.Children = append(op.Children, wrapPhysicalPlanAsOperator(x.indexPlan, "cop"))
+	default:
+		for _, child := range p.Children() {
+			op.Children = append(op.Children, wrapPhysicalPlanAsOperator(child, taskType))
+		}
+	}
+	return op
+}
+
+func wrapPhysicalPlanAsRequest(p PhysicalPlan) ([]byte, error) {
+	op := wrapPhysicalPlanAsOperator(p, "root")
+	return json.Marshal(op)
+}
 
 // for simplicity, we only considered HashAgg, HashJoin, Sort, Selection, Projection,
 // TableReader, TableScan, IndexReader, IndexScan, IndexLookup in lab2.
@@ -59,9 +108,21 @@ func callExternalCostEstimator(ctx sessionctx.Context, p PhysicalPlan) (cost flo
 	}
 
 	// YOUR CODE HERE
-	// addr := ctx.GetSessionVars().ExternalCostEstimatorAddress
+	reqData, err := wrapPhysicalPlanAsRequest(p)
+	if err != nil {
+		return 0, false, err
+	}
+	respData, err := postTo(ctx.GetSessionVars().ExternalCostEstimatorAddress, reqData)
+	if err != nil {
+		return 0, false, err
+	}
 
-	return 0, false, errors.New("not support")
+	cost, err = strconv.ParseFloat(string(respData), 64)
+	if err != nil {
+		return 0, false, err
+	}
+
+	return cost, false, errors.New("not support")
 }
 
 const (
