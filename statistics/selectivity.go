@@ -22,9 +22,8 @@ import (
 	"math/bits"
 	"net/http"
 	"sort"
-	"strconv"
 	"strings"
-	
+
 	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb/expression"
 	"github.com/pingcap/tidb/parser/ast"
@@ -217,18 +216,13 @@ func fallbackToInternalCardinalityEstimator(ctx sessionctx.Context, expr express
 }
 
 func wrapCNFExprsAsRequest(exprs expression.CNFExprs) []byte {
-	var conds []string
-	for _, expr := range exprs {
-		f := expr.(*expression.ScalarFunction)
-		col := f.GetArgs()[0].(*expression.Column)
-		con := f.GetArgs()[1].(*expression.Constant)
-		op := ">"
-		if f.FuncName.L == ast.LT {
-			op = "<"
-		}
-		conds = append(conds, fmt.Sprintf("%v %v %v", col, op, con))
-	}
-	return []byte(strings.Join(conds, " and "))
+	// YOUR CODE HERE: wrap these CNF expressions into a raw request
+	return nil
+}
+
+func parseResponseAsSelectivity(respData []byte) (float64, error) {
+	// YOUR CODE HERE: wrap response data into a selectivity
+	return 0, nil
 }
 
 func callExternalCardinalityEstimator(ctx sessionctx.Context, exprs expression.CNFExprs) (selectivity float64, fallback bool, err error) {
@@ -238,14 +232,13 @@ func callExternalCardinalityEstimator(ctx sessionctx.Context, exprs expression.C
 		}
 	}
 
-	// YOUR CODE HERE
 	conds := wrapCNFExprsAsRequest(exprs)
 	resp, err := postTo(ctx.GetSessionVars().ExternalCardinalityEstimatorAddress, conds)
 	if err != nil {
 		return 0, false, err
 	}
 
-	sel, err := strconv.ParseFloat(string(resp), 64)
+	sel, err := parseResponseAsSelectivity(resp)
 	if err != nil {
 		return 0, false, err
 	}

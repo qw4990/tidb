@@ -32,10 +32,6 @@ import (
 	"github.com/pingcap/tidb/util/paging"
 )
 
-//   def __init__(self, id, est_rows, est_cost, act_rows, task, acc_obj, exec_info, op_info, mem, disk)
-//   `execution info`,`memory`, `disk` 和 `actRows` 字
-
-// Operator ..
 type Operator struct {
 	ID            string      `json:"id"`
 	EstRows       string      `json:"est_rows"`
@@ -79,6 +75,11 @@ func wrapPhysicalPlanAsRequest(p PhysicalPlan) ([]byte, error) {
 	return json.Marshal(op)
 }
 
+func parseResponseAsCost(respData []byte) (float64, error) {
+	// YOUR CODE HERE: wrap response data into a cost value
+	return 0, nil
+}
+
 // for simplicity, we only considered HashAgg, HashJoin, Sort, Selection, Projection,
 // TableReader, TableScan, IndexReader, IndexScan, IndexLookup in lab2.
 func fallbackToInternalCostEstimator(ctx sessionctx.Context, p PhysicalPlan) (fallback bool) {
@@ -107,7 +108,6 @@ func callExternalCostEstimator(ctx sessionctx.Context, p PhysicalPlan) (cost flo
 		return 0, true, nil
 	}
 
-	// YOUR CODE HERE
 	reqData, err := wrapPhysicalPlanAsRequest(p)
 	if err != nil {
 		return 0, false, err
@@ -117,11 +117,10 @@ func callExternalCostEstimator(ctx sessionctx.Context, p PhysicalPlan) (cost flo
 		return 0, false, err
 	}
 
-	cost, err = strconv.ParseFloat(string(respData), 64)
+	cost, err = parseResponseAsCost(respData)
 	if err != nil {
 		return 0, false, err
 	}
-
 	return cost, false, nil
 }
 
