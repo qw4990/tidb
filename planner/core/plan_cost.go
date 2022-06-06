@@ -15,14 +15,17 @@
 package core
 
 import (
-	"github.com/pingcap/tidb/sessionctx"
+	"bytes"
+	"io/ioutil"
 	"math"
+	"net/http"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb/config"
 	"github.com/pingcap/tidb/expression"
 	"github.com/pingcap/tidb/kv"
 	"github.com/pingcap/tidb/planner/property"
+	"github.com/pingcap/tidb/sessionctx"
 	"github.com/pingcap/tidb/statistics"
 	"github.com/pingcap/tidb/util/paging"
 )
@@ -1206,4 +1209,20 @@ func getTableNetFactor(copTaskPlan PhysicalPlan) float64 {
 		}
 		return getTableNetFactor(x.Children()[0])
 	}
+}
+
+func postTo(addr string, data []byte) (respData []byte, err error) {
+	buf := bytes.NewBuffer(data)
+	resp, err := http.Post(addr, "application/json", buf)
+	if err != nil {
+		return nil, err
+	}
+	respData, err = ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	if err := resp.Body.Close(); err != nil {
+		return nil, err
+	}
+	return respData, nil
 }
