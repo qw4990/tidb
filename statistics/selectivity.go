@@ -17,6 +17,14 @@ package statistics
 import (
 	"bytes"
 	"fmt"
+	"io/ioutil"
+	"math"
+	"math/bits"
+	"net/http"
+	"sort"
+	"strconv"
+	"strings"
+	
 	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb/expression"
 	"github.com/pingcap/tidb/parser/ast"
@@ -31,13 +39,6 @@ import (
 	"github.com/pingcap/tidb/util/ranger"
 	"github.com/pingcap/tidb/util/tracing"
 	"go.uber.org/zap"
-	"io/ioutil"
-	"math"
-	"math/bits"
-	"net/http"
-	"sort"
-	"strconv"
-	"strings"
 )
 
 // If one condition can't be calculated, we will assume that the selectivity of this condition is 0.8.
