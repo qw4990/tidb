@@ -15,6 +15,7 @@
 package core
 
 import (
+	"github.com/pingcap/tidb/sessionctx"
 	"math"
 
 	"github.com/pingcap/errors"
@@ -22,7 +23,6 @@ import (
 	"github.com/pingcap/tidb/expression"
 	"github.com/pingcap/tidb/kv"
 	"github.com/pingcap/tidb/planner/property"
-	"github.com/pingcap/tidb/sessionctx"
 	"github.com/pingcap/tidb/statistics"
 	"github.com/pingcap/tidb/util/paging"
 )

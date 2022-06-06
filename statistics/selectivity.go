@@ -17,11 +17,6 @@ package statistics
 import (
 	"bytes"
 	"fmt"
-	"math"
-	"math/bits"
-	"sort"
-	"strings"
-
 	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb/expression"
 	"github.com/pingcap/tidb/parser/ast"
@@ -36,6 +31,13 @@ import (
 	"github.com/pingcap/tidb/util/ranger"
 	"github.com/pingcap/tidb/util/tracing"
 	"go.uber.org/zap"
+	"io/ioutil"
+	"math"
+	"math/bits"
+	"net/http"
+	"sort"
+	"strconv"
+	"strings"
 )
 
 // If one condition can't be calculated, we will assume that the selectivity of this condition is 0.8.
@@ -178,43 +180,57 @@ func isColEqCorCol(filter expression.Expression) *expression.Column {
 }
 
 func fallbackToInternalCardinalityEstimator(ctx sessionctx.Context, expr expression.Expression) (fallback bool) {
-	switch x := expr.(type) {
-	case *expression.Column:
-		tmp := strings.Split(x.OrigName, ".") // db.table.colum
-		if len(tmp) != 3 {
-			return true
-		}
-		switch strings.ToLower(tmp[1] + "." + tmp[2]) {
-		case "title.kind_id", "title.production_year", "title.imdb_id", "title.episode_of_id", "title.season_nr", "title.episode_nr":
-			// for simplicity, we only considered these columns above in lab1
-		default:
-			return true
-		}
+	// for simplicity, we only considered '>', '<' in lab1
+	f, ok := expr.(*expression.ScalarFunction)
+	if !ok {
+		return true
+	}
+	if f.FuncName.L != ast.LT && f.FuncName.L != ast.GT {
+		return true
+	}
 
-	case *expression.Constant:
-		if x.RetType.EvalType() != types.ETInt {
-			// for simplicity, we only considered INT in lab1
-			return true
-		}
-	case *expression.ScalarFunction:
-		switch x.FuncName.L {
-		case ast.LT, ast.GT, ast.LogicAnd:
-			// for simplicity, we only considered '>', '<', 'and' in lab1
-		default:
-			return true
-		}
-		for _, expr := range x.GetArgs() {
-			if fallbackToInternalCardinalityEstimator(ctx, expr) {
-				return true
-			}
-		}
+	// for simplicity, we only considered these columns above in lab1
+	col, ok := f.GetArgs()[0].(*expression.Column)
+	if !ok {
+		return true
+	}
+	tmp := strings.Split(col.OrigName, ".") // db.table.colum
+	if len(tmp) != 3 {
+		return true
+	}
+	switch strings.ToLower(tmp[1] + "." + tmp[2]) {
+	case "title.kind_id", "title.production_year", "title.imdb_id", "title.episode_of_id", "title.season_nr", "title.episode_nr":
 	default:
+		return true
+	}
+
+	// for simplicity, we only considered INT in lab1
+	con, ok := f.GetArgs()[1].(*expression.Constant)
+	if !ok {
+		return true
+	}
+	if con.RetType.EvalType() != types.ETInt {
 		return true
 	}
 	return false
 }
 
-func callExternalCardinalityEstimator(ctx sessionctx.Context, exprs []expression.Expression) (selectivity float64, fallback bool, err error) {
+func wrapCNFExprsAsRequest(exprs expression.CNFExprs) string {
+	var conds []string
+	for _, expr := range exprs {
+		f := expr.(*expression.ScalarFunction)
+		col := f.GetArgs()[0].(*expression.Column)
+		con := f.GetArgs()[1].(*expression.Constant)
+		op := ">"
+		if f.FuncName.L == ast.LT {
+			op = "<"
+		}
+		conds = append(conds, fmt.Sprintf("%v %v %v", col, op, con))
+	}
+	return strings.Join(conds, " and ")
+}
+
+func callExternalCardinalityEstimator(ctx sessionctx.Context, exprs expression.CNFExprs) (selectivity float64, fallback bool, err error) {
 	for _, expr := range exprs {
 		if fallbackToInternalCardinalityEstimator(ctx, expr) {
 			return 0, true, nil
@@ -222,9 +238,33 @@ func callExternalCardinalityEstimator(ctx sessionctx.Context, exprs []expression
 	}
 
 	// YOUR CODE HERE
-	// addr := ctx.GetSessionVars().ExternalCardinalityEstimatorAddress
+	conds := wrapCNFExprsAsRequest(exprs)
+	resp, err := postTo(ctx.GetSessionVars().ExternalCardinalityEstimatorAddress, []byte(conds))
+	if err != nil {
+		return 0, false, err
+	}
 
-	return 0, false, errors.New("not support")
+	sel, err := strconv.ParseFloat(string(resp), 64)
+	if err != nil {
+		return 0, false, err
+	}
+	return sel, false, nil
+}
+
+func postTo(addr string, data []byte) (respData []byte, err error) {
+	buf := bytes.NewBuffer(data)
+	resp, err := http.Post(addr, "application/json", buf)
+	if err != nil {
+		return nil, err
+	}
+	respData, err = ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	if err := resp.Body.Close(); err != nil {
+		return nil, err
+	}
+	return respData, nil
 }
 
 // Selectivity is a function calculate the selectivity of the expressions.
