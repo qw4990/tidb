@@ -56,7 +56,7 @@ func callExternalCostEstimator(ctx sessionctx.Context, p PhysicalPlan) (cost flo
 	}
 
 	// YOUR CODE HERE
-	addr := ctx.GetSessionVars().ExternalCostEstimatorAddress
+	// addr := ctx.GetSessionVars().ExternalCostEstimatorAddress
 
 	return 0, false, errors.New("not support")
 }
