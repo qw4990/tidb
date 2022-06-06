@@ -122,7 +122,7 @@ func callExternalCostEstimator(ctx sessionctx.Context, p PhysicalPlan) (cost flo
 		return 0, false, err
 	}
 
-	return cost, false, errors.New("not support")
+	return cost, false, nil
 }
 
 const (
