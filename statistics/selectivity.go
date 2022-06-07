@@ -236,7 +236,7 @@ func callExternalCardinalityEstimator(ctx sessionctx.Context, exprs expression.C
 	if err != nil {
 		return 0, false, err
 	}
-	resp, err := postTo(ctx.GetSessionVars().ExternalCardinalityEstimatorAddress, conds)
+	resp, err := requestTo(ctx.GetSessionVars().ExternalCardinalityEstimatorAddress, conds)
 	if err != nil {
 		return 0, false, err
 	}
@@ -246,22 +246,6 @@ func callExternalCardinalityEstimator(ctx sessionctx.Context, exprs expression.C
 		return 0, false, err
 	}
 	return sel, false, nil
-}
-
-func postTo(addr string, data []byte) (respData []byte, err error) {
-	buf := bytes.NewBuffer(data)
-	resp, err := http.Post(addr, "application/json", buf)
-	if err != nil {
-		return nil, err
-	}
-	respData, err = ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-	if err := resp.Body.Close(); err != nil {
-		return nil, err
-	}
-	return respData, nil
 }
 
 // Selectivity is a function calculate the selectivity of the expressions.
@@ -723,4 +707,20 @@ func ExprToString(e expression.Expression) (string, error) {
 		return buffer.String(), nil
 	}
 	return "", errors.New("unexpected type of Expression")
+}
+
+func requestTo(addr string, data []byte) (respData []byte, err error) {
+	buf := bytes.NewBuffer(data)
+	resp, err := http.Post(addr, "application/json", buf)
+	if err != nil {
+		return nil, err
+	}
+	respData, err = ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	if err := resp.Body.Close(); err != nil {
+		return nil, err
+	}
+	return respData, nil
 }

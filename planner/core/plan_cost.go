@@ -112,7 +112,7 @@ func callExternalCostEstimator(ctx sessionctx.Context, p PhysicalPlan) (cost flo
 	if err != nil {
 		return 0, false, err
 	}
-	respData, err := postTo(ctx.GetSessionVars().ExternalCostEstimatorAddress, reqData)
+	respData, err := requestTo(ctx.GetSessionVars().ExternalCostEstimatorAddress, reqData)
 	if err != nil {
 		return 0, false, err
 	}
@@ -1271,7 +1271,7 @@ func getTableNetFactor(copTaskPlan PhysicalPlan) float64 {
 	}
 }
 
-func postTo(addr string, data []byte) (respData []byte, err error) {
+func requestTo(addr string, data []byte) (respData []byte, err error) {
 	buf := bytes.NewBuffer(data)
 	resp, err := http.Post(addr, "application/json", buf)
 	if err != nil {
