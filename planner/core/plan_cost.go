@@ -870,11 +870,9 @@ func (p *PhysicalHashJoin) GetCost(lCnt, rCnt float64, isMPP bool, costFlag uint
 	rowSize := getAvgRowSize(build.statsInfo(), build.Schema())
 	spill := oomUseTmpStorage && memQuota > 0 && rowSize*buildCnt > float64(memQuota) && p.storeTp != kv.TiFlash
 	// Cost of building hash table.
-	var cpuFactor float64
-	if !isMPP {
-		cpuFactor = sessVars.GetCPUFactor()
-	} else {
-		cpuFactor = sessVars.GetTiFlashCPUFactor()
+	cpuFactor := sessVars.GetCPUFactor()
+	if isMPP && p.ctx.GetSessionVars().CostModelVersion == modelVer2 {
+		cpuFactor = sessVars.GetTiFlashCPUFactor() // use the dedicated TiFlash CPU Factor on modelVer2
 	}
 	cpuCost := buildCnt * cpuFactor
 	memoryCost := buildCnt * sessVars.GetMemoryFactor()
@@ -906,7 +904,6 @@ func (p *PhysicalHashJoin) GetCost(lCnt, rCnt float64, isMPP bool, costFlag uint
 			numPairs = 0
 		}
 	}
-
 	if hasCostFlag(costFlag, CostFlagUseTrueCardinality) {
 		numPairs = getOperatorActRows(p)
 	}
