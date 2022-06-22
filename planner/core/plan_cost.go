@@ -527,6 +527,10 @@ func (p *PhysicalIndexJoin) GetPlanCost(taskType property.TaskType, costFlag uin
 	}
 	outerCnt := getCardinality(outerChild, costFlag)
 	innerCnt := getCardinality(innerChild, costFlag)
+	if hasCostFlag(costFlag, CostFlagUseTrueCardinality) && outerCnt > 0 {
+		innerCnt /= outerCnt // corresponding to one outer row when calculating IndexJoin costs
+		innerCost /= outerCnt
+	}
 	p.planCost = p.GetCost(outerCnt, innerCnt, outerCost, innerCost)
 	p.planCostInit = true
 	return p.planCost, nil
@@ -609,6 +613,10 @@ func (p *PhysicalIndexHashJoin) GetPlanCost(taskType property.TaskType, costFlag
 	}
 	outerCnt := getCardinality(outerChild, costFlag)
 	innerCnt := getCardinality(innerChild, costFlag)
+	if hasCostFlag(costFlag, CostFlagUseTrueCardinality) && outerCnt > 0 {
+		innerCnt /= outerCnt // corresponding to one outer row when calculating IndexJoin costs
+		innerCost /= outerCnt
+	}
 	p.planCost = p.GetCost(outerCnt, innerCnt, outerCost, innerCost)
 	p.planCostInit = true
 	return p.planCost, nil
@@ -693,6 +701,10 @@ func (p *PhysicalIndexMergeJoin) GetPlanCost(taskType property.TaskType, costFla
 	}
 	outerCnt := getCardinality(outerChild, costFlag)
 	innerCnt := getCardinality(innerChild, costFlag)
+	if hasCostFlag(costFlag, CostFlagUseTrueCardinality) && outerCnt > 0 {
+		innerCnt /= outerCnt // corresponding to one outer row when calculating IndexJoin costs
+		innerCost /= outerCnt
+	}
 	p.planCost = p.GetCost(outerCnt, innerCnt, outerCost, innerCost)
 	p.planCostInit = true
 	return p.planCost, nil
@@ -742,6 +754,10 @@ func (p *PhysicalApply) GetPlanCost(taskType property.TaskType, costFlag uint64)
 	}
 	outerCnt := getCardinality(outerChild, costFlag)
 	innerCnt := getCardinality(innerChild, costFlag)
+	if hasCostFlag(costFlag, CostFlagUseTrueCardinality) && outerCnt > 0 {
+		innerCnt /= outerCnt // corresponding to one outer row when calculating IndexJoin costs
+		innerCost /= outerCnt
+	}
 	p.planCost = p.GetCost(outerCnt, innerCnt, outerCost, innerCost)
 	p.planCostInit = true
 	return p.planCost, nil
