@@ -462,7 +462,7 @@ func (p *PhysicalIndexScan) GetPlanCost(taskType property.TaskType, costFlag uin
 }
 
 // GetCost computes the cost of index join operator and its children.
-func (p *PhysicalIndexJoin) GetCost(outerCnt, innerCnt float64, outerCost, innerCost float64) float64 {
+func (p *PhysicalIndexJoin) GetCost(outerCnt, innerCnt, outerCost, innerCost float64, costFlag uint64) float64 {
 	var cpuCost float64
 	sessVars := p.ctx.GetSessionVars()
 	// Add the cost of evaluating outer filter, since inner filter of index join
@@ -491,6 +491,9 @@ func (p *PhysicalIndexJoin) GetCost(outerCnt, innerCnt float64, outerCost, inner
 	cpuCost += innerCPUCost / innerConcurrency
 	// Cost of probing hash table in main thread.
 	numPairs := outerCnt * innerCnt
+	if hasCostFlag(costFlag, CostFlagUseTrueCardinality) {
+		numPairs = getOperatorActRows(p)
+	}
 	if p.JoinType == SemiJoin || p.JoinType == AntiSemiJoin ||
 		p.JoinType == LeftOuterSemiJoin || p.JoinType == AntiLeftOuterSemiJoin {
 		if len(p.OtherConditions) > 0 {
@@ -531,13 +534,13 @@ func (p *PhysicalIndexJoin) GetPlanCost(taskType property.TaskType, costFlag uin
 		innerCnt /= outerCnt // corresponding to one outer row when calculating IndexJoin costs
 		innerCost /= outerCnt
 	}
-	p.planCost = p.GetCost(outerCnt, innerCnt, outerCost, innerCost)
+	p.planCost = p.GetCost(outerCnt, innerCnt, outerCost, innerCost, costFlag)
 	p.planCostInit = true
 	return p.planCost, nil
 }
 
 // GetCost computes the cost of index merge join operator and its children.
-func (p *PhysicalIndexHashJoin) GetCost(outerCnt, innerCnt, outerCost, innerCost float64) float64 {
+func (p *PhysicalIndexHashJoin) GetCost(outerCnt, innerCnt, outerCost, innerCost float64, costFlag uint64) float64 {
 	var cpuCost float64
 	sessVars := p.ctx.GetSessionVars()
 	// Add the cost of evaluating outer filter, since inner filter of index join
@@ -567,6 +570,9 @@ func (p *PhysicalIndexHashJoin) GetCost(outerCnt, innerCnt, outerCost, innerCost
 	cpuCost += outerCPUCost / concurrency
 	// Cost of probing hash table concurrently.
 	numPairs := outerCnt * innerCnt
+	if hasCostFlag(costFlag, CostFlagUseTrueCardinality) {
+		numPairs = getOperatorActRows(p)
+	}
 	if p.JoinType == SemiJoin || p.JoinType == AntiSemiJoin ||
 		p.JoinType == LeftOuterSemiJoin || p.JoinType == AntiLeftOuterSemiJoin {
 		if len(p.OtherConditions) > 0 {
@@ -617,13 +623,13 @@ func (p *PhysicalIndexHashJoin) GetPlanCost(taskType property.TaskType, costFlag
 		innerCnt /= outerCnt // corresponding to one outer row when calculating IndexJoin costs
 		innerCost /= outerCnt
 	}
-	p.planCost = p.GetCost(outerCnt, innerCnt, outerCost, innerCost)
+	p.planCost = p.GetCost(outerCnt, innerCnt, outerCost, innerCost, costFlag)
 	p.planCostInit = true
 	return p.planCost, nil
 }
 
 // GetCost computes the cost of index merge join operator and its children.
-func (p *PhysicalIndexMergeJoin) GetCost(outerCnt, innerCnt, outerCost, innerCost float64) float64 {
+func (p *PhysicalIndexMergeJoin) GetCost(outerCnt, innerCnt, outerCost, innerCost float64, costFlag uint64) float64 {
 	var cpuCost float64
 	sessVars := p.ctx.GetSessionVars()
 	// Add the cost of evaluating outer filter, since inner filter of index join
@@ -655,6 +661,9 @@ func (p *PhysicalIndexMergeJoin) GetCost(outerCnt, innerCnt, outerCost, innerCos
 	cpuCost += innerCPUCost / innerConcurrency
 	// Cost of merge join in inner worker.
 	numPairs := outerCnt * innerCnt
+	if hasCostFlag(costFlag, CostFlagUseTrueCardinality) {
+		numPairs = getOperatorActRows(p)
+	}
 	if p.JoinType == SemiJoin || p.JoinType == AntiSemiJoin ||
 		p.JoinType == LeftOuterSemiJoin || p.JoinType == AntiLeftOuterSemiJoin {
 		if len(p.OtherConditions) > 0 {
@@ -705,7 +714,7 @@ func (p *PhysicalIndexMergeJoin) GetPlanCost(taskType property.TaskType, costFla
 		innerCnt /= outerCnt // corresponding to one outer row when calculating IndexJoin costs
 		innerCost /= outerCnt
 	}
-	p.planCost = p.GetCost(outerCnt, innerCnt, outerCost, innerCost)
+	p.planCost = p.GetCost(outerCnt, innerCnt, outerCost, innerCost, costFlag)
 	p.planCostInit = true
 	return p.planCost, nil
 }
