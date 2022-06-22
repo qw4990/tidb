@@ -510,7 +510,20 @@ func (p *PhysicalIndexJoin) GetCost(outerCnt, innerCnt, outerCost, innerCost flo
 	memoryCost := innerConcurrency * (batchSize * distinctFactor) * innerCnt * sessVars.GetMemoryFactor()
 	// Cost of inner child plan, i.e, mainly I/O and network cost.
 	innerPlanCost := outerCnt * innerCost
-	return outerCost + innerPlanCost + cpuCost + memoryCost
+	return outerCost + innerPlanCost + cpuCost + memoryCost + p.estDoubleReadCost(outerCnt)
+}
+
+func (p *PhysicalIndexJoin) estDoubleReadCost(doubleReadRows float64) float64 {
+	if p.ctx.GetSessionVars().CostModelVersion == modelVer1 {
+		// only consider double-read cost on modelVer2
+		return 0
+	}
+	batchSize := float64(p.ctx.GetSessionVars().IndexJoinBatchSize)
+	// distRatio indicates how many requests corresponding to a batch, current value is from experiments.
+	// TODO: estimate it by using index correlation or make it configurable.
+	distRatio := 40.0
+	numDoubleReadTasks := (doubleReadRows / batchSize) * distRatio
+	return numDoubleReadTasks * p.ctx.GetSessionVars().GetSeekFactor(nil)
 }
 
 // GetPlanCost calculates the cost of the plan if it has not been calculated yet and returns the cost.
@@ -599,7 +612,7 @@ func (p *PhysicalIndexHashJoin) GetCost(outerCnt, innerCnt, outerCost, innerCost
 	memoryCost := concurrency * (batchSize * distinctFactor) * innerCnt * sessVars.GetMemoryFactor()
 	// Cost of inner child plan, i.e, mainly I/O and network cost.
 	innerPlanCost := outerCnt * innerCost
-	return outerCost + innerPlanCost + cpuCost + memoryCost
+	return outerCost + innerPlanCost + cpuCost + memoryCost + p.estDoubleReadCost(outerCnt)
 }
 
 // GetPlanCost calculates the cost of the plan if it has not been calculated yet and returns the cost.
@@ -690,7 +703,7 @@ func (p *PhysicalIndexMergeJoin) GetCost(outerCnt, innerCnt, outerCost, innerCos
 	memoryCost := innerConcurrency * (batchSize * avgProbeCnt) * sessVars.GetMemoryFactor()
 
 	innerPlanCost := outerCnt * innerCost
-	return outerCost + innerPlanCost + cpuCost + memoryCost
+	return outerCost + innerPlanCost + cpuCost + memoryCost + p.estDoubleReadCost(outerCnt)
 }
 
 // GetPlanCost calculates the cost of the plan if it has not been calculated yet and returns the cost.
