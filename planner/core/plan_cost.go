@@ -21,6 +21,7 @@ import (
 	"github.com/pingcap/tidb/config"
 	"github.com/pingcap/tidb/expression"
 	"github.com/pingcap/tidb/kv"
+	"github.com/pingcap/tidb/parser/model"
 	"github.com/pingcap/tidb/planner/property"
 	"github.com/pingcap/tidb/statistics"
 	"github.com/pingcap/tidb/util/paging"
@@ -227,11 +228,8 @@ func (p *PhysicalIndexLookUpReader) GetPlanCost(taskType property.TaskType, cost
 	// table-side seek cost
 	p.planCost += estimateNetSeekCost(p.tablePlan)
 
-	if p.ctx.GetSessionVars().CostModelVersion == modelVer2 {
-		// accumulate the real double-read cost: numDoubleReadTasks * seekFactor
-		numDoubleReadTasks := p.estNumDoubleReadTasks(costFlag)
-		p.planCost += numDoubleReadTasks * p.ctx.GetSessionVars().GetSeekFactor(ts.Table)
-	}
+	// double read cost
+	p.planCost += p.estDoubleReadCost(ts.Table, costFlag)
 
 	// consider concurrency
 	p.planCost /= float64(p.ctx.GetSessionVars().DistSQLScanConcurrency())
@@ -242,14 +240,21 @@ func (p *PhysicalIndexLookUpReader) GetPlanCost(taskType property.TaskType, cost
 	return p.planCost, nil
 }
 
-func (p *PhysicalIndexLookUpReader) estNumDoubleReadTasks(costFlag uint64) float64 {
-	doubleReadRows := p.indexPlan.StatsCount()
+func (p *PhysicalIndexLookUpReader) estDoubleReadCost(tbl *model.TableInfo, costFlag uint64) float64 {
+	if p.ctx.GetSessionVars().CostModelVersion == modelVer1 {
+		// only consider double-read cost on modelVer2
+		return 0
+	}
+	// estimate the double-read cost: (numDoubleReadTasks * seekFactor) / concurrency
+	doubleReadRows := getCardinality(p.indexPlan, costFlag)
 	batchSize := float64(p.ctx.GetSessionVars().IndexLookupSize)
+	concurrency := math.Max(1.0, float64(p.ctx.GetSessionVars().IndexLookupConcurrency()))
+	seekFactor := p.ctx.GetSessionVars().GetSeekFactor(tbl)
 	// distRatio indicates how many requests corresponding to a batch, current value is from experiments.
 	// TODO: estimate it by using index correlation or make it configurable.
 	distRatio := 40.0
-	numDoubleReadTasks := (doubleReadRows / batchSize) * distRatio
-	return numDoubleReadTasks // use Float64 instead of Int like `Ceil(...)` to make the cost continuous
+	numDoubleReadTasks := (doubleReadRows / batchSize) * distRatio // use Float64 instead of Int like `Ceil(...)` to make the cost continuous.
+	return (numDoubleReadTasks * seekFactor) / concurrency
 }
 
 // GetPlanCost calculates the cost of the plan if it has not been calculated yet and returns the cost.
@@ -502,6 +507,9 @@ func (p *PhysicalIndexJoin) GetCost(outerCnt, innerCnt, outerCost, innerCost flo
 			numPairs = 0
 		}
 	}
+	if hasCostFlag(costFlag, CostFlagUseTrueCardinality) {
+		numPairs = getOperatorActRows(p)
+	}
 	probeCost := numPairs * sessVars.GetCPUFactor()
 	// Cost of additional concurrent goroutines.
 	cpuCost += probeCost + (innerConcurrency+1.0)*sessVars.GetConcurrencyFactor()
@@ -518,12 +526,15 @@ func (p *PhysicalIndexJoin) estDoubleReadCost(doubleReadRows float64) float64 {
 		// only consider double-read cost on modelVer2
 		return 0
 	}
-	batchSize := float64(p.ctx.GetSessionVars().IndexJoinBatchSize)
+	// estimate the double read cost for IndexJoin: (double-read-tasks * seek-factor) / concurrency
+	seekFactor := p.ctx.GetSessionVars().GetSeekFactor(nil)
+	batchSize := math.Max(1.0, float64(p.ctx.GetSessionVars().IndexJoinBatchSize))
+	concurrency := math.Max(1.0, float64(p.ctx.GetSessionVars().IndexLookupJoinConcurrency()))
 	// distRatio indicates how many requests corresponding to a batch, current value is from experiments.
 	// TODO: estimate it by using index correlation or make it configurable.
 	distRatio := 40.0
 	numDoubleReadTasks := (doubleReadRows / batchSize) * distRatio
-	return numDoubleReadTasks * p.ctx.GetSessionVars().GetSeekFactor(nil)
+	return (numDoubleReadTasks * seekFactor) / concurrency
 }
 
 // GetPlanCost calculates the cost of the plan if it has not been calculated yet and returns the cost.
@@ -593,6 +604,9 @@ func (p *PhysicalIndexHashJoin) GetCost(outerCnt, innerCnt, outerCost, innerCost
 		} else {
 			numPairs = 0
 		}
+	}
+	if hasCostFlag(costFlag, CostFlagUseTrueCardinality) {
+		numPairs = getOperatorActRows(p)
 	}
 	// Inner workers do hash join in parallel, but they can only save ONE outer
 	// batch results. So as the number of outer batch exceeds inner concurrency,
@@ -684,6 +698,9 @@ func (p *PhysicalIndexMergeJoin) GetCost(outerCnt, innerCnt, outerCost, innerCos
 		} else {
 			numPairs = 0
 		}
+	}
+	if hasCostFlag(costFlag, CostFlagUseTrueCardinality) {
+		numPairs = getOperatorActRows(p)
 	}
 	avgProbeCnt := numPairs / outerCnt
 	var probeCost float64
@@ -1227,9 +1244,9 @@ func (p *PhysicalExchangeReceiver) GetPlanCost(taskType property.TaskType, costF
 		return 0, err
 	}
 	p.planCost = childCost
-	// accumulate net cost: rows * row-size * net-factor
-	rowSize := getTblStats(p.children[0]).GetAvgRowSize(p.ctx, p.children[0].Schema().Columns, false, false)
-	p.planCost += getCardinality(p.children[0], costFlag) * rowSize * p.ctx.GetSessionVars().GetNetworkFactor(nil)
+	// accumulate net cost
+	// TODO: this formula is wrong since it doesn't consider tableRowSize, fix it later
+	p.planCost += getCardinality(p.children[0], costFlag) * p.ctx.GetSessionVars().GetNetworkFactor(nil)
 	p.planCostInit = true
 	return p.planCost, nil
 }
