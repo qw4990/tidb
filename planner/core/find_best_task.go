@@ -336,6 +336,7 @@ func getTaskPlanCost(t task) (float64, error) {
 		if fallback {
 			return t.plan().GetPlanCost(taskType, 0)
 		}
+		p.SCtx().GetSessionVars().StmtCtx.AppendWarning(fmt.Errorf("get cost(%v)=%v successfully from the external model", p.ExplainID().String(), cost))
 		return cost, nil
 	}
 

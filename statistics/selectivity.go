@@ -261,6 +261,7 @@ func (coll *HistColl) Selectivity(ctx sessionctx.Context, exprs []expression.Exp
 	if ctx.GetSessionVars().ExternalCardinalityEstimatorAddress != "" {
 		sel, fallback, err := callExternalCardinalityEstimator(ctx, exprs)
 		if !fallback && err == nil {
+			ctx.GetSessionVars().StmtCtx.AppendWarning(fmt.Errorf("get selectivity(%v)=%.4f successfully from the external model", exprs, sel))
 			return sel, nil, nil
 		}
 		if err != nil {
