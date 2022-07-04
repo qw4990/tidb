@@ -89,6 +89,22 @@ func datumsToConstants(datums []types.Datum) []Expression {
 	return constants
 }
 
+func iterateExpression(ctx sessionctx.Context, expr Expression) {
+	if sf, ok := expr.(*ScalarFunction); ok {
+		fmt.Println(sf.FuncName)           // print the function name
+		for _, arg := range sf.GetArgs() { // iterate the args recursively
+			iterateExpression(ctx, arg)
+		}
+	} else if col, ok := expr.(*Column); ok {
+		fmt.Println(col.OrigName)           // print the column name
+		fmt.Println(col.RetType.EvalType()) // print the column type
+	} else if con, ok := expr.(*Constant); ok {
+		fmt.Println(con.RetType.EvalType())        // print the constant type
+		val, _, _ := con.EvalInt(ctx, chunk.Row{}) // evaluate this constant
+		fmt.Println(val)                           // print its value
+	}
+}
+
 func primitiveValsToConstants(ctx sessionctx.Context, args []interface{}) []Expression {
 	cons := datumsToConstants(types.MakeDatums(args...))
 	char, col := ctx.GetSessionVars().GetCharsetInfo()
