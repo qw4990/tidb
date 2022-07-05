@@ -15,6 +15,7 @@
 package expression
 
 import (
+	"fmt"
 	"sync/atomic"
 	"testing"
 	"time"
