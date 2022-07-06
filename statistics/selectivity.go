@@ -181,12 +181,12 @@ func isColEqCorCol(filter expression.Expression) *expression.Column {
 }
 
 func fallbackToInternalCardinalityEstimator(ctx sessionctx.Context, expr expression.Expression) (fallback bool) {
-	// for simplicity, we only considered '>', '<' in lab1
+	// for simplicity, we only considered '>=', '<=' in lab1
 	f, ok := expr.(*expression.ScalarFunction)
 	if !ok {
 		return true
 	}
-	if f.FuncName.L != ast.LT && f.FuncName.L != ast.GT {
+	if f.FuncName.L != ast.LE && f.FuncName.L != ast.GE {
 		return true
 	}
 
@@ -227,8 +227,8 @@ func wrapCNFExprsAsRequest(exprs expression.CNFExprs) ([]byte, error) {
 			// only support "col <op> val"
 			return nil, errors.New("not support")
 		}
-		if f.FuncName.L != ast.LT && f.FuncName.L != ast.GT {
-			// only support >, <
+		if f.FuncName.L != ast.LE && f.FuncName.L != ast.GE {
+			// only support >=, <=
 			return nil, errors.New("not support")
 		}
 
