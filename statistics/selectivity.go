@@ -16,13 +16,13 @@ package statistics
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"math"
 	"math/bits"
 	"net/http"
 	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/pingcap/errors"
@@ -243,7 +243,18 @@ func wrapCNFExprsAsRequest(exprs expression.CNFExprs) ([]byte, error) {
 }
 
 func parseResponseAsSelectivity(respData []byte) (float64, error) {
-	return strconv.ParseFloat(string(respData), 54)
+	type Resp struct {
+		Selectivity float64 `json:"selectivity"`
+		ErrMsg      string  `json:"err_msg"`
+	}
+	var resp Resp
+	if err := json.Unmarshal(respData, &resp); err != nil {
+		return 0, err
+	}
+	if resp.ErrMsg != "" {
+		return 0, errors.New(resp.ErrMsg)
+	}
+	return resp.Selectivity, nil
 }
 
 // exprs: exprs[0] AND exprs[1] AND exprs[2] ...
