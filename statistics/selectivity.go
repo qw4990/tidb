@@ -22,6 +22,7 @@ import (
 	"math/bits"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/pingcap/errors"
@@ -217,13 +218,32 @@ func fallbackToInternalCardinalityEstimator(ctx sessionctx.Context, expr express
 
 // exprs: exprs[0] AND exprs[1] AND exprs[2] ...
 func wrapCNFExprsAsRequest(exprs expression.CNFExprs) ([]byte, error) {
-	// YOUR CODE HERE: wrap these CNF expressions into a raw request
-	return nil, errors.New("not support")
+	exprStrs := make([]string, 0, len(exprs))
+	for _, expr := range exprs {
+		f, ok1 := expr.(*expression.ScalarFunction)
+		col, ok2 := f.GetArgs()[0].(*expression.Column)
+		val, ok3 := f.GetArgs()[1].(*expression.Constant)
+		if !ok1 || !ok2 || !ok3 {
+			// only support "col <op> val"
+			return nil, errors.New("not support")
+		}
+		if f.FuncName.L != ast.LT && f.FuncName.L != ast.GT {
+			// only support >, <
+			return nil, errors.New("not support")
+		}
+
+		// YOUR CODE HERE: wrap these CNF expressions into a raw request.
+		fmt.Println(f.FuncName.L, col.OrigName, val.Value.GetInt64())
+		exprStr := ""
+
+		exprStrs = append(exprStrs, exprStr)
+	}
+
+	return []byte(strings.Join(exprStrs, " and ")), nil
 }
 
 func parseResponseAsSelectivity(respData []byte) (float64, error) {
-	// YOUR CODE HERE: wrap response data into a selectivity
-	return 0, errors.New("not support")
+	return strconv.ParseFloat(string(respData), 54)
 }
 
 // exprs: exprs[0] AND exprs[1] AND exprs[2] ...
