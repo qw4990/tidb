@@ -1554,13 +1554,13 @@ var defaultSysVars = []*SysVar{
 			return nil
 		},
 	},
-	{Scope: ScopeGlobal | ScopeSession, Name: TiDBExternalCardinalityEstimatorAddress, Value: "", Hidden: false, Type: TypeStr,
+	{Scope: ScopeGlobal | ScopeSession, Name: TiDBExternalCardinalityEstimatorAddress, Value: "http://localhost:8888/cardinality", Hidden: false, Type: TypeStr,
 		SetSession: func(vars *SessionVars, s string) error {
 			vars.ExternalCardinalityEstimatorAddress = strings.TrimSpace(s)
 			return nil
 		},
 	},
-	{Scope: ScopeGlobal | ScopeSession, Name: TiDBExternalCostEstimatorAddress, Value: "", Hidden: false, Type: TypeStr,
+	{Scope: ScopeGlobal | ScopeSession, Name: TiDBExternalCostEstimatorAddress, Value: "http://localhost:8888/cost", Hidden: false, Type: TypeStr,
 		SetSession: func(vars *SessionVars, s string) error {
 			vars.ExternalCostEstimatorAddress = strings.TrimSpace(s)
 			return nil
