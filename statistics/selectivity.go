@@ -215,6 +215,7 @@ func fallbackToInternalCardinalityEstimator(ctx sessionctx.Context, expr express
 	return false
 }
 
+// exprs: exprs[0] AND exprs[1] AND exprs[2] ...
 func wrapCNFExprsAsRequest(exprs expression.CNFExprs) ([]byte, error) {
 	// YOUR CODE HERE: wrap these CNF expressions into a raw request
 	return nil, errors.New("not support")
@@ -225,6 +226,7 @@ func parseResponseAsSelectivity(respData []byte) (float64, error) {
 	return 0, errors.New("not support")
 }
 
+// exprs: exprs[0] AND exprs[1] AND exprs[2] ...
 func callExternalCardinalityEstimator(ctx sessionctx.Context, exprs expression.CNFExprs) (selectivity float64, fallback bool, err error) {
 	for _, expr := range exprs {
 		if fallbackToInternalCardinalityEstimator(ctx, expr) {
