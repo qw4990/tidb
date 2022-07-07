@@ -17,6 +17,7 @@ package core
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"math"
 	"net/http"
@@ -52,6 +53,13 @@ func wrapPhysicalPlanAsOperator(p PhysicalPlan, taskType string) *Operator {
 		op.OperatorInfo = accesser.OperatorInfo(false)
 	} else {
 		op.OperatorInfo = p.ExplainInfo()
+	}
+
+	rowSize := getAvgRowSize(p.statsInfo(), p.Schema())
+	if op.OperatorInfo == "" {
+		op.OperatorInfo = fmt.Sprintf("row_size: %v", int(rowSize))
+	} else {
+		op.OperatorInfo = fmt.Sprintf("%v, row_size: %v", op.OperatorInfo, int(rowSize))
 	}
 
 	switch x := p.(type) {
