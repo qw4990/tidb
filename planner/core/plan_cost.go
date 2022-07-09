@@ -81,11 +81,41 @@ func wrapPhysicalPlanAsOperator(p PhysicalPlan, taskType string) *Operator {
 }
 
 // wrapPhysicalPlanAsRequest converts this plan to a request in JSON format.
+// Here is an example:
+//{
+//   "id":"IndexReader_12",
+//   "est_rows":"200.00",
+//   "task":"root",
+//   "acc_obj":"",
+//   "op_info":"index:Selection_11, row_size: 48",
+//   "children":[
+//      {
+//         "id":"Selection_11",
+//         "est_rows":"200.00",
+//         "task":"cop",
+//         "acc_obj":"",
+//         "op_info":"ge(imdb.title.episode_nr, 8), ge(imdb.title.production_year, 1901), le(imdb.title.episode_nr, 483), le(imdb.title.production_year, 2015), row_size: 48",
+//         "children":[
+//            {
+//               "id":"IndexRangeScan_10",
+//               "est_rows":"340.00",
+//               "task":"cop",
+//               "acc_obj":"table:title, index:idx2(kind_id, production_year, episode_nr)",
+//               "op_info":"range:[0,5], keep order:false, row_size: 48",
+//               "children":null
+//            }
+//         ]
+//      }
+//   ]
+//}
 func wrapPhysicalPlanAsRequest(p PhysicalPlan) ([]byte, error) {
 	op := wrapPhysicalPlanAsOperator(p, "root")
 	return json.Marshal(op)
 }
 
+// parseResponseAsCost parse the response data.
+// The response data is expected to be in JSON format:
+// {"cost": 23.33, "err_msg": "..."}
 func parseResponseAsCost(respData []byte) (float64, error) {
 	type Resp struct {
 		Cost   float64 `json:"cost"`
@@ -101,7 +131,7 @@ func parseResponseAsCost(respData []byte) (float64, error) {
 	return resp.Cost, nil
 }
 
-// fallbackToInternalCostEstimator checks whether to fallback to the internal cost estimator.
+// fallbackToInternalCostEstimator checks whether to fall back to the internal cost estimator.
 // For simplicity, we only considered operators appeared in lab2: HashAgg, HashJoin,
 // Sort, Selection, Projection, TableReader, TableScan, IndexReader, IndexScan, IndexLookup.
 func fallbackToInternalCostEstimator(ctx sessionctx.Context, p PhysicalPlan) (fallback bool) {
@@ -119,6 +149,7 @@ func fallbackToInternalCostEstimator(ctx sessionctx.Context, p PhysicalPlan) (fa
 		}
 	}
 
+	// only support operators appeared in lab2
 	switch x := p.(type) {
 	case *PhysicalHashAgg, *PhysicalHashJoin, *PhysicalSort, *PhysicalSelection,
 		*PhysicalProjection, *PhysicalTableScan, *PhysicalIndexScan:
@@ -145,20 +176,24 @@ func fallbackToInternalCostEstimator(ctx sessionctx.Context, p PhysicalPlan) (fa
 	return false
 }
 
+// callExternalCostEstimator tries to call the external cost estimator to estimate this plan's cost.
 func callExternalCostEstimator(ctx sessionctx.Context, p PhysicalPlan) (cost float64, fallback bool, err error) {
 	if fallbackToInternalCostEstimator(ctx, p) {
 		return 0, true, nil
 	}
 
+	// wrap this plan as a request
 	reqData, err := wrapPhysicalPlanAsRequest(p)
 	if err != nil {
 		return 0, false, err
 	}
+	// send this request to the cost-estimation server and get the response
 	respData, err := requestTo(ctx.GetSessionVars().ExternalCostEstimatorAddress, reqData)
 	if err != nil {
 		return 0, false, err
 	}
 
+	// parse the resp and get the cost
 	cost, err = parseResponseAsCost(respData)
 	if err != nil {
 		return 0, false, err

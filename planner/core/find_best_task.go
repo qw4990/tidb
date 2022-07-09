@@ -329,15 +329,16 @@ func getTaskPlanCost(t task) (float64, error) {
 	if p.SCtx().GetSessionVars().ExternalCostEstimatorAddress != "" {
 		cost, fallback, err := callExternalCostEstimator(p.SCtx(), p)
 		if err != nil {
+			// record a warning and fall back to the internal estimator if there is an error
 			p.SCtx().GetSessionVars().StmtCtx.AppendWarning(fmt.Errorf("cannot get cost from the external cost estimator %v: %v",
 				p.SCtx().GetSessionVars().ExternalCostEstimatorAddress, err))
 			return t.plan().GetPlanCost(taskType, 0)
 		}
-		if fallback {
+		if fallback { // fall back to the internal estimator
 			return t.plan().GetPlanCost(taskType, 0)
 		}
 		p.SCtx().GetSessionVars().StmtCtx.AppendWarning(fmt.Errorf("get cost(%v)=%v successfully from the external model", p.ExplainID().String(), cost))
-		return cost, nil
+		return cost, nil // return the cost estimated by the external cost estimator
 	}
 
 	return t.plan().GetPlanCost(taskType, 0)
