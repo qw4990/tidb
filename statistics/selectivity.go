@@ -180,13 +180,24 @@ func isColEqCorCol(filter expression.Expression) *expression.Column {
 	return nil
 }
 
+var (
+	// for simplicity, only support >, <, >= and <=
+	supportedOps = map[string]bool{
+		ast.LE: true,
+		ast.GE: true,
+		ast.GT: true,
+		ast.LT: true,
+	}
+)
+
+// fallbackToInternalCardinalityEstimator checks whether to fall back to the internal cardinality estimator.
 func fallbackToInternalCardinalityEstimator(ctx sessionctx.Context, expr expression.Expression) (fallback bool) {
-	// for simplicity, we only considered '>=', '<=' in lab1
+	// for simplicity, only support predicates like `col op INT_val`
 	f, ok := expr.(*expression.ScalarFunction)
 	if !ok {
 		return true
 	}
-	if f.FuncName.L != ast.LE && f.FuncName.L != ast.GE {
+	if _, supported := supportedOps[f.FuncName.L]; !supported {
 		return true
 	}
 
@@ -195,8 +206,9 @@ func fallbackToInternalCardinalityEstimator(ctx sessionctx.Context, expr express
 	if !ok {
 		return true
 	}
-	tmp := strings.Split(col.OrigName, ".") // db.table.colum
-	if len(tmp) != 3 {
+	// col.OrigName = db.table.colum, e.g. imdb.title.kind_id
+	tmp := strings.Split(col.OrigName, ".")
+	if len(tmp) != 3 { // unexpected
 		return true
 	}
 	switch strings.ToLower(tmp[1] + "." + tmp[2]) {
@@ -205,7 +217,7 @@ func fallbackToInternalCardinalityEstimator(ctx sessionctx.Context, expr express
 		return true
 	}
 
-	// for simplicity, we only considered INT in lab1
+	// for simplicity, we only support INT value here
 	con, ok := f.GetArgs()[1].(*expression.Constant)
 	if !ok {
 		return true
