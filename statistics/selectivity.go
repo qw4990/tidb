@@ -228,24 +228,24 @@ func fallbackToInternalCardinalityEstimator(ctx sessionctx.Context, expr express
 	return false
 }
 
+// wrapCNFExprsAsRequest converts these expressions into a request.
 // exprs: exprs[0] AND exprs[1] AND exprs[2] ...
 func wrapCNFExprsAsRequest(exprs expression.CNFExprs) ([]byte, error) {
 	exprStrs := make([]string, 0, len(exprs))
 	for _, expr := range exprs {
-		f, ok1 := expr.(*expression.ScalarFunction)
-		col, ok2 := f.GetArgs()[0].(*expression.Column)
-		val, ok3 := f.GetArgs()[1].(*expression.Constant)
-		if !ok1 || !ok2 || !ok3 {
-			// only support "col <op> val"
-			return nil, errors.New("not support")
-		}
-		if f.FuncName.L != ast.LE && f.FuncName.L != ast.GE {
-			// only support >=, <=
-			return nil, errors.New("not support")
-		}
+		f := expr.(*expression.ScalarFunction)
+		col := f.GetArgs()[0].(*expression.Column)
+		val := f.GetArgs()[1].(*expression.Constant)
+		// For simplicity, only support predicates like `col op INT_val`, and
+		//   op can only be '>', '<', '>=', '<=', and
+		//   col can only be columns appeared in lab1: kind_id, production_year, imdb_id, episode_of_id, season_nr, episode_nr.
+		//   e.g. imdb.title.kind_id < 7
+		// All other unsupported predicates are filtered by fallbackToInternalCardinalityEstimator.
 
-		// YOUR CODE HERE: wrap these CNF expressions into a raw request.
-		// Don't forget to convert '>=' and '<=' to '>' and '<'
+		// YOUR CODE HERE: convert this expression into a string.
+		// col.OrigName = db.table.col, e.g. imdb.title.kind_id
+		// Don't forget to convert '>=' and '<=' to '>' and '<' since the model in lab1 cannot support '>=' and '<=',
+		//   for example, 'kind_id >= 5' should be converted to 'kind_id > 4'
 		fmt.Println(f.FuncName.L, col.OrigName, val.Value.GetInt64())
 		exprStr := ""
 
