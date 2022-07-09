@@ -34,13 +34,14 @@ import (
 	"github.com/pingcap/tidb/util/paging"
 )
 
+// Operator represents a node(operator) in the plan.
 type Operator struct {
-	ID            string      `json:"id"`
-	EstRows       string      `json:"est_rows"`
-	Task          string      `json:"task"`
-	AccessObjects string      `json:"acc_obj"`
-	OperatorInfo  string      `json:"op_info"`
-	Children      []*Operator `json:"children"`
+	ID            string      `json:"id"`       // id of this node, e.g. Selection_13, TableRowIDScan_11
+	EstRows       string      `json:"est_rows"` // the estimated rows of this node, e.g. 23.33
+	Task          string      `json:"task"`     // where this node is processed(TiDB or TiKV), e.g. root(TiDB), cop[tikv](TiKV)
+	AccessObjects string      `json:"acc_obj"`  // table or index to access, e.g. table:t1, index:idx_year(production_year)
+	OperatorInfo  string      `json:"op_info"`  // opertor info of this node, e.g. row_size: 195
+	Children      []*Operator `json:"children"` // children of this node
 }
 
 func wrapPhysicalPlanAsOperator(p PhysicalPlan, taskType string) *Operator {
@@ -79,6 +80,7 @@ func wrapPhysicalPlanAsOperator(p PhysicalPlan, taskType string) *Operator {
 	return op
 }
 
+// wrapPhysicalPlanAsRequest converts this plan to a request in JSON format.
 func wrapPhysicalPlanAsRequest(p PhysicalPlan) ([]byte, error) {
 	op := wrapPhysicalPlanAsOperator(p, "root")
 	return json.Marshal(op)
@@ -99,10 +101,12 @@ func parseResponseAsCost(respData []byte) (float64, error) {
 	return resp.Cost, nil
 }
 
-// for simplicity, we only considered HashAgg, HashJoin, Sort, Selection, Projection,
-// TableReader, TableScan, IndexReader, IndexScan, IndexLookup in lab2.
+// fallbackToInternalCostEstimator checks whether to fallback to the internal cost estimator.
+// For simplicity, we only considered operators appeared in lab2: HashAgg, HashJoin,
+// Sort, Selection, Projection, TableReader, TableScan, IndexReader, IndexScan, IndexLookup.
 func fallbackToInternalCostEstimator(ctx sessionctx.Context, p PhysicalPlan) (fallback bool) {
 	if accesser, ok := p.(dataAccesser); ok {
+		// only support plans that access imdb.title table
 		accInfo := accesser.AccessObject(false)
 		ok := false
 		for _, t := range []string{"title", "t1", "t2"} {
@@ -135,7 +139,8 @@ func fallbackToInternalCostEstimator(ctx sessionctx.Context, p PhysicalPlan) (fa
 			return true
 		}
 	default:
-		return true // unexpected operator
+		// unsupported operators
+		return true
 	}
 	return false
 }
