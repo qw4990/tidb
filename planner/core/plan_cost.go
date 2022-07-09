@@ -104,7 +104,13 @@ func parseResponseAsCost(respData []byte) (float64, error) {
 func fallbackToInternalCostEstimator(ctx sessionctx.Context, p PhysicalPlan) (fallback bool) {
 	if accesser, ok := p.(dataAccesser); ok {
 		accInfo := accesser.AccessObject(false)
-		if !strings.Contains(accInfo, "table:title") {
+		ok := false
+		for _, t := range []string{"title", "t1", "t2"} {
+			if strings.Contains(accInfo, fmt.Sprintf("table:%v", t)) {
+				ok = true
+			}
+		}
+		if !ok {
 			return true
 		}
 	}
