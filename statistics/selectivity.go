@@ -243,9 +243,9 @@ func wrapCNFExprsAsRequest(exprs expression.CNFExprs) ([]byte, error) {
 		// All other unsupported predicates are filtered by fallbackToInternalCardinalityEstimator.
 
 		// YOUR CODE HERE: convert this expression into a string.
-		// col.OrigName = db.table.col, e.g. imdb.title.kind_id
 		// Don't forget to convert '>=' and '<=' to '>' and '<' since the model in lab1 cannot support '>=' and '<=',
 		//   for example, 'kind_id >= 5' should be converted to 'kind_id > 4'
+		// col.OrigName is formatted as `db.table.col`, e.g. imdb.title.kind_id
 		fmt.Println(f.FuncName.L, col.OrigName, val.Value.GetInt64())
 		exprStr := ""
 
@@ -255,6 +255,9 @@ func wrapCNFExprsAsRequest(exprs expression.CNFExprs) ([]byte, error) {
 	return []byte(strings.Join(exprStrs, " and ")), nil
 }
 
+// parseResponseAsSelectivity parse the response data.
+// The response data is expected to be in JSON format:
+// {"selectivity": 0.2333, "err_msg": "..."}
 func parseResponseAsSelectivity(respData []byte) (float64, error) {
 	type Resp struct {
 		Selectivity float64 `json:"selectivity"`
@@ -270,23 +273,26 @@ func parseResponseAsSelectivity(respData []byte) (float64, error) {
 	return resp.Selectivity, nil
 }
 
+// callExternalCardinalityEstimator tries to call the external cardinality estimator.
 // exprs: exprs[0] AND exprs[1] AND exprs[2] ...
 func callExternalCardinalityEstimator(ctx sessionctx.Context, exprs expression.CNFExprs) (selectivity float64, fallback bool, err error) {
+	// check whether to fall back to the internal estimator
 	for _, expr := range exprs {
 		if fallbackToInternalCardinalityEstimator(ctx, expr) {
 			return 0, true, nil
 		}
 	}
-
+	// wrap these predicates into a request
 	conds, err := wrapCNFExprsAsRequest(exprs)
 	if err != nil {
 		return 0, false, err
 	}
+	// send this request to the external estimator
 	resp, err := requestTo(ctx.GetSessionVars().ExternalCardinalityEstimatorAddress, conds)
 	if err != nil {
 		return 0, false, err
 	}
-
+	// parse the resp and get the selectivity
 	sel, err := parseResponseAsSelectivity(resp)
 	if err != nil {
 		return 0, false, err

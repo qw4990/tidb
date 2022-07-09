@@ -178,6 +178,7 @@ func fallbackToInternalCostEstimator(ctx sessionctx.Context, p PhysicalPlan) (fa
 
 // callExternalCostEstimator tries to call the external cost estimator to estimate this plan's cost.
 func callExternalCostEstimator(ctx sessionctx.Context, p PhysicalPlan) (cost float64, fallback bool, err error) {
+	// check whether to fall back to the internal estimator
 	if fallbackToInternalCostEstimator(ctx, p) {
 		return 0, true, nil
 	}
@@ -192,7 +193,6 @@ func callExternalCostEstimator(ctx sessionctx.Context, p PhysicalPlan) (cost flo
 	if err != nil {
 		return 0, false, err
 	}
-
 	// parse the resp and get the cost
 	cost, err = parseResponseAsCost(respData)
 	if err != nil {
