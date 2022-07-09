@@ -243,7 +243,8 @@ func wrapCNFExprsAsRequest(exprs expression.CNFExprs) ([]byte, error) {
 		// All other unsupported predicates are filtered by fallbackToInternalCardinalityEstimator.
 
 		// col.OrigName is formatted as `db.table.col`, e.g. imdb.title.kind_id
-		fmt.Println(f.FuncName.L, col.OrigName, val.Value.GetInt64())
+		colName := strings.Split(col.OrigName, ".")[2]
+		fmt.Println(colName, f.FuncName.L, val.Value.GetInt64())
 
 		// YOUR CODE HERE: convert this expression into a string.
 		// Don't forget to convert '>=' and '<=' to '>' and '<' since the model in lab1 cannot support '>=' and '<=',
