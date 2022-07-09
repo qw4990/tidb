@@ -22,6 +22,7 @@ import (
 	"math"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb/config"
@@ -103,7 +104,7 @@ func parseResponseAsCost(respData []byte) (float64, error) {
 func fallbackToInternalCostEstimator(ctx sessionctx.Context, p PhysicalPlan) (fallback bool) {
 	if accesser, ok := p.(dataAccesser); ok {
 		accInfo := accesser.AccessObject(false)
-		if accInfo != "table:title" {
+		if !strings.Contains(accInfo, "table:title") {
 			return true
 		}
 	}
