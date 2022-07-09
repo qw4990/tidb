@@ -242,13 +242,22 @@ func wrapCNFExprsAsRequest(exprs expression.CNFExprs) ([]byte, error) {
 		//   e.g. imdb.title.kind_id < 7
 		// All other unsupported predicates are filtered by fallbackToInternalCardinalityEstimator.
 
+		// col.OrigName is formatted as `db.table.col`, e.g. imdb.title.kind_id
+		fmt.Println(f.FuncName.L, col.OrigName, val.Value.GetInt64())
+
 		// YOUR CODE HERE: convert this expression into a string.
 		// Don't forget to convert '>=' and '<=' to '>' and '<' since the model in lab1 cannot support '>=' and '<=',
 		//   for example, 'kind_id >= 5' should be converted to 'kind_id > 4'
-		// col.OrigName is formatted as `db.table.col`, e.g. imdb.title.kind_id
-		fmt.Println(f.FuncName.L, col.OrigName, val.Value.GetInt64())
 		exprStr := ""
+		if f.FuncName.L == ast.LT {
 
+		} else if f.FuncName.L == ast.LE {
+
+		} else if f.FuncName.L == ast.GT {
+
+		} else if f.FuncName.L == ast.GE {
+
+		}
 		exprStrs = append(exprStrs, exprStr)
 	}
 
