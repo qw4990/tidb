@@ -244,7 +244,8 @@ func wrapCNFExprsAsRequest(exprs expression.CNFExprs) ([]byte, error) {
 
 		// col.OrigName is formatted as `db.table.col`, e.g. imdb.title.kind_id
 		colName := strings.Split(col.OrigName, ".")[2]
-		fmt.Println(colName, f.FuncName.L, val.Value.GetInt64())
+		intVal := val.Value.GetInt64()
+		fmt.Println(colName, f.FuncName.L, intVal)
 
 		// YOUR CODE HERE: convert this expression into a string.
 		// Don't forget to convert '>=' and '<=' to '>' and '<' since the model in lab1 cannot support '>=' and '<=',
