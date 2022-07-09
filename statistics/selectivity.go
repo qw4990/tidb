@@ -233,6 +233,7 @@ func wrapCNFExprsAsRequest(exprs expression.CNFExprs) ([]byte, error) {
 		}
 
 		// YOUR CODE HERE: wrap these CNF expressions into a raw request.
+		// Don't forget to convert '>=' and '<=' to '>' and '<'
 		fmt.Println(f.FuncName.L, col.OrigName, val.Value.GetInt64())
 		exprStr := ""
 
