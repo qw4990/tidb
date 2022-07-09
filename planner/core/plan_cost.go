@@ -101,6 +101,13 @@ func parseResponseAsCost(respData []byte) (float64, error) {
 // for simplicity, we only considered HashAgg, HashJoin, Sort, Selection, Projection,
 // TableReader, TableScan, IndexReader, IndexScan, IndexLookup in lab2.
 func fallbackToInternalCostEstimator(ctx sessionctx.Context, p PhysicalPlan) (fallback bool) {
+	if accesser, ok := p.(dataAccesser); ok {
+		accInfo := accesser.AccessObject(false)
+		if accInfo != "table:title" {
+			return true
+		}
+	}
+
 	switch x := p.(type) {
 	case *PhysicalHashAgg, *PhysicalHashJoin, *PhysicalSort, *PhysicalSelection,
 		*PhysicalProjection, *PhysicalTableScan, *PhysicalIndexScan:
@@ -109,12 +116,17 @@ func fallbackToInternalCostEstimator(ctx sessionctx.Context, p PhysicalPlan) (fa
 				return true
 			}
 		}
-		return false
 	case *PhysicalTableReader:
 		return fallbackToInternalCostEstimator(ctx, x.tablePlan)
 	case *PhysicalIndexReader:
 		return fallbackToInternalCostEstimator(ctx, x.indexPlan)
 	case *PhysicalIndexLookUpReader:
+		if fallbackToInternalCostEstimator(ctx, x.indexPlan) {
+			return true
+		}
+		if fallbackToInternalCostEstimator(ctx, x.tablePlan) {
+			return true
+		}
 	default:
 		return true // unexpected operator
 	}
