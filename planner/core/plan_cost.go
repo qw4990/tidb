@@ -109,8 +109,21 @@ func wrapPhysicalPlanAsOperator(p PhysicalPlan, taskType string) *Operator {
 //   ]
 //}
 func wrapPhysicalPlanAsRequest(p PhysicalPlan) ([]byte, error) {
-	op := wrapPhysicalPlanAsOperator(p, "root")
+	op := wrapPhysicalPlanAsOperator(p, planType(p))
 	return json.Marshal(op)
+}
+
+func planType(p PhysicalPlan) string {
+	switch p.(type) {
+	case *PhysicalTableReader, *PhysicalIndexReader, *PhysicalIndexLookUpReader:
+		return "root"
+	}
+	for _, c := range p.Children() {
+		if planType(c) == "root" {
+			return "root"
+		}
+	}
+	return "cop"
 }
 
 // parseResponseAsCost parse the response data.
