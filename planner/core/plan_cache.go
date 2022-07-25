@@ -31,16 +31,8 @@ type PlanCacheReq struct {
 	TxtProtoVars []expression.Expression // text protocol
 }
 
-// PlanCache ...
-type PlanCache interface {
-	GetPhysicalPlan(ctx context.Context, sctx sessionctx.Context, req *PlanCacheReq)
-}
-
-type sessionPlanCache struct {
-	planCache *kvcache.SimpleLRUCache
-}
-
-func (pc *sessionPlanCache) GetPhysicalPlan(ctx context.Context, sctx sessionctx.Context, req *PlanCacheReq) (PhysicalPlan, error) {
+// GetPhysicalPlan ...
+func GetPhysicalPlan(ctx context.Context, sctx sessionctx.Context, req *PlanCacheReq) (PhysicalPlan, error) {
 	var err error
 	var cacheKey kvcache.Key
 	sessVars := sctx.GetSessionVars()
@@ -98,7 +90,7 @@ func (pc *sessionPlanCache) GetPhysicalPlan(ctx context.Context, sctx sessionctx
 		// the expression in the where condition will not be evaluated,
 		// so you don't need to consider whether prepared.useCache is enabled.
 		plan := prepared.CachedPlan.(Plan)
-		err := pc.RebuildPlan(plan)
+		err := RebuildPlan(plan)
 		if err != nil {
 			logutil.BgLogger().Debug("rebuild range failed", zap.Error(err))
 			goto REBUILD
@@ -113,8 +105,8 @@ func (pc *sessionPlanCache) GetPhysicalPlan(ctx context.Context, sctx sessionctx
 		return plan.(PhysicalPlan), nil
 	}
 	if prepared.UseCache && !ignorePlanCache { // for general plans
-		if cacheValue, exists := pc.planCache.Get(cacheKey); exists {
-			if err := pc.checkPreparedPriv(ctx, sctx, preparedStmt, req.IS); err != nil {
+		if cacheValue, exists := sctx.PreparedPlanCache().Get(cacheKey); exists {
+			if err := checkPreparedPriv(ctx, sctx, preparedStmt, req.IS); err != nil {
 				return nil, err
 			}
 			cachedVals := cacheValue.([]*PlanCacheValue)
@@ -123,7 +115,7 @@ func (pc *sessionPlanCache) GetPhysicalPlan(ctx context.Context, sctx sessionctx
 					// When BindSQL does not match, it means that we have added a new binding,
 					// and the original cached plan will be invalid,
 					// so the original cached plan can be cleared directly
-					pc.planCache.Delete(cacheKey)
+					sctx.PreparedPlanCache().Delete(cacheKey)
 					break
 				}
 				if !cachedVal.varTypesUnchanged(binVarTypes, txtVarTypes) {
@@ -135,12 +127,12 @@ func (pc *sessionPlanCache) GetPhysicalPlan(ctx context.Context, sctx sessionctx
 						planValid = false
 						// TODO we can inject UnionScan into cached plan to avoid invalidating it, though
 						// rebuilding the filters in UnionScan is pretty trivial.
-						pc.planCache.Delete(cacheKey)
+						sctx.PreparedPlanCache().Delete(cacheKey)
 						break
 					}
 				}
 				if planValid {
-					err := pc.RebuildPlan(cachedVal.Plan)
+					err := RebuildPlan(cachedVal.Plan)
 					if err != nil {
 						logutil.BgLogger().Debug("rebuild range failed", zap.Error(err))
 						goto REBUILD
@@ -171,7 +163,7 @@ REBUILD:
 	if err != nil {
 		return nil, err
 	}
-	err = pc.tryCachePointPlan(ctx, sctx, preparedStmt, is, p)
+	err = tryCachePointPlan(ctx, sctx, preparedStmt, is, p)
 	if err != nil {
 		return nil, err
 	}
@@ -193,7 +185,7 @@ REBUILD:
 		preparedStmt.NormalizedPlan, preparedStmt.PlanDigest = NormalizePlan(p)
 		stmtCtx.SetPlan(p)
 		stmtCtx.SetPlanDigest(preparedStmt.NormalizedPlan, preparedStmt.PlanDigest)
-		if cacheVals, exists := pc.planCache.Get(cacheKey); exists {
+		if cacheVals, exists := sctx.PreparedPlanCache().Get(cacheKey); exists {
 			hitVal := false
 			for i, cacheVal := range cacheVals.([]*PlanCacheValue) {
 				if cacheVal.varTypesUnchanged(binVarTypes, txtVarTypes) {
@@ -205,9 +197,9 @@ REBUILD:
 			if !hitVal {
 				cacheVals = append(cacheVals.([]*PlanCacheValue), cached)
 			}
-			pc.planCache.Put(cacheKey, cacheVals)
+			sctx.PreparedPlanCache().Put(cacheKey, cacheVals)
 		} else {
-			pc.planCache.Put(cacheKey, []*PlanCacheValue{cached})
+			sctx.PreparedPlanCache().Put(cacheKey, []*PlanCacheValue{cached})
 		}
 	}
 	sessVars.FoundInPlanCache = false
@@ -216,7 +208,7 @@ REBUILD:
 
 // tryCachePointPlan will try to cache point execution plan, there may be some
 // short paths for these executions, currently "point select" and "point update"
-func (e *sessionPlanCache) tryCachePointPlan(ctx context.Context, sctx sessionctx.Context,
+func tryCachePointPlan(ctx context.Context, sctx sessionctx.Context,
 	preparedStmt *CachedPrepareStmt, is infoschema.InfoSchema, p Plan) error {
 	if !sctx.GetSessionVars().StmtCtx.UseCache || sctx.GetSessionVars().StmtCtx.SkipPlanCache {
 		return nil
@@ -246,54 +238,54 @@ func (e *sessionPlanCache) tryCachePointPlan(ctx context.Context, sctx sessionct
 	return err
 }
 
-func (pc *sessionPlanCache) RebuildPlan(p Plan) error {
+func RebuildPlan(p Plan) error {
 	sc := p.SCtx().GetSessionVars().StmtCtx
 	sc.InPreparedPlanBuilding = true
 	defer func() { sc.InPreparedPlanBuilding = false }()
-	return pc.rebuildRange(p)
+	return rebuildRange(p)
 }
 
-func (pc *sessionPlanCache) rebuildRange(p Plan) error {
+func rebuildRange(p Plan) error {
 	sctx := p.SCtx()
 	sc := p.SCtx().GetSessionVars().StmtCtx
 	var err error
 	switch x := p.(type) {
 	case *PhysicalIndexHashJoin:
-		return pc.rebuildRange(&x.PhysicalIndexJoin)
+		return rebuildRange(&x.PhysicalIndexJoin)
 	case *PhysicalIndexMergeJoin:
-		return pc.rebuildRange(&x.PhysicalIndexJoin)
+		return rebuildRange(&x.PhysicalIndexJoin)
 	case *PhysicalIndexJoin:
 		if err := x.Ranges.Rebuild(); err != nil {
 			return err
 		}
 		for _, child := range x.Children() {
-			err = pc.rebuildRange(child)
+			err = rebuildRange(child)
 			if err != nil {
 				return err
 			}
 		}
 	case *PhysicalTableScan:
-		err = pc.buildRangeForTableScan(sctx, x)
+		err = buildRangeForTableScan(sctx, x)
 		if err != nil {
 			return err
 		}
 	case *PhysicalIndexScan:
-		err = pc.buildRangeForIndexScan(sctx, x)
+		err = buildRangeForIndexScan(sctx, x)
 		if err != nil {
 			return err
 		}
 	case *PhysicalTableReader:
-		err = pc.rebuildRange(x.TablePlans[0])
+		err = rebuildRange(x.TablePlans[0])
 		if err != nil {
 			return err
 		}
 	case *PhysicalIndexReader:
-		err = pc.rebuildRange(x.IndexPlans[0])
+		err = rebuildRange(x.IndexPlans[0])
 		if err != nil {
 			return err
 		}
 	case *PhysicalIndexLookUpReader:
-		err = pc.rebuildRange(x.IndexPlans[0])
+		err = rebuildRange(x.IndexPlans[0])
 		if err != nil {
 			return err
 		}
@@ -423,7 +415,7 @@ func (pc *sessionPlanCache) rebuildRange(p Plan) error {
 	case *PhysicalIndexMergeReader:
 		indexMerge := p.(*PhysicalIndexMergeReader)
 		for _, partialPlans := range indexMerge.PartialPlans {
-			err = pc.rebuildRange(partialPlans[0])
+			err = rebuildRange(partialPlans[0])
 			if err != nil {
 				return err
 			}
@@ -432,28 +424,28 @@ func (pc *sessionPlanCache) rebuildRange(p Plan) error {
 		// only can be (Selection) + TableRowIDScan. There have no range need to rebuild.
 	case PhysicalPlan:
 		for _, child := range x.Children() {
-			err = pc.rebuildRange(child)
+			err = rebuildRange(child)
 			if err != nil {
 				return err
 			}
 		}
 	case *Insert:
 		if x.SelectPlan != nil {
-			return pc.rebuildRange(x.SelectPlan)
+			return rebuildRange(x.SelectPlan)
 		}
 	case *Update:
 		if x.SelectPlan != nil {
-			return pc.rebuildRange(x.SelectPlan)
+			return rebuildRange(x.SelectPlan)
 		}
 	case *Delete:
 		if x.SelectPlan != nil {
-			return pc.rebuildRange(x.SelectPlan)
+			return rebuildRange(x.SelectPlan)
 		}
 	}
 	return nil
 }
 
-func (pc *sessionPlanCache) buildRangeForIndexScan(sctx sessionctx.Context, is *PhysicalIndexScan) (err error) {
+func buildRangeForIndexScan(sctx sessionctx.Context, is *PhysicalIndexScan) (err error) {
 	if len(is.IdxCols) == 0 {
 		is.Ranges = ranger.FullRange()
 		return
@@ -469,7 +461,7 @@ func (pc *sessionPlanCache) buildRangeForIndexScan(sctx sessionctx.Context, is *
 	return
 }
 
-func (e *sessionPlanCache) buildRangeForTableScan(sctx sessionctx.Context, ts *PhysicalTableScan) (err error) {
+func buildRangeForTableScan(sctx sessionctx.Context, ts *PhysicalTableScan) (err error) {
 	if ts.Table.IsCommonHandle {
 		pk := tables.FindPrimaryIndex(ts.Table)
 		pkCols := make([]*expression.Column, 0, len(pk.Columns))
@@ -520,7 +512,7 @@ func (e *sessionPlanCache) buildRangeForTableScan(sctx sessionctx.Context, ts *P
 	return
 }
 
-func (e *sessionPlanCache) checkPreparedPriv(ctx context.Context, sctx sessionctx.Context,
+func checkPreparedPriv(ctx context.Context, sctx sessionctx.Context,
 	preparedObj *CachedPrepareStmt, is infoschema.InfoSchema) error {
 	if pm := privilege.GetPrivilegeManager(sctx); pm != nil {
 		visitInfo := VisitInfo4PrivCheck(is, preparedObj.PreparedAst.Stmt, preparedObj.VisitInfos)
