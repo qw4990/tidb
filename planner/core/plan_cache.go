@@ -21,26 +21,16 @@ import (
 	"go.uber.org/zap"
 )
 
-// PlanCacheReq ...
-type PlanCacheReq struct {
-	IS   infoschema.InfoSchema
-	Stmt *CachedPrepareStmt // Information of the specific statement
-
-	// parameters
-	BinProtoVars []types.Datum           // binary protocol
-	TxtProtoVars []expression.Expression // text protocol
-}
-
-// GetPhysicalPlan ...
-func GetPhysicalPlan(ctx context.Context, sctx sessionctx.Context, req *PlanCacheReq) (PhysicalPlan, error) {
+// GetPlanFromSessionPlanCache gets a plan from this session's plan cache.
+func GetPlanFromSessionPlanCache(ctx context.Context, sctx sessionctx.Context, is infoschema.InfoSchema,
+	stmt *CachedPrepareStmt, binProtoVars []types.Datum, txtProtoVars []expression.Expression) (PhysicalPlan, error) {
 	var err error
 	var cacheKey kvcache.Key
 	sessVars := sctx.GetSessionVars()
 	stmtCtx := sessVars.StmtCtx
-	preparedStmt := req.Stmt
+	preparedStmt := stmt
 	prepared := preparedStmt.PreparedAst
 	stmtCtx.UseCache = prepared.UseCache
-	is := req.IS
 
 	var bindSQL string
 	var ignorePlanCache = false
@@ -66,15 +56,15 @@ func GetPhysicalPlan(ctx context.Context, sctx sessionctx.Context, req *PlanCach
 	var varsNum int
 	var binVarTypes []byte
 	var txtVarTypes []*types.FieldType
-	isBinProtocol := len(req.BinProtoVars) > 0
+	isBinProtocol := len(binProtoVars) > 0
 	if isBinProtocol { // binary protocol
-		varsNum = len(req.BinProtoVars)
-		for _, param := range req.BinProtoVars {
+		varsNum = len(binProtoVars)
+		for _, param := range binProtoVars {
 			binVarTypes = append(binVarTypes, param.Kind())
 		}
 	} else { // txt protocol
-		varsNum = len(req.TxtProtoVars)
-		for _, param := range req.TxtProtoVars {
+		varsNum = len(txtProtoVars)
+		for _, param := range txtProtoVars {
 			name := param.(*expression.ScalarFunction).GetArgs()[0].String()
 			tp := sctx.GetSessionVars().UserVarTypes[name]
 			if tp == nil {
@@ -106,7 +96,7 @@ func GetPhysicalPlan(ctx context.Context, sctx sessionctx.Context, req *PlanCach
 	}
 	if prepared.UseCache && !ignorePlanCache { // for general plans
 		if cacheValue, exists := sctx.PreparedPlanCache().Get(cacheKey); exists {
-			if err := checkPreparedPriv(ctx, sctx, preparedStmt, req.IS); err != nil {
+			if err := checkPreparedPriv(ctx, sctx, preparedStmt, is); err != nil {
 				return nil, err
 			}
 			cachedVals := cacheValue.([]*PlanCacheValue)
@@ -158,8 +148,7 @@ func GetPhysicalPlan(ctx context.Context, sctx sessionctx.Context, req *PlanCach
 
 REBUILD:
 	planCacheMissCounter.Inc()
-	stmt := prepared.Stmt
-	p, names, err := OptimizeAstNode(ctx, sctx, stmt, is)
+	p, names, err := OptimizeAstNode(ctx, sctx, stmt.PreparedAst.Stmt, is)
 	if err != nil {
 		return nil, err
 	}
@@ -173,7 +162,7 @@ REBUILD:
 	}
 	if prepared.UseCache && !stmtCtx.SkipPlanCache && !ignorePlanCache {
 		// rebuild key to exclude kv.TiFlash when stmt is not read only
-		if _, isolationReadContainTiFlash := sessVars.IsolationReadEngines[kv.TiFlash]; isolationReadContainTiFlash && !IsReadOnly(stmt, sessVars) {
+		if _, isolationReadContainTiFlash := sessVars.IsolationReadEngines[kv.TiFlash]; isolationReadContainTiFlash && !IsReadOnly(stmt.PreparedAst.Stmt, sessVars) {
 			delete(sessVars.IsolationReadEngines, kv.TiFlash)
 			if cacheKey, err = NewPlanCacheKey(sessVars, preparedStmt.StmtText, preparedStmt.StmtDB,
 				prepared.SchemaVersion, latestSchemaVersion); err != nil {
