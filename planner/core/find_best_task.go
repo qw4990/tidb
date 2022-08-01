@@ -211,6 +211,13 @@ func (p *baseLogicalPlan) enumeratePhysicalPlans4Task(physicalPlans []PhysicalPl
 	childCnts := make([]int64, len(p.children))
 	cntPlan = 0
 	for _, pp := range physicalPlans {
+		localDEBUG := false
+		if strings.Contains(p.SCtx().GetSessionVars().StmtCtx.OriginalSQL, "github_events") && pp.ExplainID().String() == "StreamAgg_9" {
+			fmt.Println("================================= optimize StreamAgg_36/9 ======================================== ")
+			p.SCtx().GetSessionVars().StmtCtx.DEBUG = true
+			localDEBUG = true
+		}
+
 		// Find best child tasks firstly.
 		childTasks = childTasks[:0]
 		// The curCntPlan records the number of possible plans for pp
@@ -231,6 +238,12 @@ func (p *baseLogicalPlan) enumeratePhysicalPlans4Task(physicalPlans []PhysicalPl
 			childTasks = append(childTasks, childTask)
 		}
 
+		if strings.Contains(p.SCtx().GetSessionVars().StmtCtx.OriginalSQL, "github_events") && pp.ExplainID().String() == "StreamAgg_9" && len(childTasks) > 0 {
+			fmt.Println("----->>> ", childTasks[0].plan().ExplainID().String(), pp.GetChildReqProps(0))
+			fmt.Println("================================= optimize StreamAgg_36/9 END ======================================== ")
+			p.SCtx().GetSessionVars().StmtCtx.DEBUG = false
+		}
+
 		// This check makes sure that there is no invalid child task.
 		if len(childTasks) != len(p.children) {
 			continue
@@ -247,7 +260,16 @@ func (p *baseLogicalPlan) enumeratePhysicalPlans4Task(physicalPlans []PhysicalPl
 		}
 
 		// Combine best child tasks with parent physical plan.
+		if localDEBUG {
+			p.SCtx().GetSessionVars().StmtCtx.DEBUG = true
+			fmt.Println(" ====================================== attach StreamAgg_36/9 =======================================")
+			DEBUGXX(">>> StreamAgg Child >>> ", childTasks[0].plan())
+		}
 		curTask := pp.attach2Task(childTasks...)
+		if localDEBUG {
+			p.SCtx().GetSessionVars().StmtCtx.DEBUG = false
+			fmt.Println(" ====================================== attach StreamAgg_36/9 END =======================================")
+		}
 
 		if curTask.invalid() {
 			continue
@@ -287,32 +309,68 @@ func (p *baseLogicalPlan) enumeratePhysicalPlans4Task(physicalPlans []PhysicalPl
 	return bestTask, cntPlan, nil
 }
 
-// compareTaskCost compares cost of curTask and bestTask and returns whether curTask's cost is smaller than bestTask's.
-func compareTaskCost(ctx sessionctx.Context, curTask, bestTask task) (curIsBetter bool, err error) {
-	if curTask.invalid() {
-		return false, nil
+func DEBUGXX(prefix string, p PhysicalPlan) {
+	cost, _ := p.GetPlanCost(property.RootTaskType, 0)
+
+	var operatorInfo string
+	if plan, ok := p.(dataAccesser); ok {
+		operatorInfo = plan.OperatorInfo(false)
 	}
-	if bestTask.invalid() {
-		return true, nil
+
+	fmt.Printf("%v %v %v %.2f %v %v\n", prefix, p.ExplainID().String(), p.StatsCount(), cost, p.ExplainInfo(), operatorInfo)
+	for _, c := range p.Children() {
+		DEBUGXX(prefix+"  ", c)
 	}
-	if ctx.GetSessionVars().EnableNewCostInterface { // use the new cost interface
-		curCost, err := getTaskPlanCost(curTask)
-		if err != nil {
-			return false, err
-		}
-		bestCost, err := getTaskPlanCost(bestTask)
-		if err != nil {
-			return false, err
-		}
-		return curCost < bestCost, nil
+
+	switch x := p.(type) {
+	case *PhysicalTableReader:
+		DEBUGXX(prefix+"  ", x.tablePlan)
+	case *PhysicalIndexReader:
+		DEBUGXX(prefix+"  ", x.indexPlan)
+	case *PhysicalIndexLookUpReader:
+		DEBUGXX(prefix+"  ", x.indexPlan)
+		DEBUGXX(prefix+"  ", x.tablePlan)
 	}
-	return curTask.cost() < bestTask.cost(), nil
+
 }
 
-func getTaskPlanCost(t task) (float64, error) {
-	if t.invalid() {
-		return math.MaxFloat64, nil
+// compareTaskCost compares cost of curTask and bestTask and returns whether curTask's cost is smaller than bestTask's.
+func compareTaskCost(ctx sessionctx.Context, curTask, bestTask task) (curIsBetter bool, err error) {
+	curCost, curInvalid, err := getTaskPlanCost(curTask)
+	if err != nil {
+		return false, err
 	}
+	bestCost, bestInvalid, err := getTaskPlanCost(bestTask)
+	if err != nil {
+		return false, err
+	}
+	if curInvalid {
+		return false, nil
+	}
+	if bestInvalid {
+		return true, nil
+	}
+
+	//if strings.Contains(ctx.GetSessionVars().StmtCtx.OriginalSQL, "github_events") && strings.Contains(curTask.plan().ExplainID().String(), "Agg") {
+	//	DEBUGXX(" --> cur ", curTask.plan())
+	//	DEBUGXX(" --> bst ", bestTask.plan())
+	//}
+
+	return curCost < bestCost, nil
+}
+
+// getTaskPlanCost returns the cost of this task.
+// The new cost interface will be used if EnableNewCostInterface is true.
+// The second returned value indicates whether this task is valid.
+func getTaskPlanCost(t task) (float64, bool, error) {
+	if t.invalid() {
+		return math.MaxFloat64, true, nil
+	}
+	if !t.plan().SCtx().GetSessionVars().EnableNewCostInterface {
+		return t.cost(), false, nil
+	}
+
+	// use the new cost interface
 	var taskType property.TaskType
 	switch t.(type) {
 	case *rootTask:
@@ -322,9 +380,10 @@ func getTaskPlanCost(t task) (float64, error) {
 	case *mppTask:
 		taskType = property.MppTaskType
 	default:
-		return 0, errors.New("unknown task type")
+		return 0, false, errors.New("unknown task type")
 	}
-	return t.plan().GetPlanCost(taskType, 0)
+	cost, err := t.plan().GetPlanCost(taskType, 0)
+	return cost, false, err
 }
 
 type physicalOptimizeOp struct {
@@ -1016,6 +1075,11 @@ func (ds *DataSource) findBestTask(prop *property.PhysicalProperty, planCounter 
 				cntPlan += 1
 				planCounter.Dec(1)
 			}
+
+			if ds.ctx.GetSessionVars().StmtCtx.DEBUG {
+				DEBUGXX("---->>>> child table scan ", tblTask.plan())
+			}
+
 			appendCandidate(ds, tblTask, prop, opt)
 			curIsBetter, err := compareTaskCost(ds.ctx, tblTask, t)
 			if err != nil {
@@ -1037,9 +1101,15 @@ func (ds *DataSource) findBestTask(prop *property.PhysicalProperty, planCounter 
 		if err != nil {
 			return nil, 0, err
 		}
+		if ds.ctx.GetSessionVars().StmtCtx.DEBUG {
+			fmt.Println("--->>> invalid idx task ", path.Index.Name, idxTask.invalid())
+		}
 		if !idxTask.invalid() {
 			cntPlan += 1
 			planCounter.Dec(1)
+			if ds.ctx.GetSessionVars().StmtCtx.DEBUG {
+				DEBUGXX("---->>>> child index scan ", idxTask.plan())
+			}
 		}
 		appendCandidate(ds, idxTask, prop, opt)
 		curIsBetter, err := compareTaskCost(ds.ctx, idxTask, t)

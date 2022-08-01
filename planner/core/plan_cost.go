@@ -15,7 +15,9 @@
 package core
 
 import (
+	"fmt"
 	"math"
+	"strings"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb/config"
@@ -981,6 +983,15 @@ func (p *PhysicalStreamAgg) GetCost(inputRows float64, isRoot, isMPP bool, costF
 	}
 	rowsPerGroup := inputRows / getCardinality(p, costFlag)
 	memoryCost := rowsPerGroup * distinctFactor * sessVars.GetMemoryFactor() * float64(p.numDistinctFunc())
+
+	if p.ExplainID().String() == "StreamAgg_36" {
+		//debug.PrintStack()
+	}
+
+	//if strings.Contains(p.SCtx().GetSessionVars().StmtCtx.OriginalSQL, "github_events") {
+	//	fmt.Println("---->>> ", p.ExplainID().String(), cpuCost, memoryCost)
+	//}
+
 	return cpuCost + memoryCost
 }
 
@@ -994,6 +1005,11 @@ func (p *PhysicalStreamAgg) GetPlanCost(taskType property.TaskType, costFlag uin
 		return 0, err
 	}
 	p.planCost = childCost
+
+	if p.ExplainID().String() == "StreamAgg_36" {
+		p.planCost = 0
+	}
+
 	p.planCost += p.GetCost(getCardinality(p.children[0], costFlag), taskType == property.RootTaskType, taskType == property.MppTaskType, costFlag)
 	p.planCostInit = true
 	return p.planCost, nil
@@ -1028,6 +1044,11 @@ func (p *PhysicalHashAgg) GetCost(inputRows float64, isRoot, isMPP bool, costFla
 	// When aggregation has distinct flag, we would allocate a map for each group to
 	// check duplication.
 	memoryCost += inputRows * distinctFactor * sessVars.GetMemoryFactor() * float64(numDistinctFunc)
+
+	if strings.Contains(p.SCtx().GetSessionVars().StmtCtx.OriginalSQL, "github_events") {
+		fmt.Println("---->>> ", p.ExplainID().String(), cpuCost, memoryCost)
+	}
+
 	return cpuCost + memoryCost
 }
 
