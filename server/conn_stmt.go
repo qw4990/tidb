@@ -707,6 +707,10 @@ func (cc *clientConn) handleSetOption(ctx context.Context, data []byte) (err err
 	return cc.flush(ctx)
 }
 
+func (cc *clientConn) generalPlanCacheFastPath(ctx context.Context, sql string) (ok bool, err error) {
+	return false, nil
+}
+
 func (cc *clientConn) preparedStmt2String(stmtID uint32) string {
 	sv := cc.ctx.GetSessionVars()
 	if sv == nil {
