@@ -2306,8 +2306,7 @@ func (s *session) preparedStmtExec(ctx context.Context, execStmt *ast.ExecuteStm
 	return runStmt(ctx, s, st)
 }
 
-// ExecutePreparedStmt executes a prepared statement.
-func (s *session) ExecutePreparedStmt(ctx context.Context, stmtID uint32, args []expression.Expression) (sqlexec.RecordSet, error) {
+func (s *session) ExecutePreparedStmtByID(ctx context.Context, stmtID uint32, args []expression.Expression) (sqlexec.RecordSet, error) {
 	var err error
 	if err = s.PrepareTxnCtx(ctx); err != nil {
 		return nil, err
@@ -2320,6 +2319,10 @@ func (s *session) ExecutePreparedStmt(ctx context.Context, stmtID uint32, args [
 		logutil.Logger(ctx).Error("prepared statement not found", zap.Uint32("stmtID", stmtID))
 		return nil, err
 	}
+	return s.ExecutePreparedStmt(ctx, prepStmt, args)
+}
+
+func (s *session) ExecutePreparedStmt(ctx context.Context, prepStmt interface{}, args []expression.Expression) (sqlexec.RecordSet, error) {
 	preparedStmt, ok := prepStmt.(*plannercore.CachedPrepareStmt)
 	if !ok {
 		return nil, errors.Errorf("invalid CachedPrepareStmt type")
@@ -2330,6 +2333,7 @@ func (s *session) ExecutePreparedStmt(ctx context.Context, stmtID uint32, args [
 		return nil, err
 	}
 
+	var err error
 	staleReadProcessor := staleread.NewStaleReadProcessor(s)
 	if err = staleReadProcessor.OnExecutePreparedStmt(preparedStmt.SnapshotTSEvaluator); err != nil {
 		return nil, err
