@@ -2325,6 +2325,7 @@ func (s *session) ExecutePreparedStmtByID(ctx context.Context, stmtID uint32, ar
 }
 
 func (s *session) ExecutePreparedStmtByQuery(ctx context.Context, sql string, param []expression.Expression) (sqlexec.RecordSet, error) {
+	panic("TODO")
 	return nil, nil
 }
 
