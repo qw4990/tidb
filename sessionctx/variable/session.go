@@ -49,7 +49,6 @@ import (
 	"github.com/pingcap/tidb/util/execdetails"
 	"github.com/pingcap/tidb/util/mathutil"
 	"github.com/pingcap/tidb/util/rowcodec"
-	"github.com/pingcap/tidb/util/stringutil"
 	"github.com/pingcap/tidb/util/tableutil"
 	"github.com/pingcap/tidb/util/timeutil"
 	tikvstore "github.com/tikv/client-go/v2/kv"
@@ -549,6 +548,8 @@ func validateReadConsistencyLevel(val string) error {
 	}
 }
 
+var CloneUserVars func(userVar interface{}) (interface{}, error)
+
 // SessionVars is to handle user-defined or global variables in the current session.
 type SessionVars struct {
 	Concurrency
@@ -559,13 +560,12 @@ type SessionVars struct {
 	DMLBatchSize        int
 	RetryLimit          int64
 	DisableTxnAutoRetry bool
-	// UsersLock is a lock for user defined variables.
-	UsersLock sync.RWMutex
-	// Users are user defined variables.
-	Users map[string]types.Datum
-	// UserVarTypes stores the FieldType for user variables, it cannot be inferred from Users when Users have not been set yet.
-	// It is read/write protected by UsersLock.
-	UserVarTypes map[string]*types.FieldType
+
+	UserVars struct {
+		Lock sync.RWMutex
+		Vars map[string]interface{}
+	}
+
 	// systems variables, don't modify it directly, use GetSystemVar/SetSystemVar method.
 	systems map[string]string
 	// stmtVars variables are temporarily set by SET_VAR hint
@@ -1629,14 +1629,11 @@ func (s *SessionVars) GetParseParams() []parser.ParseParam {
 }
 
 // SetUserVar set the value and collation for user defined variable.
-func (s *SessionVars) SetUserVar(varName string, svalue string, collation string) {
+func (s *SessionVars) SetUserVar(varName string, varVal interface{}) {
 	varName = strings.ToLower(varName)
-	if len(collation) > 0 {
-		s.Users[varName] = types.NewCollationStringDatum(stringutil.Copy(svalue), collation)
-	} else {
-		_, collation = s.GetCharsetInfo()
-		s.Users[varName] = types.NewCollationStringDatum(stringutil.Copy(svalue), collation)
-	}
+	s.UserVars.Lock.Lock()
+	defer s.UserVars.Lock.Unlock()
+	s.UserVars.Vars[varName] = varVal
 }
 
 // UnsetUserVar unset an user defined variable by name.

@@ -17,6 +17,7 @@ package expression
 import (
 	goJSON "encoding/json"
 	"fmt"
+	"github.com/pingcap/tidb/sessionctx/variable"
 	"strconv"
 	"strings"
 	"sync"
@@ -1463,4 +1464,16 @@ func Args2Expressions4Test(args ...interface{}) []Expression {
 		exprs[i] = &Constant{Value: d, RetType: ft}
 	}
 	return exprs
+}
+
+func init() {
+	variable.CloneUserVars = CloneUserVars
+}
+
+func CloneUserVars(userVar interface{}) (interface{}, error) {
+	c, ok := userVar.(*Constant)
+	if !ok {
+		return nil, errors.New("...")
+	}
+	return c.Clone(), nil
 }
