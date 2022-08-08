@@ -2309,11 +2309,6 @@ func (s *session) preparedStmtExec(ctx context.Context, execStmt *ast.ExecuteStm
 }
 
 func (s *session) ExecutePreparedStmtByID(ctx context.Context, stmtID uint32, args []expression.Expression) (sqlexec.RecordSet, error) {
-	var err error
-	if err = s.PrepareTxnCtx(ctx); err != nil {
-		return nil, err
-	}
-
 	s.sessionVars.StartTime = time.Now()
 	prepStmt, err := s.sessionVars.GetPreparedStmtByID(stmtID)
 	if err != nil {
@@ -2330,6 +2325,11 @@ func (s *session) ExecutePreparedStmtByQuery(ctx context.Context, sql string, pa
 }
 
 func (s *session) executePreparedStmt(ctx context.Context, prepStmt interface{}, args []expression.Expression) (sqlexec.RecordSet, error) {
+	var err error
+	if err = s.PrepareTxnCtx(ctx); err != nil {
+		return nil, err
+	}
+
 	preparedStmt, ok := prepStmt.(*plannercore.CachedPrepareStmt)
 	if !ok {
 		return nil, errors.Errorf("invalid CachedPrepareStmt type")
