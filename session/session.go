@@ -156,7 +156,7 @@ type Session interface {
 	// PrepareStmt executes prepare statement in binary protocol.
 	PrepareStmt(sql string) (stmtID uint32, paramCount int, fields []*ast.ResultField, err error)
 	ExecutePreparedStmtByID(ctx context.Context, stmtID uint32, param []expression.Expression) (sqlexec.RecordSet, error)
-	ExecutePreparedStmt(ctx context.Context, prepStmt interface{}, param []expression.Expression) (sqlexec.RecordSet, error)
+	ExecutePreparedStmtByQuery(ctx context.Context, sql string, param []expression.Expression) (sqlexec.RecordSet, error)
 	DropPreparedStmt(stmtID uint32) error
 
 	// SetSessionStatesHandler sets SessionStatesHandler for type stateType.
@@ -2321,10 +2321,14 @@ func (s *session) ExecutePreparedStmtByID(ctx context.Context, stmtID uint32, ar
 		logutil.Logger(ctx).Error("prepared statement not found", zap.Uint32("stmtID", stmtID))
 		return nil, err
 	}
-	return s.ExecutePreparedStmt(ctx, prepStmt, args)
+	return s.executePreparedStmt(ctx, prepStmt, args)
 }
 
-func (s *session) ExecutePreparedStmt(ctx context.Context, prepStmt interface{}, args []expression.Expression) (sqlexec.RecordSet, error) {
+func (s *session) ExecutePreparedStmtByQuery(ctx context.Context, sql string, param []expression.Expression) (sqlexec.RecordSet, error) {
+	return nil, nil
+}
+
+func (s *session) executePreparedStmt(ctx context.Context, prepStmt interface{}, args []expression.Expression) (sqlexec.RecordSet, error) {
 	preparedStmt, ok := prepStmt.(*plannercore.CachedPrepareStmt)
 	if !ok {
 		return nil, errors.Errorf("invalid CachedPrepareStmt type")
