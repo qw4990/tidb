@@ -20,6 +20,7 @@ import (
 	"crypto/tls"
 	"encoding/binary"
 	"fmt"
+	"github.com/pingcap/tidb/util/kvcache"
 	"math"
 	"math/rand"
 	"net"
@@ -574,6 +575,8 @@ type SessionVars struct {
 	SysWarningCount int
 	// SysErrorCount is the system variable "error_count", because it is on the hot path, so we extract it from the systems
 	SysErrorCount uint16
+	// generalStmtsCache stores CachedPreparedStmt for general plan cache
+	generalStmtsCache *kvcache.SimpleLRUCache
 	// PreparedStmts stores prepared statement.
 	PreparedStmts        map[uint32]interface{}
 	PreparedStmtNameToID map[string]uint32
@@ -1804,6 +1807,29 @@ func (s *SessionVars) setDDLReorgPriority(val string) {
 	default:
 		s.DDLReorgPriority = kv.PriorityLow
 	}
+}
+
+type generalStmtKey string
+
+func (g generalStmtKey) Hash() []byte {
+	return []byte(g)
+}
+
+// AddGeneralStmt ...
+func (s *SessionVars) AddGeneralStmt(sql string, stmt interface{}) {
+	if s.generalStmtsCache == nil {
+		// TODO: make it configurable
+		s.generalStmtsCache = kvcache.NewSimpleLRUCache(1000, 0, 0)
+	}
+	s.generalStmtsCache.Put(generalStmtKey(sql), stmt)
+}
+
+// GetGeneralStmt ...
+func (s *SessionVars) GetGeneralStmt(sql string) (stmt interface{}, ok bool) {
+	if s.generalStmtsCache == nil {
+		return nil, false
+	}
+	return s.generalStmtsCache.Get(generalStmtKey(sql))
 }
 
 // AddPreparedStmt adds prepareStmt to current session and count in global.
