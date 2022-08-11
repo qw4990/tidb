@@ -126,10 +126,9 @@ func (cc *clientConn) handleStmtPrepare(ctx context.Context, sql string) error {
 	return cc.flush(ctx)
 }
 
-func (cc *clientConn) handleStmtExecute(ctx context.Context, data []byte) (err error) {
-	defer trace.StartRegion(ctx, "HandleStmtExecute").End()
+func (cc *clientConn) parseExecArgs(ctx context.Context, data []byte) (stmt PreparedStatement, args []expression.Expression, useCursor bool, err error) {
 	if len(data) < 9 {
-		return mysql.ErrMalformPacket
+		return nil, nil, false, mysql.ErrMalformPacket
 	}
 	pos := 0
 	stmtID := binary.LittleEndian.Uint32(data[0:4])
@@ -137,7 +136,7 @@ func (cc *clientConn) handleStmtExecute(ctx context.Context, data []byte) (err e
 
 	stmt := cc.ctx.GetStatement(int(stmtID))
 	if stmt == nil {
-		return mysql.NewErr(mysql.ErrUnknownStmtHandler,
+		return nil, nil, false, mysql.NewErr(mysql.ErrUnknownStmtHandler,
 			strconv.FormatUint(uint64(stmtID), 10), "stmt_execute")
 	}
 
@@ -146,15 +145,15 @@ func (cc *clientConn) handleStmtExecute(ctx context.Context, data []byte) (err e
 	// Please refer to https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_com_stmt_execute.html
 	// The client indicates that it wants to use cursor by setting this flag.
 	// Now we only support forward-only, read-only cursor.
-	useCursor := false
+	useCursor = false
 	if flag&mysql.CursorTypeReadOnly > 0 {
 		useCursor = true
 	}
 	if flag&mysql.CursorTypeForUpdate > 0 {
-		return mysql.NewErrf(mysql.ErrUnknown, "unsupported flag: CursorTypeForUpdate", nil)
+		return nil, nil, false, mysql.NewErrf(mysql.ErrUnknown, "unsupported flag: CursorTypeForUpdate", nil)
 	}
 	if flag&mysql.CursorTypeScrollable > 0 {
-		return mysql.NewErrf(mysql.ErrUnknown, "unsupported flag: CursorTypeScrollable", nil)
+		return nil, nil, false, mysql.NewErrf(mysql.ErrUnknown, "unsupported flag: CursorTypeScrollable", nil)
 	}
 
 	// skip iteration-count, always 1
@@ -167,11 +166,11 @@ func (cc *clientConn) handleStmtExecute(ctx context.Context, data []byte) (err e
 	)
 	cc.initInputEncoder(ctx)
 	numParams := stmt.NumParams()
-	args := make([]expression.Expression, numParams)
+	args = make([]expression.Expression, numParams)
 	if numParams > 0 {
 		nullBitmapLen := (numParams + 7) >> 3
 		if len(data) < (pos + nullBitmapLen + 1) {
-			return mysql.ErrMalformPacket
+			return nil, nil, false, mysql.ErrMalformPacket
 		}
 		nullBitmaps = data[pos : pos+nullBitmapLen]
 		pos += nullBitmapLen
@@ -180,7 +179,7 @@ func (cc *clientConn) handleStmtExecute(ctx context.Context, data []byte) (err e
 		if data[pos] == 1 {
 			pos++
 			if len(data) < (pos + (numParams << 1)) {
-				return mysql.ErrMalformPacket
+				return nil, nil, false, mysql.ErrMalformPacket
 			}
 
 			paramTypes = data[pos : pos+(numParams<<1)]
@@ -196,9 +195,20 @@ func (cc *clientConn) handleStmtExecute(ctx context.Context, data []byte) (err e
 		err = parseExecArgs(cc.ctx.GetSessionVars().StmtCtx, args, stmt.BoundParams(), nullBitmaps, stmt.GetParamsType(), paramValues, cc.inputDecoder)
 		stmt.Reset()
 		if err != nil {
-			return errors.Annotate(err, cc.preparedStmt2String(stmtID))
+			return nil, nil, false, errors.Annotate(err, cc.preparedStmt2String(stmtID))
 		}
 	}
+	return stmt, args, useCursor, nil
+}
+
+func (cc *clientConn) handleStmtExecute(ctx context.Context, data []byte) (err error) {
+	defer trace.StartRegion(ctx, "HandleStmtExecute").End()
+
+	stmt, args, useCursor, err := cc.parseExecArgs(ctx, data)
+	if err != nil {
+		return err
+	}
+
 	ctx = context.WithValue(ctx, execdetails.StmtExecDetailKey, &execdetails.StmtExecDetails{})
 	ctx = context.WithValue(ctx, util.ExecDetailsKey, &util.ExecDetails{})
 	retryable, err := cc.executePreparedStmtAndWriteResult(ctx, stmt, args, useCursor)
