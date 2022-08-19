@@ -3560,7 +3560,7 @@ func (n *TableOptimizerHint) Restore(ctx *format.RestoreCtx) error {
 	}
 	// Hints without args except query block.
 	switch n.HintName.L {
-	case "hash_agg", "stream_agg", "agg_to_cop", "mpp_1phase_agg", "mpp_2phase_agg", "debug",
+	case "hash_agg", "stream_agg", "agg_to_cop", "mpp_1phase_agg", "mpp_2phase_agg", "mpp_tidb_agg", "mpp_scalar_agg", "debug",
 		"read_consistent_replica", "no_index_merge", "qb_name", "ignore_plan_cache", "limit_to_cop", "straight_join", "merge":
 		ctx.WritePlain(")")
 		return nil
