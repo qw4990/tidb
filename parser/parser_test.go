@@ -4182,6 +4182,16 @@ func TestOptimizerHints(t *testing.T) {
 	require.Equal(t, "hash_agg", hints[0].HintName.L)
 	require.Equal(t, "hash_agg", hints[1].HintName.L)
 
+	// Test DEBUG
+	stmt, _, err = p.Parse("select /*+ DEBUG(), debug() */ c1, c2 from t1, t2 where t1.c1 = t2.c1", "", "")
+	require.NoError(t, err)
+	selectStmt = stmt[0].(*ast.SelectStmt)
+
+	hints = selectStmt.TableHints
+	require.Len(t, hints, 2)
+	require.Equal(t, "debug", hints[0].HintName.L)
+	require.Equal(t, "debug", hints[1].HintName.L)
+
 	// Test MPPAgg
 	stmt, _, err = p.Parse("select /*+ MPP_1PHASE_AGG(), mpp_1phase_agg() */ c1, c2 from t1, t2 where t1.c1 = t2.c1", "", "")
 	require.NoError(t, err)
