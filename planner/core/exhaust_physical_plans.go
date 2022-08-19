@@ -2621,6 +2621,9 @@ func (la *LogicalAggregation) tryToGetMppHashAggs(prop *property.PhysicalPropert
 			agg := NewPhysicalHashAgg(la, la.stats.ScaleByExpectCnt(prop.ExpectedCnt), childProp)
 			agg.SetSchema(la.schema.Clone())
 			agg.MppRunMode = Mpp1Phase
+			if la.aggHints.preferAggType&preferMPP1PhaseAgg > 0 {
+				return []PhysicalPlan{agg}
+			}
 			hashAggs = append(hashAggs, agg)
 		}
 
@@ -2635,6 +2638,9 @@ func (la *LogicalAggregation) tryToGetMppHashAggs(prop *property.PhysicalPropert
 		agg.SetSchema(la.schema.Clone())
 		agg.MppRunMode = Mpp2Phase
 		agg.MppPartitionCols = partitionCols
+		if la.aggHints.preferAggType&preferMPP2PhaseAgg > 0 {
+			return []PhysicalPlan{agg}
+		}
 		hashAggs = append(hashAggs, agg)
 
 		// agg runs on TiDB with a partial agg on TiFlash if possible
