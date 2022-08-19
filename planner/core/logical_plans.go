@@ -120,6 +120,8 @@ const (
 	preferRewriteSemiJoin
 	preferHashAgg
 	preferStreamAgg
+	preferMPP1PhaseAgg
+	preferMPP2PhaseAgg
 )
 
 const (

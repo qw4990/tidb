@@ -94,7 +94,9 @@ const (
 	// HintHashAgg is hint enforce hash aggregation.
 	HintHashAgg = "hash_agg"
 	// HintStreamAgg is hint enforce stream aggregation.
-	HintStreamAgg = "stream_agg"
+	HintStreamAgg    = "stream_agg"
+	HintMPP1PhaseAgg = "mpp_1phase_agg"
+	HintMPP2PhaseAgg = "mpp_2phase_agg"
 	// HintUseIndex is hint enforce using some indexes.
 	HintUseIndex = "use_index"
 	// HintIgnoreIndex is hint enforce ignoring some indexes.
@@ -3556,6 +3558,10 @@ func (b *PlanBuilder) pushTableHints(hints []*ast.TableOptimizerHint, currentLev
 			INLMJTables = append(INLMJTables, tableNames2HintTableInfo(b.ctx, hint.HintName.L, hint.Tables, b.hintProcessor, currentLevel)...)
 		case TiDBHashJoin, HintHJ:
 			hashJoinTables = append(hashJoinTables, tableNames2HintTableInfo(b.ctx, hint.HintName.L, hint.Tables, b.hintProcessor, currentLevel)...)
+		case HintMPP1PhaseAgg:
+			aggHints.preferAggType |= preferMPP1PhaseAgg
+		case HintMPP2PhaseAgg:
+			aggHints.preferAggType |= preferMPP2PhaseAgg
 		case HintHashAgg:
 			aggHints.preferAggType |= preferHashAgg
 		case HintStreamAgg:
