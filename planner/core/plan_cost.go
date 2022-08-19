@@ -1098,6 +1098,9 @@ func (p *PhysicalHashAgg) GetCost(inputRows float64, isRoot, isMPP bool, costFla
 	} else {
 		cpuCost = inputRows * sessVars.GetCopCPUFactor() * aggFuncFactor
 	}
+
+	// TODO: cost to construct and probe hash table
+
 	memoryCost := cardinality * sessVars.GetMemoryFactor() * float64(len(p.AggFuncs))
 	costDebug(p, "card(%v), memFac(%v), aggFuncs(%v)", cardinality, sessVars.GetMemoryFactor(), float64(len(p.AggFuncs)))
 	// When aggregation has distinct flag, we would allocate a map for each group to
