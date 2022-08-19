@@ -2596,6 +2596,28 @@ func (la *LogicalAggregation) tryToGetMppHashAggs(prop *property.PhysicalPropert
 		return nil
 	}
 
+	defer func() {
+		var mppMode AggMppRunMode
+		var preMode bool
+		if la.aggHints.preferAggType&preferMPP1PhaseAgg > 0 {
+			preMode = true
+			mppMode = Mpp1Phase
+		} else if la.aggHints.preferAggType&preferMPP2PhaseAgg > 0 {
+			preMode = true
+			mppMode = Mpp2Phase
+		}
+		if preMode {
+			var tmp []PhysicalPlan
+			for _, agg := range hashAggs {
+				hg := agg.(*PhysicalHashAgg)
+				if hg.MppRunMode == mppMode {
+					tmp = append(tmp, agg)
+				}
+			}
+			hashAggs = tmp
+		}
+	}()
+
 	// Is this aggregate a final stage aggregate?
 	// Final agg can't be split into multi-stage aggregate
 	hasFinalAgg := len(la.AggFuncs) > 0 && la.AggFuncs[0].Mode == aggregation.FinalMode
@@ -2621,9 +2643,6 @@ func (la *LogicalAggregation) tryToGetMppHashAggs(prop *property.PhysicalPropert
 			agg := NewPhysicalHashAgg(la, la.stats.ScaleByExpectCnt(prop.ExpectedCnt), childProp)
 			agg.SetSchema(la.schema.Clone())
 			agg.MppRunMode = Mpp1Phase
-			if la.aggHints.preferAggType&preferMPP1PhaseAgg > 0 {
-				return []PhysicalPlan{agg}
-			}
 			hashAggs = append(hashAggs, agg)
 		}
 
@@ -2638,9 +2657,6 @@ func (la *LogicalAggregation) tryToGetMppHashAggs(prop *property.PhysicalPropert
 		agg.SetSchema(la.schema.Clone())
 		agg.MppRunMode = Mpp2Phase
 		agg.MppPartitionCols = partitionCols
-		if la.aggHints.preferAggType&preferMPP2PhaseAgg > 0 {
-			return []PhysicalPlan{agg}
-		}
 		hashAggs = append(hashAggs, agg)
 
 		// agg runs on TiDB with a partial agg on TiFlash if possible
