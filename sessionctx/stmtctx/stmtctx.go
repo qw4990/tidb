@@ -199,6 +199,7 @@ type StatementContext struct {
 	TableIDs         []int64
 	IndexNames       []string
 	StmtType         string
+	DEBUG            bool
 	OriginalSQL      string
 	digestMemo       struct {
 		sync.Once
