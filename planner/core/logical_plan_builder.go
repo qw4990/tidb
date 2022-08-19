@@ -97,6 +97,8 @@ const (
 	HintStreamAgg    = "stream_agg"
 	HintMPP1PhaseAgg = "mpp_1phase_agg"
 	HintMPP2PhaseAgg = "mpp_2phase_agg"
+	HintMPPTiDBAgg   = "mpp_tidb_agg"
+	HintMPPScalarAgg = "mpp_scalar_agg"
 	HintDEBUG        = "debug"
 	// HintUseIndex is hint enforce using some indexes.
 	HintUseIndex = "use_index"
@@ -3565,6 +3567,10 @@ func (b *PlanBuilder) pushTableHints(hints []*ast.TableOptimizerHint, currentLev
 			aggHints.preferAggType |= preferMPP1PhaseAgg
 		case HintMPP2PhaseAgg:
 			aggHints.preferAggType |= preferMPP2PhaseAgg
+		case HintMPPTiDBAgg:
+			aggHints.preferAggType |= preferMPPTiDBAgg
+		case HintMPPScalarAgg:
+			aggHints.preferAggType |= preferMPPScalarAgg
 		case HintHashAgg:
 			aggHints.preferAggType |= preferHashAgg
 		case HintStreamAgg:

@@ -2605,6 +2605,12 @@ func (la *LogicalAggregation) tryToGetMppHashAggs(prop *property.PhysicalPropert
 		} else if la.aggHints.preferAggType&preferMPP2PhaseAgg > 0 {
 			preMode = true
 			mppMode = Mpp2Phase
+		} else if la.aggHints.preferAggType&preferMPPTiDBAgg > 0 {
+			preMode = true
+			mppMode = MppTiDB
+		} else if la.aggHints.preferAggType&preferMPPScalarAgg > 0 {
+			preMode = true
+			mppMode = MppScalar
 		}
 		if preMode {
 			var tmp []PhysicalPlan

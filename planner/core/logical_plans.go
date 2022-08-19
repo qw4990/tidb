@@ -122,8 +122,8 @@ const (
 	preferStreamAgg
 	preferMPP1PhaseAgg
 	preferMPP2PhaseAgg
-	preferTiDBAgg
-	preferScalarAgg
+	preferMPPTiDBAgg
+	preferMPPScalarAgg
 )
 
 const (
