@@ -1115,7 +1115,8 @@ func costDebug(p PhysicalPlan, format string, args ...interface{}) {
 	if !p.SCtx().GetSessionVars().StmtCtx.DEBUG {
 		return
 	}
-	fmt.Printf("[COST-DEBUG-ver%v] %v %v\n", p.SCtx().GetSessionVars().CostModelVersion, p.ExplainID().String(), fmt.Sprintf(format, args...))
+	msg := fmt.Sprintf("[COST-DEBUG-ver%v] %v %v", p.SCtx().GetSessionVars().CostModelVersion, p.ExplainID().String(), fmt.Sprintf(format, args...))
+	p.SCtx().GetSessionVars().StmtCtx.AppendNote(errors.New(msg))
 }
 
 // GetPlanCost calculates the cost of the plan if it has not been calculated yet and returns the cost.
