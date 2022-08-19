@@ -15,6 +15,7 @@
 package core
 
 import (
+	"fmt"
 	"math"
 
 	"github.com/pingcap/errors"
@@ -1099,7 +1100,17 @@ func (p *PhysicalHashAgg) GetCost(inputRows float64, isRoot, isMPP bool, costFla
 	// When aggregation has distinct flag, we would allocate a map for each group to
 	// check duplication.
 	memoryCost += inputRows * distinctFactor * sessVars.GetMemoryFactor() * float64(numDistinctFunc)
+
+	costDebug(p, "cpuCost(%v), memCost(%v)", cpuCost, memoryCost)
+
 	return cpuCost + memoryCost
+}
+
+func costDebug(p PhysicalPlan, format string, args ...interface{}) {
+	if !p.SCtx().GetSessionVars().StmtCtx.DEBUG {
+		return
+	}
+	fmt.Printf("[COST-DEBUG] %v %v\n", p.ExplainID().String(), fmt.Sprintf(format, args...))
 }
 
 // GetPlanCost calculates the cost of the plan if it has not been calculated yet and returns the cost.
