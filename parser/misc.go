@@ -921,6 +921,8 @@ var hintTokenMap = map[string]int{
 	"LIMIT_TO_COP":            hintLimitToCop,
 	"IGNORE_PLAN_CACHE":       hintIgnorePlanCache,
 	"HASH_AGG":                hintHashAgg,
+	"MPP_1PHASE_AGG":          hintMpp1PhaseAgg,
+	"MPP_2PHASE_AGG":          hintMpp2PhaseAgg,
 	"IGNORE_INDEX":            hintIgnoreIndex,
 	"INL_HASH_JOIN":           hintInlHashJoin,
 	"INL_JOIN":                hintInlJoin,
