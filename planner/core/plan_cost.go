@@ -1090,16 +1090,21 @@ func (p *PhysicalHashAgg) GetCost(inputRows float64, isRoot, isMPP bool, costFla
 		if p.ctx.GetSessionVars().CostModelVersion == modelVer2 {
 			// use the dedicated CPU factor for TiFlash on modelVer2
 			cpuCost = inputRows * sessVars.GetTiFlashCPUFactor() * aggFuncFactor
+			costDebug(p, "rows(%v), tiflashCPU(%v), aggFac(%v)", inputRows, sessVars.GetTiFlashCPUFactor(), aggFuncFactor)
 		} else {
 			cpuCost = inputRows * sessVars.GetCopCPUFactor() * aggFuncFactor
+			costDebug(p, "rows(%v), copCPU(%v), aggFac(%v)", inputRows, sessVars.GetCopCPUFactor(), aggFuncFactor)
 		}
 	} else {
 		cpuCost = inputRows * sessVars.GetCopCPUFactor() * aggFuncFactor
 	}
 	memoryCost := cardinality * sessVars.GetMemoryFactor() * float64(len(p.AggFuncs))
+	costDebug(p, "card(%v), memFac(%v), aggFuncs(%v)", cardinality, sessVars.GetMemoryFactor(), float64(len(p.AggFuncs)))
 	// When aggregation has distinct flag, we would allocate a map for each group to
 	// check duplication.
 	memoryCost += inputRows * distinctFactor * sessVars.GetMemoryFactor() * float64(numDistinctFunc)
+	costDebug(p, "rows(%v), distFac(%v), memFac(%v), distFuncs(%v)",
+		inputRows, distinctFactor, sessVars.GetMemoryFactor(), float64(numDistinctFunc))
 
 	costDebug(p, "cpuCost(%v), memCost(%v)", cpuCost, memoryCost)
 
@@ -1110,7 +1115,7 @@ func costDebug(p PhysicalPlan, format string, args ...interface{}) {
 	if !p.SCtx().GetSessionVars().StmtCtx.DEBUG {
 		return
 	}
-	fmt.Printf("[COST-DEBUG] %v %v\n", p.ExplainID().String(), fmt.Sprintf(format, args...))
+	fmt.Printf("[COST-DEBUG-ver%v] %v %v\n", p.SCtx().GetSessionVars().CostModelVersion, p.ExplainID().String(), fmt.Sprintf(format, args...))
 }
 
 // GetPlanCost calculates the cost of the plan if it has not been calculated yet and returns the cost.
@@ -1348,9 +1353,18 @@ func (p *PhysicalExchangeReceiver) GetPlanCost(taskType property.TaskType, optio
 	// accumulate net cost
 	if p.ctx.GetSessionVars().CostModelVersion == modelVer1 {
 		p.planCost += getCardinality(p.children[0], costFlag) * p.ctx.GetSessionVars().GetNetworkFactor(nil)
+		costDebug(p, "rows(%v), netFac(%v), cost(%v)",
+			getCardinality(p.children[0], costFlag),
+			p.ctx.GetSessionVars().GetNetworkFactor(nil),
+			getCardinality(p.children[0], costFlag)*p.ctx.GetSessionVars().GetNetworkFactor(nil))
 	} else { // to avoid regression, only consider row-size on model ver2
 		rowSize := getTblStats(p.children[0]).GetAvgRowSize(p.ctx, p.children[0].Schema().Columns, false, false)
 		p.planCost += getCardinality(p.children[0], costFlag) * rowSize * p.ctx.GetSessionVars().GetNetworkFactor(nil)
+		costDebug(p, "rows(%v), rowSize(%v), netFac(%v), cost(%v)",
+			getCardinality(p.children[0], costFlag),
+			rowSize,
+			p.ctx.GetSessionVars().GetNetworkFactor(nil),
+			getCardinality(p.children[0], costFlag)*rowSize*p.ctx.GetSessionVars().GetNetworkFactor(nil))
 	}
 	p.planCostInit = true
 	return p.planCost, nil
