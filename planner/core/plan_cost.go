@@ -964,8 +964,10 @@ func (p *PhysicalHashJoin) GetCost(lCnt, rCnt float64, isMPP bool, costFlag uint
 	spill := oomUseTmpStorage && memQuota > 0 && rowSize*buildCnt > float64(memQuota) && p.storeTp != kv.TiFlash
 	// Cost of building hash table.
 	cpuFactor := sessVars.GetCPUFactor()
+	cpuFactorName := variable.TiDBOptCPUFactorV2
 	if isMPP && p.ctx.GetSessionVars().CostModelVersion == modelVer2 {
 		cpuFactor = sessVars.GetTiFlashCPUFactor() // use the dedicated TiFlash CPU Factor on modelVer2
+		cpuFactorName = variable.TiDBOptTiFlashCPUFactorV2
 	}
 	diskFactor := sessVars.GetDiskFactor()
 	memoryFactor := sessVars.GetMemoryFactor()
@@ -1041,6 +1043,9 @@ func (p *PhysicalHashJoin) GetCost(lCnt, rCnt float64, isMPP bool, costFlag uint
 			diskFactor, memoryFactor, concurrencyFactor,
 			memQuota)
 	}
+	recordFactorCost(p, costFlag, cpuFactorName, cpuCost)
+	recordFactorCost(p, costFlag, variable.TiDBOptMemoryFactorV2, memoryCost)
+	recordFactorCost(p, costFlag, variable.TiDBOptDiskFactorV2, diskCost)
 	return cpuCost + memoryCost + diskCost
 }
 
@@ -1501,4 +1506,11 @@ func getTableNetFactor(copTaskPlan PhysicalPlan) float64 {
 		}
 		return getTableNetFactor(x.Children()[0])
 	}
+}
+
+func recordFactorCost(p PhysicalPlan, costFlag uint64, factor string, cost float64) {
+	if p.SCtx().GetSessionVars().CostModelVersion != 2 || !hasCostFlag(costFlag, CostFlagUseTrueCardinality) {
+		return
+	}
+	p.RecordFactorCost(factor, cost)
 }
