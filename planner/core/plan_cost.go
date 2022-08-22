@@ -1110,6 +1110,7 @@ func (p *PhysicalHashAgg) GetCost(inputRows float64, isRoot, isMPP bool, costFla
 		cpuCost = inputRows * sessVars.GetCopCPUFactor() * aggFuncFactor
 	}
 
+	// cost of building and probing the hash table
 	if p.ctx.GetSessionVars().CostModelVersion == 2 && len(p.GroupByItems) > 0 {
 		hashTableFactor := sessVars.GetHashTableFactor()
 		if isMPP {
