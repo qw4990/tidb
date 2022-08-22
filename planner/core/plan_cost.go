@@ -1099,7 +1099,9 @@ func (p *PhysicalHashAgg) GetCost(inputRows float64, isRoot, isMPP bool, costFla
 		cpuCost = inputRows * sessVars.GetCopCPUFactor() * aggFuncFactor
 	}
 
-	// TODO: cost to construct and probe hash table
+	if p.ctx.GetSessionVars().CostModelVersion == 2 && len(p.GroupByItems) > 0 {
+		// TODO: cost to construct and probe hash table
+	}
 
 	memoryCost := cardinality * sessVars.GetMemoryFactor() * float64(len(p.AggFuncs))
 	costDebug(p, "card(%v), memFac(%v), aggFuncs(%v)", cardinality, sessVars.GetMemoryFactor(), float64(len(p.AggFuncs)))
