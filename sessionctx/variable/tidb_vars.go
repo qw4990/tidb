@@ -291,6 +291,10 @@ const (
 	TiDBOptCopCPUFactorV2 = "tidb_opt_copcpu_factor_v2"
 	// TiDBOptTiFlashCPUFactorV2 is the TiFlashCPU factor for the Cost Model Ver2
 	TiDBOptTiFlashCPUFactorV2 = "tidb_opt_tiflash_cpu_factor_v2"
+	// TiDBOptHashTableFactorV2 ...
+	TiDBOptHashTableFactorV2 = "tidb_opt_hash_table_factor_v2"
+	// TiDBOptTiFlashHashTableFactorV2 ...
+	TiDBOptTiFlashHashTableFactorV2 = "tidb_opt_tiflash_hash_table_factor_v2"
 	// TiDBOptNetworkFactorV2 is the network factor for the Cost Model Ver2
 	TiDBOptNetworkFactorV2 = "tidb_opt_network_factor_v2"
 	// TiDBOptScanFactorV2 is the scan factor for the Cost Model Ver2
@@ -847,6 +851,8 @@ const (
 	DefOptCPUFactorV2                              = 30.0
 	DefOptCopCPUFactorV2                           = 30.0
 	DefOptTiFlashCPUFactorV2                       = 2.0
+	DefOptHashTableFactorV2                        = 100
+	DefOptTiFlashHashTableFactorV2                 = 30
 	DefOptNetworkFactorV2                          = 4.0
 	DefOptScanFactorV2                             = 100.0
 	DefOptDescScanFactorV2                         = 150.0

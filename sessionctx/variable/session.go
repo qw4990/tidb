@@ -797,6 +797,10 @@ type SessionVars struct {
 	copCPUFactorV2 float64
 	// tiflashCPUFactorV2 is the cop-cpu factor for the Cost Model Ver2.
 	tiflashCPUFactorV2 float64
+	// hashTableFactorV2 ...
+	hashTableFactorV2 float64
+	// tiflashHashTableFactorV2 ...
+	tiflashHashTableFactorV2 float64
 	// networkFactorV2 is the network factor for the Cost Model Ver2.
 	networkFactorV2 float64
 	// scanFactorV2 is the scan factor for the Cost Model Ver2.
@@ -2840,6 +2844,16 @@ func (s *SessionVars) GetCopCPUFactor() float64 {
 // GetTiFlashCPUFactor returns the session
 func (s *SessionVars) GetTiFlashCPUFactor() float64 {
 	return s.tiflashCPUFactorV2
+}
+
+// GetHashTableFactor ...
+func (s *SessionVars) GetHashTableFactor() float64 {
+	return s.hashTableFactorV2
+}
+
+// GetTiFlashHashTableFactor ...
+func (s *SessionVars) GetTiFlashHashTableFactor() float64 {
+	return s.tiflashHashTableFactorV2
 }
 
 // GetMemoryFactor returns the session variable memoryFactor
