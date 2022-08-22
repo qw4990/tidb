@@ -1111,6 +1111,7 @@ func (p *PhysicalHashAgg) GetCost(inputRows float64, isRoot, isMPP bool, costFla
 	}
 
 	// cost of building and probing the hash table
+	var hashTableCost float64
 	if p.ctx.GetSessionVars().CostModelVersion == 2 && len(p.GroupByItems) > 0 {
 		hashTableFactor := sessVars.GetHashTableFactor()
 		if isMPP {
@@ -1123,7 +1124,7 @@ func (p *PhysicalHashAgg) GetCost(inputRows float64, isRoot, isMPP bool, costFla
 		if isRoot {
 			probeCost /= sessVars.GetConcurrencyFactor()
 		}
-		cpuCost += buildCost + probeCost
+		hashTableCost = buildCost + probeCost
 	}
 
 	memoryCost := cardinality * sessVars.GetMemoryFactor() * float64(len(p.AggFuncs))
@@ -1134,9 +1135,9 @@ func (p *PhysicalHashAgg) GetCost(inputRows float64, isRoot, isMPP bool, costFla
 	costDebug(p, "rows(%v), distFac(%v), memFac(%v), distFuncs(%v)",
 		inputRows, distinctFactor, sessVars.GetMemoryFactor(), float64(numDistinctFunc))
 
-	costDebug(p, "cpuCost(%v), memCost(%v)", cpuCost, memoryCost)
+	costDebug(p, "cpuCost(%v), memCost(%v), hashTableCost(%v)", cpuCost, memoryCost, hashTableCost)
 
-	return cpuCost + memoryCost
+	return cpuCost + memoryCost + hashTableCost
 }
 
 func costDebug(p PhysicalPlan, format string, args ...interface{}) {
