@@ -366,6 +366,12 @@ type PhysicalPlan interface {
 	// Deprecated: use the new method GetPlanCost
 	Cost() float64
 
+	// RecordCostWeight ...
+	RecordCostWeight(weight float64, factor string)
+
+	// CostWeights ...
+	CostWeights() map[string]float64
+
 	// SetCost set the cost of the subplan.
 	// Deprecated: use the new method GetPlanCost
 	SetCost(cost float64)
@@ -460,6 +466,7 @@ type basePhysicalPlan struct {
 	// used by the new cost interface
 	planCostInit bool
 	planCost     float64
+	costWeights  map[string]float64
 
 	// Only for MPP. If TiFlashFineGrainedShuffleStreamCount > 0:
 	// 1. For ExchangeSender, means its output will be partitioned by hash key.

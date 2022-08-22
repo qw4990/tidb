@@ -64,6 +64,26 @@ func (p *basePhysicalPlan) GetPlanCost(taskType property.TaskType, option *PlanC
 	return p.planCost, nil
 }
 
+// RecordCostWeight ...
+func (p *basePhysicalPlan) RecordCostWeight(weight float64, factor string) {
+	if p.costWeights == nil {
+		p.costWeights = make(map[string]float64)
+	}
+	p.costWeights[factor] += weight
+}
+
+// CostWeights ...
+func (p *basePhysicalPlan) CostWeights() map[string]float64 {
+	weights := make(map[string]float64)
+	for _, child := range p.children {
+		for k, v := range child.CostWeights() {
+			weights[k] += v
+		}
+	}
+	// TODO:
+	return weights
+}
+
 // GetPlanCost calculates the cost of the plan if it has not been calculated yet and returns the cost.
 func (p *PhysicalSelection) GetPlanCost(taskType property.TaskType, option *PlanCostOption) (float64, error) {
 	costFlag := option.CostFlag
@@ -1303,6 +1323,13 @@ func (p *BatchPointGetPlan) GetAvgRowSize() float64 {
 	return p.stats.HistColl.GetIndexAvgRowSize(p.ctx, cols, p.IndexInfo.Unique)
 }
 
+// RecordCostWeight ...
+func (p *BatchPointGetPlan) RecordCostWeight(weight float64, factor string) {
+}
+
+// CostWeights ...
+func (p *BatchPointGetPlan) CostWeights() map[string]float64 { return nil }
+
 // GetCost returns cost of the PointGetPlan.
 func (p *PointGetPlan) GetCost(opt *physicalOptimizeOp) float64 {
 	cols := p.accessCols
@@ -1350,6 +1377,13 @@ func (p *PointGetPlan) GetAvgRowSize() float64 {
 	}
 	return p.stats.HistColl.GetIndexAvgRowSize(p.ctx, cols, p.IndexInfo.Unique)
 }
+
+// RecordCostWeight ...
+func (p *PointGetPlan) RecordCostWeight(weight float64, factor string) {
+}
+
+// CostWeights ...
+func (p *PointGetPlan) CostWeights() map[string]float64 { return nil }
 
 // GetPlanCost calculates the cost of the plan if it has not been calculated yet and returns the cost.
 func (p *PhysicalUnionAll) GetPlanCost(taskType property.TaskType, option *PlanCostOption) (float64, error) {
