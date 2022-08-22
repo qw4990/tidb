@@ -64,19 +64,19 @@ func (p *basePhysicalPlan) GetPlanCost(taskType property.TaskType, option *PlanC
 	return p.planCost, nil
 }
 
-// RecordCostWeight ...
-func (p *basePhysicalPlan) RecordCostWeight(weight float64, factor string) {
+// RecordFactorCost ...
+func (p *basePhysicalPlan) RecordFactorCost(factor string, weight float64) {
 	if p.costWeights == nil {
 		p.costWeights = make(map[string]float64)
 	}
 	p.costWeights[factor] += weight
 }
 
-// CostWeights ...
-func (p *basePhysicalPlan) CostWeights() map[string]float64 {
+// FactorCosts ...
+func (p *basePhysicalPlan) FactorCosts() map[string]float64 {
 	weights := make(map[string]float64)
 	for _, child := range p.children {
-		for k, v := range child.CostWeights() {
+		for k, v := range child.FactorCosts() {
 			weights[k] += v
 		}
 	}

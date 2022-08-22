@@ -366,11 +366,11 @@ type PhysicalPlan interface {
 	// Deprecated: use the new method GetPlanCost
 	Cost() float64
 
-	// RecordCostWeight ...
-	RecordCostWeight(weight float64, factor string)
+	// RecordFactorCost ...
+	RecordFactorCost(factor string, cost float64)
 
-	// CostWeights ...
-	CostWeights() map[string]float64
+	// FactorCosts ...
+	FactorCosts() map[string]float64
 
 	// SetCost set the cost of the subplan.
 	// Deprecated: use the new method GetPlanCost
