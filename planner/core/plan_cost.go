@@ -1111,25 +1111,18 @@ func (p *PhysicalHashAgg) GetCost(inputRows float64, isRoot, isMPP bool, costFla
 	}
 
 	if p.ctx.GetSessionVars().CostModelVersion == 2 && len(p.GroupByItems) > 0 {
-		var cpuFactor float64
-		if isRoot {
-			cpuFactor = sessVars.GetCPUFactor()
-		} else if isMPP {
-			cpuFactor = sessVars.GetTiFlashCPUFactor()
-		} else {
-			cpuFactor = sessVars.GetCopCPUFactor()
+		hashTableFactor := sessVars.GetHashTableFactor()
+		if isMPP {
+			hashTableFactor = sessVars.GetTiFlashHashTableFactor()
 		}
-		// cost of calculating hash keys
-		hashKeyCost := inputRows * cpuFactor * float64(len(p.GroupByItems))
 		// cost of building the hash table
-		buildCost := cardinality * cpuFactor
+		buildCost := cardinality * hashTableFactor
 		// cost of probing the hash table
-		probeCost := inputRows * cpuFactor
+		probeCost := inputRows * hashTableFactor
 		if isRoot {
 			probeCost /= sessVars.GetConcurrencyFactor()
 		}
-
-		cpuCost += hashKeyCost + buildCost + probeCost
+		cpuCost += buildCost + probeCost
 	}
 
 	memoryCost := cardinality * sessVars.GetMemoryFactor() * float64(len(p.AggFuncs))
