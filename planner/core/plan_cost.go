@@ -1381,8 +1381,7 @@ func (p *BatchPointGetPlan) GetAvgRowSize() float64 {
 func (p *BatchPointGetPlan) RecordFactorCost(factor string, weight float64) {
 }
 
-// CostWeights ...
-func (p *BatchPointGetPlan) CostWeights() map[string]float64 { return nil }
+func (p *BatchPointGetPlan) FactorCosts() map[string]float64 { return nil }
 
 // GetCost returns cost of the PointGetPlan.
 func (p *PointGetPlan) GetCost(opt *physicalOptimizeOp) float64 {
@@ -1435,8 +1434,7 @@ func (p *PointGetPlan) GetAvgRowSize() float64 {
 func (p *PointGetPlan) RecordFactorCost(factor string, weight float64) {
 }
 
-// CostWeights ...
-func (p *PointGetPlan) CostWeights() map[string]float64 { return nil }
+func (p *PointGetPlan) FactorCosts() map[string]float64 { return nil }
 
 // GetPlanCost calculates the cost of the plan if it has not been calculated yet and returns the cost.
 func (p *PhysicalUnionAll) GetPlanCost(taskType property.TaskType, option *PlanCostOption) (float64, error) {
