@@ -17,6 +17,7 @@ package core
 import (
 	"bytes"
 	"fmt"
+	"github.com/pingcap/tidb/sessionctx/variable"
 	"math"
 	"strconv"
 	"strings"
@@ -565,6 +566,62 @@ func (e *Explain) prepareSchema() error {
 	return nil
 }
 
+func costWeights(sctx sessionctx.Context, costs map[string]float64) string {
+	weights := make(map[string]float64)
+	for k, v := range costs {
+		var factor float64
+		switch k {
+		case variable.TiDBOptCPUFactorV2:
+			factor = sctx.GetSessionVars().GetCPUFactor()
+		case variable.TiDBOptCopCPUFactorV2:
+			factor = sctx.GetSessionVars().GetCopCPUFactor()
+		case variable.TiDBOptTiFlashCPUFactorV2:
+			factor = sctx.GetSessionVars().GetTiFlashCPUFactor()
+		case variable.TiDBOptHashTableFactorV2:
+			factor = sctx.GetSessionVars().GetHashTableFactor()
+		case variable.TiDBOptTiFlashHashTableFactorV2:
+			factor = sctx.GetSessionVars().GetTiFlashHashTableFactor()
+		case variable.TiDBOptNetworkFactorV2:
+			factor = sctx.GetSessionVars().GetNetworkFactor(nil)
+		case variable.TiDBOptScanFactorV2:
+			factor = sctx.GetSessionVars().GetScanFactor(nil)
+		case variable.TiDBOptDescScanFactorV2:
+			factor = sctx.GetSessionVars().GetDescScanFactor(nil)
+		case variable.TiDBOptTiFlashScanFactorV2:
+			factor = sctx.GetSessionVars().GetTiFlashScanFactor()
+		case variable.TiDBOptSeekFactorV2:
+			factor = sctx.GetSessionVars().GetSeekFactor(nil)
+		case variable.TiDBOptMemoryFactorV2:
+			factor = sctx.GetSessionVars().GetMemoryFactor()
+		case variable.TiDBOptDiskFactorV2:
+			factor = sctx.GetSessionVars().GetDiskFactor()
+		case variable.TiDBOptConcurrencyFactorV2:
+			factor = sctx.GetSessionVars().GetConcurrencyFactor()
+		}
+		weights[k] = v / factor
+	}
+
+	var vals []string
+	for _, k := range []string{
+		variable.TiDBOptCPUFactorV2,
+		variable.TiDBOptCopCPUFactorV2,
+		variable.TiDBOptTiFlashCPUFactorV2,
+		variable.TiDBOptHashTableFactorV2,
+		variable.TiDBOptTiFlashHashTableFactorV2,
+		variable.TiDBOptNetworkFactorV2,
+		variable.TiDBOptScanFactorV2,
+		variable.TiDBOptDescScanFactorV2,
+		variable.TiDBOptTiFlashScanFactorV2,
+		variable.TiDBOptSeekFactorV2,
+		variable.TiDBOptMemoryFactorV2,
+		variable.TiDBOptDiskFactorV2,
+		variable.TiDBOptConcurrencyFactorV2,
+	} {
+		vals = append(vals, fmt.Sprintf("%v=%.4f", k, weights[k]))
+	}
+	return strings.Join(vals, ", ")
+}
+
 // RenderResult renders the explain result as specified format.
 func (e *Explain) RenderResult() error {
 	if e.TargetPlan == nil {
@@ -594,7 +651,7 @@ func (e *Explain) RenderResult() error {
 					"invalid cost trace result: %v", fc))
 			} else {
 				e.SCtx().GetSessionVars().StmtCtx.AppendWarning(errors.Errorf(
-					"valid cost trace result: %v", fc))
+					"valid cost trace result: %v", costWeights(e.ctx, fc)))
 			}
 		} else {
 			e.SCtx().GetSessionVars().StmtCtx.AppendWarning(errors.Errorf("'explain format=true_card_cost' cannot support this plan"))
