@@ -110,8 +110,9 @@ func recordCost(p PhysicalPlan, costFlag uint64, factor string, cost float64) {
 	if v.CostModelVersion != 2 {
 		return
 	}
-	if v.DistSQLScanConcurrency() > 1 || v.GetConcurrencyFactor() > 1 ||
-		v.IndexLookupConcurrency() > 1 || v.ExecutorConcurrency > 1 {
+	if v.DistSQLScanConcurrency() > 1 ||
+		v.IndexLookupConcurrency() > 1 ||
+		v.ExecutorConcurrency > 1 {
 		return
 	}
 	p.RecordFactorCost(factor, cost)
