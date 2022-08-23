@@ -566,6 +566,25 @@ func (e *Explain) prepareSchema() error {
 	return nil
 }
 
+func debugCosts(prefix string, p PhysicalPlan) {
+	fc := p.FactorCosts()
+	var sum float64
+	for _, c := range fc {
+		sum += c
+	}
+	fmt.Println(prefix, p.ExplainID().String(), sum)
+
+	for _, c := range p.Children() {
+		debugCosts(prefix+"  ", c)
+	}
+	switch x := p.(type) {
+	case *PhysicalIndexReader:
+		debugCosts(prefix+"  ", x.indexPlan)
+	case *PhysicalTableReader:
+		debugCosts(prefix+"  ", x.tablePlan)
+	}
+}
+
 func costWeights(sctx sessionctx.Context, costs map[string]float64) string {
 	weights := make(map[string]float64)
 	for k, v := range costs {
@@ -647,6 +666,7 @@ func (e *Explain) RenderResult() error {
 			delta := math.Abs(sum - planCost)
 			threshold := math.Max(100.0, planCost*0.05)
 			if delta > threshold {
+				debugCosts(">> ", pp)
 				e.SCtx().GetSessionVars().StmtCtx.AppendWarning(errors.Errorf(
 					"invalid cost trace result: %v", fc))
 			} else {
