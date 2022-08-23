@@ -1285,7 +1285,6 @@ func (p *PhysicalHashAgg) GetPlanCost(taskType property.TaskType, option *PlanCo
 		p.planCost += p.GetCost(statsCnt, false, false, costFlag)
 	case property.MppTaskType:
 		p.planCost += p.GetCost(statsCnt, false, true, costFlag)
-		costDebug(p, "child-%v(%v), self(%v), cost(%v)", p.children[0].ExplainID().String(), childCost, p.GetCost(statsCnt, false, true, costFlag), p.planCost)
 	default:
 		return 0, errors.Errorf("unknown task type %v", taskType)
 	}
