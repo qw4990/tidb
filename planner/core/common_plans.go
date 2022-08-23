@@ -645,7 +645,7 @@ func (e *Explain) RenderResult() error {
 				sum += c
 			}
 			delta := math.Abs(sum - planCost)
-			threshold := math.Max(100.0, planCost/100)
+			threshold := math.Max(100.0, planCost*0.05)
 			if delta > threshold {
 				e.SCtx().GetSessionVars().StmtCtx.AppendWarning(errors.Errorf(
 					"invalid cost trace result: %v", fc))
