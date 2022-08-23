@@ -91,6 +91,9 @@ func (p *basePhysicalPlan) FactorCosts() map[string]float64 {
 		children = append(children, x.tablePlan)
 		children = append(children, x.partialPlans...)
 	}
+	for k, v := range p.costWeights {
+		weights[k] += v
+	}
 	for _, c := range children {
 		for k, v := range c.FactorCosts() {
 			weights[k] += v
