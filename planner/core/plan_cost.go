@@ -103,6 +103,9 @@ func (p *basePhysicalPlan) FactorCosts() map[string]float64 {
 }
 
 func recordCost(p PhysicalPlan, costFlag uint64, factor string, cost float64) {
+	if factor == "" || cost == 0 {
+		return
+	}
 	if !hasCostFlag(costFlag, CostFlagRecalculate) {
 		return
 	}
