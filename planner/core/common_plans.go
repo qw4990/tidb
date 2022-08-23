@@ -17,6 +17,7 @@ package core
 import (
 	"bytes"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 
@@ -586,7 +587,9 @@ func (e *Explain) RenderResult() error {
 			for _, c := range fc {
 				sum += c
 			}
-			if sum != planCost {
+			delta := math.Abs(sum - planCost)
+			threshold := math.Max(100.0, planCost/100)
+			if delta > threshold {
 				e.SCtx().GetSessionVars().StmtCtx.AppendWarning(errors.Errorf(
 					"invalid cost trace result: %v", fc))
 			} else {
