@@ -587,7 +587,11 @@ func (e *Explain) RenderResult() error {
 				sum += c
 			}
 			if sum != planCost {
-				return fmt.Errorf("invalid cost trace result")
+				e.SCtx().GetSessionVars().StmtCtx.AppendWarning(errors.Errorf(
+					"invalid cost trace result: %v", fc))
+			} else {
+				e.SCtx().GetSessionVars().StmtCtx.AppendWarning(errors.Errorf(
+					"valid cost trace result: %v", fc))
 			}
 		} else {
 			e.SCtx().GetSessionVars().StmtCtx.AppendWarning(errors.Errorf("'explain format=true_card_cost' cannot support this plan"))
