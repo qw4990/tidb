@@ -194,7 +194,7 @@ func (p *PhysicalProjection) GetPlanCost(taskType property.TaskType, option *Pla
 }
 
 // GetCost computes cost of index lookup operator itself.
-func (p *PhysicalIndexLookUpReader) GetCost(costFlag uint64) (cost float64) {
+func (p *PhysicalIndexLookUpReader) GetCost(costFlag uint64) float64 {
 	indexPlan, tablePlan := p.indexPlan, p.tablePlan
 	ctx := p.ctx
 	sessVars := ctx.GetSessionVars()
@@ -213,10 +213,10 @@ func (p *PhysicalIndexLookUpReader) GetCost(costFlag uint64) (cost float64) {
 		// if the cost is enlarged, it'll be easier to go another plan.
 		idxCst = math.Min(idxCst, pagingCst)
 	}
-	cost += idxCst
+	cpuCost := idxCst
 	// Add cost of worker goroutines in index lookup.
 	numTblWorkers := float64(sessVars.IndexLookupConcurrency())
-	cost += (numTblWorkers + 1) * sessVars.GetConcurrencyFactor()
+	concurCost := (numTblWorkers + 1) * sessVars.GetConcurrencyFactor()
 	// When building table reader executor for each batch, we would sort the handles. CPU
 	// cost of sort is:
 	// CPUFactor * batchSize * Log2(batchSize) * (indexRows / batchSize)
@@ -224,7 +224,7 @@ func (p *PhysicalIndexLookUpReader) GetCost(costFlag uint64) (cost float64) {
 	batchSize := math.Min(indexLookupSize, indexRows)
 	if batchSize > 2 {
 		sortCPUCost := (indexRows * math.Log2(batchSize) * sessVars.GetCPUFactor()) / numTblWorkers
-		cost += sortCPUCost
+		cpuCost += sortCPUCost
 	}
 	// Also, we need to sort the retrieved rows if index lookup reader is expected to return
 	// ordered results. Note that row count of these two sorts can be different, if there are
@@ -234,9 +234,11 @@ func (p *PhysicalIndexLookUpReader) GetCost(costFlag uint64) (cost float64) {
 	batchSize = math.Min(indexLookupSize*selectivity, tableRows)
 	if p.keepOrder && batchSize > 2 {
 		sortCPUCost := (tableRows * math.Log2(batchSize) * sessVars.GetCPUFactor()) / numTblWorkers
-		cost += sortCPUCost
+		cpuCost += sortCPUCost
 	}
-	return
+	recordCost(p, costFlag, variable.TiDBOptCPUFactorV2, cpuCost)
+	recordCost(p, costFlag, variable.TiDBOptConcurrencyFactorV2, concurCost)
+	return cpuCost + concurCost
 }
 
 // GetPlanCost calculates the cost of the plan if it has not been calculated yet and returns the cost.
@@ -273,23 +275,29 @@ func (p *PhysicalIndexLookUpReader) GetPlanCost(_ property.TaskType, option *Pla
 	// index-side net I/O cost: rows * row-size * net-factor
 	netFactor := getTableNetFactor(p.tablePlan)
 	rowSize := getTblStats(p.indexPlan).GetAvgRowSize(p.ctx, p.indexPlan.Schema().Columns, true, false)
-	p.planCost += getCardinality(p.indexPlan, costFlag) * rowSize * netFactor
+	idxNetCost := getCardinality(p.indexPlan, costFlag) * rowSize * netFactor
 
 	// index-side net seek cost
-	p.planCost += estimateNetSeekCost(p.indexPlan)
+	idxSeekCost := estimateNetSeekCost(p.indexPlan)
 
 	// table-side net I/O cost: rows * row-size * net-factor
 	tblRowSize := getTblStats(p.tablePlan).GetAvgRowSize(p.ctx, p.tablePlan.Schema().Columns, false, false)
-	p.planCost += getCardinality(p.tablePlan, costFlag) * tblRowSize * netFactor
+	tblNetCost := getCardinality(p.tablePlan, costFlag) * tblRowSize * netFactor
 
 	// table-side seek cost
-	p.planCost += estimateNetSeekCost(p.tablePlan)
+	tblSeekCost := estimateNetSeekCost(p.tablePlan)
 
 	// double read cost
-	p.planCost += p.estDoubleReadCost(ts.Table, costFlag)
+	doubleReadCost := p.estDoubleReadCost(ts.Table, costFlag)
 
 	// consider concurrency
-	p.planCost /= float64(p.ctx.GetSessionVars().DistSQLScanConcurrency())
+	c := float64(p.ctx.GetSessionVars().DistSQLScanConcurrency())
+	p.planCost += (idxNetCost + idxSeekCost + tblNetCost + tblSeekCost + doubleReadCost) / c
+	recordCost(p, costFlag, variable.TiDBOptNetworkFactorV2, idxNetCost/c)
+	recordCost(p, costFlag, variable.TiDBOptSeekFactorV2, idxSeekCost/c)
+	recordCost(p, costFlag, variable.TiDBOptNetworkFactorV2, tblNetCost/c)
+	recordCost(p, costFlag, variable.TiDBOptSeekFactorV2, tblSeekCost/c)
+	recordCost(p, costFlag, variable.TiDBOptSeekFactorV2, doubleReadCost/c)
 
 	// lookup-cpu-cost in TiDB
 	p.planCost += p.GetCost(costFlag)
