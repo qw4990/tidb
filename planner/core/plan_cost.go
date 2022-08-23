@@ -1189,7 +1189,7 @@ func (p *PhysicalHashAgg) GetCost(inputRows float64, isRoot, isMPP bool, costFla
 	cardinality := getCardinality(p, costFlag)
 	numDistinctFunc := p.numDistinctFunc()
 	aggFuncFactor := p.getAggFuncCostFactor(isMPP)
-	var cpuCost float64
+	var cpuCost, concurrencyCost float64
 	var cpuFactorName string
 	sessVars := p.ctx.GetSessionVars()
 	if isRoot {
@@ -1199,7 +1199,7 @@ func (p *PhysicalHashAgg) GetCost(inputRows float64, isRoot, isMPP bool, costFla
 		if divisor > 0 {
 			cpuCost /= divisor
 			// Cost of additional goroutines.
-			cpuCost += (con + 1) * sessVars.GetConcurrencyFactor()
+			concurrencyCost = (con + 1) * sessVars.GetConcurrencyFactor()
 		}
 	} else if isMPP {
 		if p.ctx.GetSessionVars().CostModelVersion == modelVer2 {
@@ -1232,7 +1232,7 @@ func (p *PhysicalHashAgg) GetCost(inputRows float64, isRoot, isMPP bool, costFla
 		// cost of probing the hash table
 		probeCost := inputRows * hashTableFactor
 		if isRoot {
-			probeCost /= sessVars.GetConcurrencyFactor()
+			probeCost /= float64(sessVars.ExecutorConcurrency)
 		}
 		hashTableCost = buildCost + probeCost
 	}
@@ -1250,8 +1250,9 @@ func (p *PhysicalHashAgg) GetCost(inputRows float64, isRoot, isMPP bool, costFla
 	recordCost(p, costFlag, cpuFactorName, cpuCost)
 	recordCost(p, costFlag, variable.TiDBOptMemoryFactorV2, memoryCost)
 	recordCost(p, costFlag, hashTableFactorName, hashTableCost)
+	recordCost(p, costFlag, variable.TiDBOptConcurrencyFactorV2, concurrencyCost)
 
-	return cpuCost + memoryCost + hashTableCost
+	return cpuCost + memoryCost + hashTableCost + concurrencyCost
 }
 
 func costDebug(p PhysicalPlan, format string, args ...interface{}) {
