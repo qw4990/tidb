@@ -573,9 +573,21 @@ func (e *Explain) RenderResult() error {
 	if e.Analyze && strings.ToLower(e.Format) == types.ExplainFormatTrueCardCost {
 		pp, ok := e.TargetPlan.(PhysicalPlan)
 		if ok {
-			if _, err := pp.GetPlanCost(property.RootTaskType,
+			var planCost float64
+			var err error
+			if planCost, err = pp.GetPlanCost(property.RootTaskType,
 				NewDefaultPlanCostOption().WithCostFlag(CostFlagRecalculate|CostFlagUseTrueCardinality)); err != nil {
 				return err
+			}
+
+			// check cost trace
+			fc := pp.FactorCosts()
+			var sum float64
+			for _, c := range fc {
+				sum += c
+			}
+			if sum != planCost {
+				return fmt.Errorf("invalid cost trace result")
 			}
 		} else {
 			e.SCtx().GetSessionVars().StmtCtx.AppendWarning(errors.Errorf("'explain format=true_card_cost' cannot support this plan"))
