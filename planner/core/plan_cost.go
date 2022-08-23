@@ -103,7 +103,12 @@ func recordCost(p PhysicalPlan, costFlag uint64, factor string, cost float64) {
 	if !hasCostFlag(costFlag, CostFlagRecalculate) {
 		return
 	}
-	if p.SCtx().GetSessionVars().CostModelVersion != 2 {
+	v := p.SCtx().GetSessionVars()
+	if v.CostModelVersion != 2 {
+		return
+	}
+	if v.DistSQLScanConcurrency() > 1 || v.GetConcurrencyFactor() > 1 ||
+		v.IndexLookupConcurrency() > 1 || v.ExecutorConcurrency > 1 {
 		return
 	}
 	p.RecordFactorCost(factor, cost)
@@ -276,28 +281,32 @@ func (p *PhysicalIndexLookUpReader) GetPlanCost(_ property.TaskType, option *Pla
 	netFactor := getTableNetFactor(p.tablePlan)
 	rowSize := getTblStats(p.indexPlan).GetAvgRowSize(p.ctx, p.indexPlan.Schema().Columns, true, false)
 	idxNetCost := getCardinality(p.indexPlan, costFlag) * rowSize * netFactor
+	p.planCost += idxNetCost
+	recordCost(p, costFlag, variable.TiDBOptNetworkFactorV2, idxNetCost)
 
 	// index-side net seek cost
 	idxSeekCost := estimateNetSeekCost(p.indexPlan)
+	p.planCost += idxSeekCost
+	recordCost(p, costFlag, variable.TiDBOptSeekFactorV2, idxSeekCost)
 
 	// table-side net I/O cost: rows * row-size * net-factor
 	tblRowSize := getTblStats(p.tablePlan).GetAvgRowSize(p.ctx, p.tablePlan.Schema().Columns, false, false)
 	tblNetCost := getCardinality(p.tablePlan, costFlag) * tblRowSize * netFactor
+	p.planCost += tblNetCost
+	recordCost(p, costFlag, variable.TiDBOptNetworkFactorV2, tblNetCost)
 
 	// table-side seek cost
 	tblSeekCost := estimateNetSeekCost(p.tablePlan)
+	p.planCost += tblSeekCost
+	recordCost(p, costFlag, variable.TiDBOptSeekFactorV2, tblSeekCost)
 
 	// double read cost
 	doubleReadCost := p.estDoubleReadCost(ts.Table, costFlag)
+	p.planCost += doubleReadCost
+	recordCost(p, costFlag, variable.TiDBOptSeekFactorV2, doubleReadCost)
 
 	// consider concurrency
-	c := float64(p.ctx.GetSessionVars().DistSQLScanConcurrency())
-	p.planCost += (idxNetCost + idxSeekCost + tblNetCost + tblSeekCost + doubleReadCost) / c
-	recordCost(p, costFlag, variable.TiDBOptNetworkFactorV2, idxNetCost/c)
-	recordCost(p, costFlag, variable.TiDBOptSeekFactorV2, idxSeekCost/c)
-	recordCost(p, costFlag, variable.TiDBOptNetworkFactorV2, tblNetCost/c)
-	recordCost(p, costFlag, variable.TiDBOptSeekFactorV2, tblSeekCost/c)
-	recordCost(p, costFlag, variable.TiDBOptSeekFactorV2, doubleReadCost/c)
+	p.planCost /= float64(p.ctx.GetSessionVars().DistSQLScanConcurrency())
 
 	// lookup-cpu-cost in TiDB
 	p.planCost += p.GetCost(costFlag)
