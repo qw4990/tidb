@@ -99,6 +99,16 @@ func (p *basePhysicalPlan) FactorCosts() map[string]float64 {
 	return weights
 }
 
+func recordCost(p PhysicalPlan, costFlag uint64, factor string, cost float64) {
+	if !hasCostFlag(costFlag, CostFlagRecalculate) {
+		return
+	}
+	if p.SCtx().GetSessionVars().CostModelVersion != 2 {
+		return
+	}
+	p.RecordFactorCost(factor, cost)
+}
+
 // GetPlanCost calculates the cost of the plan if it has not been calculated yet and returns the cost.
 func (p *PhysicalSelection) GetPlanCost(taskType property.TaskType, option *PlanCostOption) (float64, error) {
 	costFlag := option.CostFlag
@@ -124,17 +134,22 @@ func (p *PhysicalSelection) GetPlanCost(taskType property.TaskType, option *Plan
 		}
 	case modelVer2: // selection cost: rows * num-filters * cpu-factor
 		var cpuFactor float64
+		var factorName string
 		switch taskType {
 		case property.RootTaskType:
 			cpuFactor = p.ctx.GetSessionVars().GetCPUFactor()
+			factorName = variable.TiDBOptCPUFactorV2
 		case property.MppTaskType: // use a dedicated cpu-factor for TiFlash
 			cpuFactor = p.ctx.GetSessionVars().GetTiFlashCPUFactor()
+			factorName = variable.TiDBOptTiFlashCPUFactorV2
 		case property.CopSingleReadTaskType, property.CopDoubleReadTaskType:
 			cpuFactor = p.ctx.GetSessionVars().GetCopCPUFactor()
+			factorName = variable.TiDBOptCopCPUFactorV2
 		default:
 			return 0, errors.Errorf("unknown task type %v", taskType)
 		}
 		selfCost = getCardinality(p.children[0], costFlag) * float64(len(p.Conditions)) * cpuFactor
+		recordCost(p, costFlag, factorName, selfCost)
 	}
 
 	childCost, err := p.children[0].GetPlanCost(taskType, option)
@@ -147,15 +162,18 @@ func (p *PhysicalSelection) GetPlanCost(taskType property.TaskType, option *Plan
 }
 
 // GetCost computes the cost of projection operator itself.
-func (p *PhysicalProjection) GetCost(count float64) float64 {
+func (p *PhysicalProjection) GetCost(count float64, costFlag uint64) float64 {
 	sessVars := p.ctx.GetSessionVars()
 	cpuCost := count * sessVars.GetCPUFactor()
 	concurrency := float64(sessVars.ProjectionConcurrency())
 	if concurrency <= 0 {
+		recordCost(p, costFlag, variable.TiDBOptCPUFactorV2, cpuCost)
 		return cpuCost
 	}
 	cpuCost /= concurrency
 	concurrencyCost := (1 + concurrency) * sessVars.GetConcurrencyFactor()
+	recordCost(p, costFlag, variable.TiDBOptCPUFactorV2, cpuCost)
+	recordCost(p, costFlag, variable.TiDBOptConcurrencyFactorV2, concurrencyCost)
 	return cpuCost + concurrencyCost
 }
 
@@ -170,7 +188,7 @@ func (p *PhysicalProjection) GetPlanCost(taskType property.TaskType, option *Pla
 		return 0, err
 	}
 	p.planCost = childCost
-	p.planCost += p.GetCost(getCardinality(p, costFlag)) // projection cost
+	p.planCost += p.GetCost(getCardinality(p, costFlag), costFlag) // projection cost
 	p.planCostInit = true
 	return p.planCost, nil
 }

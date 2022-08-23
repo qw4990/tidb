@@ -630,7 +630,7 @@ func buildIndexLookUpTask(ctx sessionctx.Context, t *copTask) *rootTask {
 		proj := PhysicalProjection{Exprs: expression.Column2Exprs(schema.Columns)}.Init(ctx, p.stats, t.tablePlan.SelectBlockOffset(), nil)
 		proj.SetSchema(schema)
 		proj.SetChildren(p)
-		newTask.addCost(proj.GetCost(p.StatsCount()))
+		newTask.addCost(proj.GetCost(p.StatsCount(), 0))
 		proj.cost = newTask.cst
 		newTask.p = proj
 	} else {
@@ -742,7 +742,7 @@ func (t *copTask) convertToRootTaskImpl(ctx sessionctx.Context) *rootTask {
 			proj := PhysicalProjection{Exprs: expression.Column2Exprs(schema.Columns)}.Init(ctx, p.stats, t.idxMergePartPlans[0].SelectBlockOffset(), nil)
 			proj.SetSchema(schema)
 			proj.SetChildren(p)
-			newTask.addCost(proj.GetCost(newTask.count()))
+			newTask.addCost(proj.GetCost(newTask.count(), 0))
 			proj.SetCost(newTask.cost())
 			newTask.p = proj
 		}
@@ -792,7 +792,7 @@ func (t *copTask) convertToRootTaskImpl(ctx sessionctx.Context) *rootTask {
 			proj := PhysicalProjection{Exprs: expression.Column2Exprs(t.originSchema.Columns)}.Init(ts.ctx, ts.stats, ts.SelectBlockOffset(), nil)
 			proj.SetSchema(t.originSchema)
 			proj.SetChildren(p)
-			newTask.addCost(proj.GetCost(p.StatsCount()))
+			newTask.addCost(proj.GetCost(p.StatsCount(), 0))
 			proj.SetCost(newTask.cost())
 			newTask.p = proj
 		} else {
@@ -1044,7 +1044,7 @@ func (p *PhysicalProjection) attach2Task(tasks ...task) task {
 	if cop, ok := t.(*copTask); ok {
 		if len(cop.rootTaskConds) == 0 && expression.CanExprsPushDown(p.ctx.GetSessionVars().StmtCtx, p.Exprs, p.ctx.GetClient(), cop.getStoreType()) {
 			copTask := attachPlan2Task(p, cop)
-			copTask.addCost(p.GetCost(t.count()))
+			copTask.addCost(p.GetCost(t.count(), 0))
 			p.cost = copTask.cost()
 			return copTask
 		}
@@ -1052,14 +1052,14 @@ func (p *PhysicalProjection) attach2Task(tasks ...task) task {
 		if expression.CanExprsPushDown(p.ctx.GetSessionVars().StmtCtx, p.Exprs, p.ctx.GetClient(), kv.TiFlash) {
 			p.SetChildren(mpp.p)
 			mpp.p = p
-			mpp.addCost(p.GetCost(t.count()))
+			mpp.addCost(p.GetCost(t.count(), 0))
 			p.cost = mpp.cost()
 			return mpp
 		}
 	}
 	t = t.convertToRootTask(p.ctx)
 	t = attachPlan2Task(p, t)
-	t.addCost(p.GetCost(t.count()))
+	t.addCost(p.GetCost(t.count(), 0))
 	p.cost = t.cost()
 	if root, ok := tasks[0].(*rootTask); ok && root.isEmpty {
 		t.(*rootTask).isEmpty = true
@@ -1751,7 +1751,7 @@ func (p *PhysicalHashAgg) attach2TaskForMpp(tasks ...task) task {
 		attachPlan2Task(p, mpp)
 		p.cost = mpp.cost()
 		if proj != nil {
-			mpp.addCost(proj.GetCost(mpp.count()))
+			mpp.addCost(proj.GetCost(mpp.count(), 0))
 			attachPlan2Task(proj, mpp)
 			proj.SetCost(mpp.cost())
 		}
@@ -1791,7 +1791,7 @@ func (p *PhysicalHashAgg) attach2TaskForMpp(tasks ...task) task {
 		// TODO: how to set 2-phase cost?
 		finalAgg.SetCost(newMpp.cost())
 		if proj != nil {
-			newMpp.addCost(proj.GetCost(newMpp.count()))
+			newMpp.addCost(proj.GetCost(newMpp.count(), 0))
 			attachPlan2Task(proj, newMpp)
 			proj.SetCost(newMpp.cost())
 		}
@@ -1837,7 +1837,7 @@ func (p *PhysicalHashAgg) attach2TaskForMpp(tasks ...task) task {
 			}
 			proj.SetSchema(p.schema)
 		}
-		newMpp.addCost(proj.GetCost(newMpp.count()))
+		newMpp.addCost(proj.GetCost(newMpp.count(), 0))
 		attachPlan2Task(proj, newMpp)
 		proj.SetCost(newMpp.cost())
 		return newMpp
