@@ -75,12 +75,27 @@ func (p *basePhysicalPlan) RecordFactorCost(factor string, weight float64) {
 // FactorCosts ...
 func (p *basePhysicalPlan) FactorCosts() map[string]float64 {
 	weights := make(map[string]float64)
+	var children []PhysicalPlan
 	for _, child := range p.children {
-		for k, v := range child.FactorCosts() {
+		children = append(children, child)
+	}
+	switch x := p.self.(type) {
+	case *PhysicalTableReader:
+		children = append(children, x.tablePlan)
+	case *PhysicalIndexReader:
+		children = append(children, x.indexPlan)
+	case *PhysicalIndexLookUpReader:
+		children = append(children, x.tablePlan)
+		children = append(children, x.indexPlan)
+	case *PhysicalIndexMergeReader:
+		children = append(children, x.tablePlan)
+		children = append(children, x.partialPlans...)
+	}
+	for _, c := range children {
+		for k, v := range c.FactorCosts() {
 			weights[k] += v
 		}
 	}
-	// TODO:
 	return weights
 }
 
@@ -1328,8 +1343,7 @@ func (p *BatchPointGetPlan) GetAvgRowSize() float64 {
 	return p.stats.HistColl.GetIndexAvgRowSize(p.ctx, cols, p.IndexInfo.Unique)
 }
 
-// RecordCostWeight ...
-func (p *BatchPointGetPlan) RecordCostWeight(weight float64, factor string) {
+func (p *BatchPointGetPlan) RecordFactorCost(factor string, weight float64) {
 }
 
 // CostWeights ...
@@ -1383,8 +1397,7 @@ func (p *PointGetPlan) GetAvgRowSize() float64 {
 	return p.stats.HistColl.GetIndexAvgRowSize(p.ctx, cols, p.IndexInfo.Unique)
 }
 
-// RecordCostWeight ...
-func (p *PointGetPlan) RecordCostWeight(weight float64, factor string) {
+func (p *PointGetPlan) RecordFactorCost(factor string, weight float64) {
 }
 
 // CostWeights ...
