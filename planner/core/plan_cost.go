@@ -993,6 +993,9 @@ func (p *PhysicalMergeJoin) GetCost(lCnt, rCnt float64, costFlag uint64) float64
 	if len(p.LeftConditions)+len(p.RightConditions) > 0 {
 		probeCost *= SelectionFactor
 		cpuCost += outerCnt * sessVars.GetCPUFactor()
+		if p.SCtx().GetSessionVars().CostModelVersion == modelVer2 {
+			cpuCost += innerCnt * sessVars.GetCPUFactor()
+		}
 	}
 	cpuCost += probeCost
 	// For merge join, only one group of rows with same join key(not null) are cached,
