@@ -1218,7 +1218,9 @@ func (p *PhysicalStreamAgg) GetCost(inputRows float64, isRoot, isMPP bool, costF
 		cpuCost = inputRows * sessVars.GetCopCPUFactor() * aggFuncFactor
 		cpuFactorName = variable.TiDBOptCopCPUFactorV2
 	}
-	cpuCost += inputRows * sessVars.GetCopCPUFactor() // cost of cutting groups
+	if p.ctx.GetSessionVars().CostModelVersion == modelVer2 {
+		cpuCost += inputRows * sessVars.GetCopCPUFactor() // cost of cutting groups
+	}
 	rowsPerGroup := inputRows / getCardinality(p, costFlag)
 	memoryCost := rowsPerGroup * distinctFactor * sessVars.GetMemoryFactor() * float64(p.numDistinctFunc())
 	recordCost(p, costFlag, cpuFactorName, cpuCost)
