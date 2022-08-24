@@ -1023,6 +1023,50 @@ func (p *PhysicalMergeJoin) GetPlanCost(taskType property.TaskType, option *Plan
 	return p.planCost, nil
 }
 
+func (p *PhysicalHashJoin) hashJoinCostVer2(buildCnt, probeCnt, buildRowSize float64, isMPP, spill bool, costFlag uint64) float64 {
+	sessVars := p.ctx.GetSessionVars()
+	var cpuFactor, hashTableFactor float64
+	var cpuFactorName, hashTableFactorName string
+	if !isMPP {
+		cpuFactor = sessVars.GetCPUFactor()
+		cpuFactorName = variable.TiDBOptCPUFactorV2
+		hashTableFactor = sessVars.GetHashTableFactor()
+		hashTableFactorName = variable.TiDBOptHashTableFactorV2
+	} else {
+		cpuFactor = sessVars.GetTiFlashCPUFactor()
+		cpuFactorName = variable.TiDBOptTiFlashCPUFactorV2
+		hashTableFactor = sessVars.GetTiFlashHashTableFactor()
+		hashTableFactorName = variable.TiDBOptTiFlashHashTableFactorV2
+	}
+
+	hashKeyCost := (buildCnt + probeCnt) * cpuFactor
+	recordCost(p, costFlag, cpuFactorName, hashKeyCost)
+
+	buildCost := buildCnt * hashTableFactor
+	recordCost(p, costFlag, hashTableFactorName, buildCost)
+
+	probeCost := probeCnt * hashTableFactor
+	probeCost /= float64(p.Concurrency)
+	recordCost(p, costFlag, hashTableFactorName, probeCost)
+
+	var filterCost float64
+	if len(p.LeftConditions)+len(p.RightConditions) > 0 {
+		filterCost = (probeCnt * SelectionFactor) * cpuFactor
+		recordCost(p, costFlag, cpuFactorName, filterCost)
+	}
+
+	memCost := buildCnt * sessVars.GetMemoryFactor()
+	recordCost(p, costFlag, variable.TiDBOptMemoryFactorV2, memCost)
+
+	var diskCost float64
+	if spill {
+		diskCost = buildCnt * buildRowSize * sessVars.GetDiskFactor()
+		recordCost(p, costFlag, variable.TiDBOptDiskFactorV2, diskCost)
+	}
+
+	return hashKeyCost + buildCost + probeCost + filterCost + memCost + diskCost
+}
+
 // GetCost computes cost of hash join operator itself.
 func (p *PhysicalHashJoin) GetCost(lCnt, rCnt float64, isMPP bool, costFlag uint64, op *physicalOptimizeOp) float64 {
 	buildCnt, probeCnt := lCnt, rCnt
@@ -1032,25 +1076,6 @@ func (p *PhysicalHashJoin) GetCost(lCnt, rCnt float64, isMPP bool, costFlag uint
 		buildCnt, probeCnt = rCnt, lCnt
 		build = p.children[1]
 	}
-	sessVars := p.ctx.GetSessionVars()
-	oomUseTmpStorage := variable.EnableTmpStorageOnOOM.Load()
-	memQuota := sessVars.StmtCtx.MemTracker.GetBytesLimit() // sessVars.MemQuotaQuery && hint
-	rowSize := getAvgRowSize(build.statsInfo(), build.Schema())
-	spill := oomUseTmpStorage && memQuota > 0 && rowSize*buildCnt > float64(memQuota) && p.storeTp != kv.TiFlash
-	// Cost of building hash table.
-	cpuFactor := sessVars.GetCPUFactor()
-	cpuFactorName := variable.TiDBOptCPUFactorV2
-	if isMPP && p.ctx.GetSessionVars().CostModelVersion == modelVer2 {
-		cpuFactor = sessVars.GetTiFlashCPUFactor() // use the dedicated TiFlash CPU Factor on modelVer2
-		cpuFactorName = variable.TiDBOptTiFlashCPUFactorV2
-	}
-	diskFactor := sessVars.GetDiskFactor()
-	memoryFactor := sessVars.GetMemoryFactor()
-	concurrencyFactor := sessVars.GetConcurrencyFactor()
-
-	cpuCost := buildCnt * cpuFactor
-	memoryCost := buildCnt * memoryFactor
-	diskCost := buildCnt * diskFactor * rowSize
 	// Number of matched row pairs regarding the equal join conditions.
 	helper := &fullJoinRowCountHelper{
 		cartesian:     false,
@@ -1081,6 +1106,30 @@ func (p *PhysicalHashJoin) GetCost(lCnt, rCnt float64, isMPP bool, costFlag uint
 	if hasCostFlag(costFlag, CostFlagUseTrueCardinality) {
 		numPairs = getOperatorActRows(p)
 	}
+	sessVars := p.ctx.GetSessionVars()
+	oomUseTmpStorage := variable.EnableTmpStorageOnOOM.Load()
+	memQuota := sessVars.StmtCtx.MemTracker.GetBytesLimit() // sessVars.MemQuotaQuery && hint
+	rowSize := getAvgRowSize(build.statsInfo(), build.Schema())
+	spill := oomUseTmpStorage && memQuota > 0 && rowSize*buildCnt > float64(memQuota) && p.storeTp != kv.TiFlash
+
+	if sessVars.CostModelVersion == modelVer2 {
+		return p.hashJoinCostVer2(buildCnt, probeCnt, rowSize, isMPP, spill, costFlag)
+	}
+
+	// Cost of building hash table.
+	cpuFactor := sessVars.GetCPUFactor()
+	cpuFactorName := variable.TiDBOptCPUFactorV2
+	if isMPP && p.ctx.GetSessionVars().CostModelVersion == modelVer2 {
+		cpuFactor = sessVars.GetTiFlashCPUFactor() // use the dedicated TiFlash CPU Factor on modelVer2
+		cpuFactorName = variable.TiDBOptTiFlashCPUFactorV2
+	}
+	diskFactor := sessVars.GetDiskFactor()
+	memoryFactor := sessVars.GetMemoryFactor()
+	concurrencyFactor := sessVars.GetConcurrencyFactor()
+
+	cpuCost := buildCnt * cpuFactor
+	memoryCost := buildCnt * memoryFactor
+	diskCost := buildCnt * diskFactor * rowSize
 	// Cost of querying hash table is cheap actually, so we just compute the cost of
 	// evaluating `OtherConditions` and joining row pairs.
 	probeCost := numPairs * cpuFactor
