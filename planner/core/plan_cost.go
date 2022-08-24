@@ -999,6 +999,8 @@ func (p *PhysicalMergeJoin) GetCost(lCnt, rCnt float64, costFlag uint64) float64
 	// we compute average memory cost using estimated group size.
 	NDV := getColsNDV(innerKeys, innerSchema, innerStats)
 	memoryCost := (innerCnt / NDV) * sessVars.GetMemoryFactor()
+	recordCost(p, costFlag, variable.TiDBOptCPUFactorV2, cpuCost)
+	recordCost(p, costFlag, variable.TiDBOptMemoryFactorV2, memoryCost)
 	return cpuCost + memoryCost
 }
 
