@@ -1805,16 +1805,16 @@ func (p *LogicalJoin) exhaustPhysicalPlans(prop *property.PhysicalProperty) ([]P
 	joins := make([]PhysicalPlan, 0, 8)
 	canPushToTiFlash := p.canPushToCop(kv.TiFlash)
 	if p.ctx.GetSessionVars().IsMPPAllowed() && canPushToTiFlash {
-		if p.shouldUseMPPBCJ() {
-			mppJoins := p.tryToGetMppHashJoin(prop, true)
-			if (p.preferJoinType & preferBCJoin) > 0 {
-				return mppJoins, true, nil
-			}
-			joins = append(joins, mppJoins...)
-		} else {
-			mppJoins := p.tryToGetMppHashJoin(prop, false)
-			joins = append(joins, mppJoins...)
+		bcastJoins := p.tryToGetMppHashJoin(prop, true)
+		if (p.preferJoinType&preferBCJoin) > 0 && len(bcastJoins) > 0 {
+			return bcastJoins, true, nil
 		}
+		shuffleJoins := p.tryToGetMppHashJoin(prop, false)
+		if (p.preferJoinType&preferShuffleJoin) > 0 && len(shuffleJoins) > 0 {
+			return shuffleJoins, true, nil
+		}
+		joins = append(joins, bcastJoins...)
+		joins = append(joins, shuffleJoins...)
 	}
 	if prop.IsFlashProp() {
 		return joins, true, nil

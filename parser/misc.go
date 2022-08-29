@@ -934,6 +934,7 @@ var hintTokenMap = map[string]int{
 	"READ_CONSISTENT_REPLICA": hintReadConsistentReplica,
 	"READ_FROM_STORAGE":       hintReadFromStorage,
 	"BROADCAST_JOIN":          hintBCJoin,
+	"SHUFFLE_JOIN":            hintShuffleJoin,
 	"MERGE_JOIN":              hintSMJoin,
 	"STREAM_AGG":              hintStreamAgg,
 	"SWAP_JOIN_INPUTS":        hintSwapJoinInputs,

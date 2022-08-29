@@ -117,6 +117,7 @@ const (
 	preferHashJoin
 	preferMergeJoin
 	preferBCJoin
+	preferShuffleJoin
 	preferRewriteSemiJoin
 	preferHashAgg
 	preferStreamAgg

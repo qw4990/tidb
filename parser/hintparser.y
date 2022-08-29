@@ -101,6 +101,7 @@ import (
 	hintReadFromStorage       "READ_FROM_STORAGE"
 	hintSMJoin                "MERGE_JOIN"
 	hintBCJoin                "BROADCAST_JOIN"
+	hintShuffleJoin           "SHUFFLE_JOIN"
 	hintStreamAgg             "STREAM_AGG"
 	hintSwapJoinInputs        "SWAP_JOIN_INPUTS"
 	hintUseIndexMerge         "USE_INDEX_MERGE"
@@ -542,6 +543,7 @@ UnsupportedTableLevelOptimizerHintName:
 SupportedTableLevelOptimizerHintName:
 	"MERGE_JOIN"
 |	"BROADCAST_JOIN"
+|	"SHUFFLE_JOIN"
 |	"INL_JOIN"
 |	"MERGE"
 |	"INL_HASH_JOIN"
@@ -660,6 +662,7 @@ Identifier:
 |	"READ_FROM_STORAGE"
 |	"MERGE_JOIN"
 |	"BROADCAST_JOIN"
+|	"SHUFFLE_JOIN"
 |	"STREAM_AGG"
 |	"SWAP_JOIN_INPUTS"
 |	"USE_INDEX_MERGE"
