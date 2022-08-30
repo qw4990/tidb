@@ -21,6 +21,7 @@ import (
 	"github.com/pingcap/tidb/types"
 	"github.com/pingcap/tidb/util/hack"
 	"github.com/pingcap/tidb/util/kvcache"
+	"github.com/pingcap/tidb/util/memory"
 )
 
 // planCacheEntry wraps Key and Value. It's the value of list.Element.
@@ -39,6 +40,8 @@ type LRUPlanCache struct {
 	// lock make cache thread safe
 	lock sync.Mutex
 
+	memTracker *memory.Tracker
+
 	// pickFromBucket get one element from bucket. The LRUPlanCache can not work if it is nil
 	pickFromBucket func(map[*list.Element]struct{}, []*types.FieldType) (*list.Element, bool)
 	// onEvict will be called if any eviction happened, only for test use now
@@ -48,7 +51,8 @@ type LRUPlanCache struct {
 // NewLRUPlanCache creates a PCLRUCache object, whose capacity is "capacity".
 // NOTE: "capacity" should be a positive value.
 func NewLRUPlanCache(capacity uint,
-	pickFromBucket func(map[*list.Element]struct{}, []*types.FieldType) (*list.Element, bool)) (*LRUPlanCache, error) {
+	pickFromBucket func(map[*list.Element]struct{}, []*types.FieldType) (*list.Element, bool),
+	memTracker *memory.Tracker) (*LRUPlanCache, error) {
 	if capacity < 1 {
 		return nil, errors.New("capacity of LRU Cache should be at least 1")
 	}
@@ -58,6 +62,7 @@ func NewLRUPlanCache(capacity uint,
 		buckets:        make(map[string]map[*list.Element]struct{}, 1), //Generally one query has one plan
 		lruList:        list.New(),
 		pickFromBucket: pickFromBucket,
+		memTracker:     memTracker,
 	}, nil
 }
 
@@ -103,6 +108,7 @@ func (l *LRUPlanCache) Put(key kvcache.Key, value kvcache.Value, paramTypes []*t
 	if l.size > l.capacity {
 		l.removeOldest()
 	}
+	l.memTracker.Consume(0) // TODO
 }
 
 // Delete deletes the multi-values from the LRU Cache.
@@ -162,6 +168,8 @@ func (l *LRUPlanCache) removeOldest() {
 	if l.onEvict != nil {
 		l.onEvict(lru.Value.(*planCacheEntry).PlanKey, lru.Value.(*planCacheEntry).PlanValue)
 	}
+
+	l.memTracker.Consume(0) // TODO
 
 	l.lruList.Remove(lru)
 	l.removeFromBucket(lru)
