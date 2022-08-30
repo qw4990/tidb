@@ -920,6 +920,12 @@ type PhysicalHashJoin struct {
 	mppShuffleJoin bool
 }
 
+func (p *PhysicalHashJoin) MemUsage() uint64 {
+	return p.basePhysicalJoin.MemUsage() + unsafe.Sizeof(p.Concurrency) +
+		p.EqualConditions.MemUsage() + unsafe.Sizeof(p.UseOuterToBuild) +
+		p.storeTp.MemUsage() + unsafe.Sizeof(p.mppShuffleJoin)
+}
+
 // Clone implements PhysicalPlan interface.
 func (p *PhysicalHashJoin) Clone() (PhysicalPlan, error) {
 	cloned := new(PhysicalHashJoin)
