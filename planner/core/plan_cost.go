@@ -1574,7 +1574,6 @@ func (p *PhysicalExchangeReceiver) GetPlanCost(taskType property.TaskType, optio
 			getCardinality(p.children[0], costFlag)*p.ctx.GetSessionVars().GetNetworkFactor(nil))
 	} else { // to avoid regression, only consider row-size on model ver2
 		rowSize := getTblStats(p.children[0]).GetAvgRowSize(p.ctx, p.children[0].Schema().Columns, false, false)
-		rowSize = math.Log2(rowSize) // from experiments
 		netCost := getCardinality(p.children[0], costFlag) * rowSize * p.ctx.GetSessionVars().GetNetworkFactor(nil)
 		p.planCost += netCost
 		recordCost(p, costFlag, variable.TiDBOptNetworkFactorV2, netCost)
