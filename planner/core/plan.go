@@ -334,6 +334,7 @@ type PhysicalPlan interface {
 	GetPlanCost(taskType property.TaskType, option *PlanCostOption) (float64, error)
 
 	getPlanCostV1(taskType property.TaskType, option *PlanCostOption) (float64, error)
+	getPlanCostV2(taskType property.TaskType, option *PlanCostOption) (float64, error)
 
 	// attach2Task makes the current physical plan as the father of task's physicalPlan and updates the cost of
 	// current task. If the child's task is cop task, some operator may close this task and return a new rootTask.
