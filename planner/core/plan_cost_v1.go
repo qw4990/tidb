@@ -47,10 +47,9 @@ func hasCostFlag(costFlag, flag uint64) bool {
 // GetPlanCost calculates the cost of the plan if it has not been calculated yet and returns the cost.
 func (p *basePhysicalPlan) GetPlanCost(taskType property.TaskType, option *PlanCostOption) (float64, error) {
 	if p.ctx.GetSessionVars().CostModelVersion == modelVer1 {
-		return p.getPlanCostV1(taskType, option)
+		return p.self.getPlanCostV1(taskType, option)
 	}
-	// TODO
-	return 0, nil
+	return p.self.getPlanCostV2(taskType, option)
 }
 
 func (p *basePhysicalPlan) getPlanCostV1(taskType property.TaskType, option *PlanCostOption) (float64, error) {
@@ -1234,6 +1233,14 @@ func (p *BatchPointGetPlan) GetCost(opt *physicalOptimizeOp) float64 {
 	return cost
 }
 
+// GetPlanCost calculates the cost of the plan if it has not been calculated yet and returns the cost.
+func (p *BatchPointGetPlan) GetPlanCost(taskType property.TaskType, option *PlanCostOption) (float64, error) {
+	if p.ctx.GetSessionVars().CostModelVersion == modelVer1 {
+		return p.getPlanCostV1(taskType, option)
+	}
+	return p.getPlanCostV2(taskType, option)
+}
+
 func (p *BatchPointGetPlan) getPlanCostV1(_ property.TaskType, option *PlanCostOption) (float64, error) {
 	costFlag := option.CostFlag
 	if p.planCostInit && !hasCostFlag(costFlag, CostFlagRecalculate) {
@@ -1279,6 +1286,14 @@ func (p *PointGetPlan) GetCost(opt *physicalOptimizeOp) float64 {
 		setPointGetPlanCostDetail(p, opt, rowSize, networkFactor, seekFactor)
 	}
 	return cost
+}
+
+// GetPlanCost calculates the cost of the plan if it has not been calculated yet and returns the cost.
+func (p *PointGetPlan) GetPlanCost(taskType property.TaskType, option *PlanCostOption) (float64, error) {
+	if p.ctx.GetSessionVars().CostModelVersion == modelVer1 {
+		return p.getPlanCostV1(taskType, option)
+	}
+	return p.getPlanCostV2(taskType, option)
 }
 
 func (p *PointGetPlan) getPlanCostV1(_ property.TaskType, option *PlanCostOption) (float64, error) {

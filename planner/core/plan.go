@@ -331,9 +331,13 @@ type PhysicalPlan interface {
 	Plan
 
 	// GetPlanCost calculates the cost of the plan if it has not been calculated yet and returns the cost.
+	// The cost model version is determined by TiDBCostModelVersion.
 	GetPlanCost(taskType property.TaskType, option *PlanCostOption) (float64, error)
 
+	// getPlanCostV1 returns the cost of this plan under cost model ver1.
 	getPlanCostV1(taskType property.TaskType, option *PlanCostOption) (float64, error)
+
+	// getPlanCostV2 returns the cost of this plan under cost model ver2.
 	getPlanCostV2(taskType property.TaskType, option *PlanCostOption) (float64, error)
 
 	// attach2Task makes the current physical plan as the father of task's physicalPlan and updates the cost of
