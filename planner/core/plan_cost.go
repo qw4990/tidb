@@ -403,6 +403,7 @@ func (p *PhysicalTableReader) GetPlanCost(_ property.TaskType, option *PlanCostO
 		p.planCost = childCost
 		// net I/O cost: rows * row-size * net-factor
 		rowSize = getTblStats(p.tablePlan).GetAvgRowSize(p.ctx, p.tablePlan.Schema().Columns, false, false)
+		costDebug(p, "tikv-row-size=%v", rowSize)
 		rowCount = getCardinality(p.tablePlan, costFlag)
 		p.planCost += rowCount * rowSize * netFactor
 		recordCost(p, costFlag, variable.TiDBOptNetworkFactorV2, rowCount*rowSize*netFactor)
@@ -423,6 +424,7 @@ func (p *PhysicalTableReader) GetPlanCost(_ property.TaskType, option *PlanCostO
 			} else {
 				rowSize = getTblStats(p.tablePlan).GetAvgRowSize(p.ctx, p.tablePlan.Schema().Columns, false, false)
 			}
+			costDebug(p, "mpp-row-size=%v", rowSize)
 			seekCost = accumulateNetSeekCost4MPP(p.tablePlan)
 			childCost, err := p.tablePlan.GetPlanCost(property.MppTaskType, option)
 			if err != nil {
@@ -433,6 +435,7 @@ func (p *PhysicalTableReader) GetPlanCost(_ property.TaskType, option *PlanCostO
 			// cop protocol
 			concurrency = float64(p.ctx.GetSessionVars().DistSQLScanConcurrency())
 			rowSize = getTblStats(p.tablePlan).GetAvgRowSize(p.ctx, p.tablePlan.Schema().Columns, false, false)
+			costDebug(p, "tiflash-row-size=%v", rowSize)
 			seekCost = estimateNetSeekCost(p.tablePlan)
 			tType := property.MppTaskType
 			if p.ctx.GetSessionVars().CostModelVersion == modelVer1 {
@@ -566,6 +569,7 @@ func (p *PhysicalTableScan) GetPlanCost(taskType property.TaskType, option *Plan
 		// the formula `log(rowSize)` is based on experiment results
 		rowSize = math.Max(p.getScanRowSize(), 2.0) // to guarantee logRowSize >= 1
 		logRowSize := math.Log2(rowSize)
+		costDebug(p, "original-row-size=%v, log-row-size=%v", rowSize, logRowSize)
 		rowCount = getCardinality(p, costFlag)
 		selfCost = rowCount * logRowSize * scanFactor
 
