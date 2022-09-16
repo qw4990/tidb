@@ -418,7 +418,11 @@ func (p *PhysicalTableReader) GetPlanCost(_ property.TaskType, option *PlanCostO
 		if isMPP {
 			// mpp protocol
 			concurrency = p.ctx.GetSessionVars().CopTiFlashConcurrencyFactor
-			rowSize = collectRowSizeFromMPPPlan(p.tablePlan)
+			if p.ctx.GetSessionVars().CostModelVersion == modelVer1 {
+				rowSize = collectRowSizeFromMPPPlan(p.tablePlan)
+			} else {
+				rowSize = getTblStats(p.tablePlan).GetAvgRowSize(p.ctx, p.tablePlan.Schema().Columns, false, false)
+			}
 			seekCost = accumulateNetSeekCost4MPP(p.tablePlan)
 			childCost, err := p.tablePlan.GetPlanCost(property.MppTaskType, option)
 			if err != nil {
