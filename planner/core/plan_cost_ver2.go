@@ -1,11 +1,11 @@
 package core
 
 import (
-	"github.com/pingcap/errors"
+	"math"
+
 	"github.com/pingcap/tidb/kv"
 	"github.com/pingcap/tidb/planner/property"
 	"github.com/pingcap/tidb/sessionctx/variable"
-	"math"
 )
 
 /*
@@ -13,24 +13,10 @@ import (
 	sel-cost = rows * len(filters) * cpu-factor
 */
 func (p *PhysicalSelection) getPlanCostVer2(taskType property.TaskType, option *PlanCostOption) (float64, error) {
-	costFlag := option.CostFlag
-	var cpuFactor float64
-	var factorName string
-	switch taskType {
-	case property.RootTaskType:
-		cpuFactor = p.ctx.GetSessionVars().GetCPUFactor()
-		factorName = variable.TiDBOptCPUFactorV2
-	case property.MppTaskType:
-		cpuFactor = p.ctx.GetSessionVars().GetTiFlashCPUFactor()
-		factorName = variable.TiDBOptTiFlashCPUFactorV2
-	case property.CopSingleReadTaskType, property.CopDoubleReadTaskType:
-		cpuFactor = p.ctx.GetSessionVars().GetCopCPUFactor()
-		factorName = variable.TiDBOptCopCPUFactorV2
-	default:
-		return 0, errors.Errorf("unknown task type %v", taskType)
-	}
-	selfCost := getCardinality(p.children[0], costFlag) * float64(len(p.Conditions)) * cpuFactor
-	recordCost(p, costFlag, factorName, selfCost)
+	cpuFactor, cpuFactorName := getCPUFactor(p, taskType)
+	rowCount := getCardinality(p.children[0], option.CostFlag)
+	selfCost := rowCount * float64(len(p.Conditions)) * cpuFactor
+	recordCost(p, option.CostFlag, cpuFactorName, selfCost)
 
 	childCost, err := p.children[0].GetPlanCost(taskType, option)
 	if err != nil {
@@ -46,14 +32,11 @@ func (p *PhysicalSelection) getPlanCostVer2(taskType property.TaskType, option *
 	proj-cost = rows * len(exprs) * cpu-factor / concurrency
 */
 func (p *PhysicalProjection) getPlanCostVer2(taskType property.TaskType, option *PlanCostOption) (float64, error) {
-	sessVars := p.ctx.GetSessionVars()
+	cpuFactor, cpuFactorName := getCPUFactor(p, taskType)
 	rowCount := getCardinality(p, option.CostFlag)
-	projCost := rowCount * float64(len(p.Exprs)) * sessVars.GetCPUFactor()
-	concurrency := float64(sessVars.ProjectionConcurrency())
-	if concurrency > 1 {
-		projCost /= concurrency
-	}
-	recordCost(p, option.CostFlag, variable.TiDBOptCPUFactorV2, projCost)
+	projCost := rowCount * float64(len(p.Exprs)) * cpuFactor
+	projCost /= float64(p.ctx.GetSessionVars().ProjectionConcurrency())
+	recordCost(p, option.CostFlag, cpuFactorName, projCost)
 
 	childCost, err := p.children[0].GetPlanCost(taskType, option)
 	if err != nil {
@@ -69,8 +52,8 @@ func (p *PhysicalProjection) getPlanCostVer2(taskType property.TaskType, option 
 	net-cost = rows * row-size * net-factor
 */
 func (p *PhysicalIndexReader) getPlanCostVer2(_ property.TaskType, option *PlanCostOption) (float64, error) {
-	rowSize := getTblStats(p.indexPlan).GetAvgRowSize(p.ctx, p.indexPlan.Schema().Columns, true, false)
 	rowCount := getCardinality(p.indexPlan, option.CostFlag)
+	rowSize := getTblStats(p.indexPlan).GetAvgRowSize(p.ctx, p.indexPlan.Schema().Columns, true, false)
 	netFactor := getTableNetFactor(p.indexPlan)
 	netCost := rowCount * rowSize * netFactor
 	recordCost(p, option.CostFlag, variable.TiDBOptNetworkFactorV2, rowCount*rowSize*netFactor)
