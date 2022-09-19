@@ -974,6 +974,7 @@ func (p *PhysicalMergeJoin) GetCost(lCnt, rCnt float64, costFlag uint64) float64
 		innerStats = p.children[0].statsInfo()
 	}
 	helper := &fullJoinRowCountHelper{
+		sctx:          p.SCtx(),
 		cartesian:     false,
 		leftProfile:   p.children[0].statsInfo(),
 		rightProfile:  p.children[1].statsInfo(),
@@ -1008,7 +1009,7 @@ func (p *PhysicalMergeJoin) GetCost(lCnt, rCnt float64, costFlag uint64) float64
 	cpuCost += probeCost
 	// For merge join, only one group of rows with same join key(not null) are cached,
 	// we compute average memory cost using estimated group size.
-	NDV := getColsNDV(innerKeys, innerSchema, innerStats)
+	NDV, _ := getColsNDVWithMatchedLen(innerKeys, innerSchema, innerStats)
 	memoryCost := (innerCnt / NDV) * sessVars.GetMemoryFactor()
 	recordCost(p, costFlag, variable.TiDBOptCPUFactorV2, cpuCost)
 	recordCost(p, costFlag, variable.TiDBOptMemoryFactorV2, memoryCost)
@@ -1089,6 +1090,7 @@ func (p *PhysicalHashJoin) GetCost(lCnt, rCnt float64, isMPP bool, costFlag uint
 	}
 	// Number of matched row pairs regarding the equal join conditions.
 	helper := &fullJoinRowCountHelper{
+		sctx:          p.SCtx(),
 		cartesian:     false,
 		leftProfile:   p.children[0].statsInfo(),
 		rightProfile:  p.children[1].statsInfo(),
