@@ -6,8 +6,11 @@ import (
 	"github.com/pingcap/tidb/sessionctx/variable"
 )
 
+/*
+	plan-cost = child-cost + sel-cost
+	sel-cost = rows * len(filters) * cpu-factor
+*/
 func (p *PhysicalSelection) getPlanCostVer2(taskType property.TaskType, option *PlanCostOption) (float64, error) {
-	// selection cost: rows * num-filters * cpu-factor
 	costFlag := option.CostFlag
 	var cpuFactor float64
 	var factorName string
@@ -36,27 +39,58 @@ func (p *PhysicalSelection) getPlanCostVer2(taskType property.TaskType, option *
 	return p.planCost, nil
 }
 
-func (p *PhysicalProjection) selfCostVer2(taskType property.TaskType, option *PlanCostOption) float64 {
-	// rows * num_expr * cpu-factor / concurrency
+/*
+	plan-cost = child-cost + proj-cost
+	proj-cost = rows * len(exprs) * cpu-factor / concurrency
+*/
+func (p *PhysicalProjection) getPlanCostVer2(taskType property.TaskType, option *PlanCostOption) (float64, error) {
 	sessVars := p.ctx.GetSessionVars()
-	costFlag := option.CostFlag
-	rowCount := getCardinality(p, costFlag)
-	cpuCost := rowCount * float64(len(p.Exprs)) * sessVars.GetCPUFactor()
+	rowCount := getCardinality(p, option.CostFlag)
+	projCost := rowCount * float64(len(p.Exprs)) * sessVars.GetCPUFactor()
 	concurrency := float64(sessVars.ProjectionConcurrency())
 	if concurrency > 1 {
-		cpuCost /= concurrency
+		projCost /= concurrency
 	}
-	recordCost(p, costFlag, variable.TiDBOptCPUFactorV2, cpuCost)
-	return cpuCost
-}
+	recordCost(p, option.CostFlag, variable.TiDBOptCPUFactorV2, projCost)
 
-func (p *PhysicalProjection) getPlanCostVer2(taskType property.TaskType, option *PlanCostOption) (float64, error) {
-	selfCost := p.selfCostVer2(taskType, option)
 	childCost, err := p.children[0].GetPlanCost(taskType, option)
 	if err != nil {
 		return 0, err
 	}
-	p.planCost = selfCost + childCost
+	p.planCost = projCost + childCost
+	p.planCostInit = true
+	return p.planCost, nil
+}
+
+/*
+	TODO
+*/
+func (p *PhysicalIndexLookUpReader) getPlanCostVer2(_ property.TaskType, option *PlanCostOption) (float64, error) {
+	// index-net-cost = index-rows * row-size * net-factor
+	// table-net-cost = table-rows * row-size * net-factor
+	// double-read-cost = num-tasks * seek-factor
+
+	// TODO
+	return 0, nil
+}
+
+/*
+	plan-cost = (child-cost + net-cost) / concurrency
+	net-cost = rows * row-size * net-factor
+*/
+func (p *PhysicalIndexReader) getPlanCostVer2(_ property.TaskType, option *PlanCostOption) (float64, error) {
+	rowSize := getTblStats(p.indexPlan).GetAvgRowSize(p.ctx, p.indexPlan.Schema().Columns, true, false)
+	rowCount := getCardinality(p.indexPlan, option.CostFlag)
+	netFactor := getTableNetFactor(p.indexPlan)
+	netCost := rowCount * rowSize * netFactor
+	recordCost(p, option.CostFlag, variable.TiDBOptNetworkFactorV2, rowCount*rowSize*netFactor)
+
+	childCost, err := p.indexPlan.GetPlanCost(property.CopSingleReadTaskType, option)
+	if err != nil {
+		return 0, err
+	}
+
+	p.planCost = (netCost + childCost) / float64(p.ctx.GetSessionVars().DistSQLScanConcurrency())
 	p.planCostInit = true
 	return p.planCost, nil
 }
