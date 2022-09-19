@@ -8,6 +8,70 @@ import (
 	"github.com/pingcap/tidb/sessionctx/variable"
 )
 
+func recordFactorCost(p PhysicalPlan, costFlag uint64, factor string, cost float64) {
+	if p.SCtx().GetSessionVars().CostModelVersion != 2 || !hasCostFlag(costFlag, CostFlagUseTrueCardinality) {
+		return
+	}
+	p.RecordFactorCost(factor, cost)
+}
+
+// RecordFactorCost ...
+func (p *basePhysicalPlan) RecordFactorCost(factor string, weight float64) {
+	if p.costWeights == nil {
+		p.costWeights = make(map[string]float64)
+	}
+	p.costWeights[factor] += weight
+}
+
+// FactorCosts ...
+func (p *basePhysicalPlan) FactorCosts() map[string]float64 {
+	weights := make(map[string]float64)
+	var children []PhysicalPlan
+	for _, child := range p.children {
+		children = append(children, child)
+	}
+	switch x := p.self.(type) {
+	case *PhysicalTableReader:
+		children = append(children, x.tablePlan)
+	case *PhysicalIndexReader:
+		children = append(children, x.indexPlan)
+	case *PhysicalIndexLookUpReader:
+		children = append(children, x.tablePlan)
+		children = append(children, x.indexPlan)
+	case *PhysicalIndexMergeReader:
+		children = append(children, x.tablePlan)
+		children = append(children, x.partialPlans...)
+	}
+	for k, v := range p.costWeights {
+		weights[k] += v
+	}
+	for _, c := range children {
+		for k, v := range c.FactorCosts() {
+			weights[k] += v
+		}
+	}
+	return weights
+}
+
+func recordCost(p PhysicalPlan, costFlag uint64, factor string, cost float64) {
+	if factor == "" || cost == 0 {
+		return
+	}
+	if !hasCostFlag(costFlag, CostFlagRecalculate) {
+		return
+	}
+	v := p.SCtx().GetSessionVars()
+	if v.CostModelVersion != 2 {
+		return
+	}
+	if v.DistSQLScanConcurrency() > 1 ||
+		v.IndexLookupConcurrency() > 1 ||
+		v.ExecutorConcurrency > 1 {
+		return
+	}
+	p.RecordFactorCost(factor, cost)
+}
+
 /*
 plan-cost = child-cost + sel-cost
 sel-cost = rows * len(filters) * cpu-factor

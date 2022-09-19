@@ -32,7 +32,7 @@ func NewProjectionImpl(proj *plannercore.PhysicalProjection) *ProjectionImpl {
 // CalcCost implements Implementation CalcCost interface.
 func (impl *ProjectionImpl) CalcCost(_ float64, children ...memo.Implementation) float64 {
 	proj := impl.plan.(*plannercore.PhysicalProjection)
-	impl.cost = proj.GetCost(children[0].GetPlan().Stats().RowCount, 0) + children[0].GetCost()
+	impl.cost = proj.GetCost(children[0].GetPlan().Stats().RowCount) + children[0].GetCost()
 	return impl.cost
 }
 
