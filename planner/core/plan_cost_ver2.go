@@ -2,9 +2,9 @@ package core
 
 import (
 	"fmt"
-	"github.com/pingcap/errors"
 	"math"
 
+	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb/kv"
 	"github.com/pingcap/tidb/planner/property"
 	"github.com/pingcap/tidb/sessionctx/variable"
