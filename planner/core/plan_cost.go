@@ -128,6 +128,10 @@ func (p *PhysicalSelection) GetPlanCost(taskType property.TaskType, option *Plan
 		return p.planCost, nil
 	}
 
+	if p.ctx.GetSessionVars().CostModelVersion == modelVer2 {
+		return p.getPlanCostVer2(taskType, option)
+	}
+
 	var selfCost float64
 	switch p.ctx.GetSessionVars().CostModelVersion {
 	case modelVer1: // selection cost: rows * cpu-factor
