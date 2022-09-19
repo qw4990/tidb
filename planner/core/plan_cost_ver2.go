@@ -2,8 +2,10 @@ package core
 
 import (
 	"github.com/pingcap/errors"
+	"github.com/pingcap/tidb/kv"
 	"github.com/pingcap/tidb/planner/property"
 	"github.com/pingcap/tidb/sessionctx/variable"
+	"math"
 )
 
 /*
@@ -91,6 +93,73 @@ func (p *PhysicalIndexReader) getPlanCostVer2(_ property.TaskType, option *PlanC
 	}
 
 	p.planCost = (netCost + childCost) / float64(p.ctx.GetSessionVars().DistSQLScanConcurrency())
+	p.planCostInit = true
+	return p.planCost, nil
+}
+
+/*
+	plan-cost = (child-cost + net-cost) / concurrency
+	net-cost = rows * row-size * net-factor
+*/
+func (p *PhysicalTableReader) getPlanCostVer2(_ property.TaskType, option *PlanCostOption) (float64, error) {
+	var concurrency float64
+	var childTaskType property.TaskType
+	if _, isMPP := p.tablePlan.(*PhysicalExchangeSender); isMPP && p.StoreType == kv.TiFlash { // mpp protocol
+		concurrency = p.ctx.GetSessionVars().CopTiFlashConcurrencyFactor
+		childTaskType = property.MppTaskType
+	} else { // cop protocol
+		concurrency = float64(p.ctx.GetSessionVars().DistSQLScanConcurrency())
+		childTaskType = property.CopSingleReadTaskType
+	}
+
+	rowSize := getTblStats(p.tablePlan).GetAvgRowSize(p.ctx, p.tablePlan.Schema().Columns, false, false)
+	rowCount := getCardinality(p.tablePlan, option.CostFlag)
+	netFactor := getTableNetFactor(p.tablePlan)
+	netCost := rowCount * rowSize * netFactor
+	recordCost(p, option.CostFlag, variable.TiDBOptNetworkFactorV2, netCost)
+
+	childCost, err := p.tablePlan.GetPlanCost(childTaskType, option)
+	if err != nil {
+		return 0, err
+	}
+
+	p.planCost = (childCost + netCost) / concurrency
+	p.planCostInit = true
+	return p.planCost, nil
+}
+
+/*
+	plan-cost = rows * log2(row-size) * scan-factor
+*/
+func (p *PhysicalTableScan) getPlanCostVer2(taskType property.TaskType, option *PlanCostOption) (float64, error) {
+	var scanFactor float64
+	var scanFactorName string
+	switch taskType {
+	case property.MppTaskType:
+		scanFactor = p.ctx.GetSessionVars().GetTiFlashScanFactor()
+		scanFactorName = variable.TiDBOptTiFlashScanFactorV2
+	default: // TiKV
+		scanFactor = p.ctx.GetSessionVars().GetScanFactor(p.Table)
+		scanFactorName = variable.TiDBOptScanFactorV2
+		if p.Desc {
+			scanFactor = p.ctx.GetSessionVars().GetDescScanFactor(p.Table)
+			scanFactorName = variable.TiDBOptDescScanFactorV2
+		}
+	}
+
+	// the formula `log(rowSize)` is based on experiment results
+	rowSize := math.Max(p.getScanRowSize(), 2.0) // to guarantee logRowSize >= 1
+	logRowSize := math.Log2(rowSize)
+	rowCount := getCardinality(p, option.CostFlag)
+	scanCost := rowCount * logRowSize * scanFactor
+
+	// give TiFlash a start-up cost to let the optimizer prefers to use TiKV to process small table scans.
+	if p.StoreType == kv.TiFlash {
+		scanCost += 2000 * logRowSize * scanFactor
+	}
+
+	recordCost(p, option.CostFlag, scanFactorName, scanCost)
+	p.planCost = scanCost
 	p.planCostInit = true
 	return p.planCost, nil
 }
