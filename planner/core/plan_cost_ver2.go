@@ -187,35 +187,81 @@ func (p *PhysicalIndexScan) getPlanCostVer2(_ property.TaskType, option *PlanCos
 
 /*
 	plan-cost = child-cost + agg-cost
-	agg-cost = rows * (len(agg-funcs)+len(group-funcs)) * cpu-factor
+	agg-cost = agg-cpu-cost + group-cpu-cost
+	agg-cpu-cost = rows * len(agg-funcs) * cpu-factor
+	group-cpu-cost = rows * len(group-funcs) * cpu-factor
 */
 func (p *PhysicalStreamAgg) getPlanCostVer2(taskType property.TaskType, option *PlanCostOption) (float64, error) {
-	var cpuFactor float64
-	var cpuFactorName string
-	switch taskType {
-	case property.RootTaskType:
-		cpuFactor = p.ctx.GetSessionVars().GetCPUFactor()
-		cpuFactorName = variable.TiDBOptCPUFactorV2
-	case property.CopSingleReadTaskType, property.CopDoubleReadTaskType:
-		cpuFactor = p.ctx.GetSessionVars().GetCopCPUFactor()
-		cpuFactorName = variable.TiDBOptCopCPUFactorV2
-	case property.MppTaskType:
-		cpuFactor = p.ctx.GetSessionVars().GetTiFlashCPUFactor()
-		cpuFactorName = variable.TiDBOptTiFlashCPUFactorV2
-	default:
-		return 0, errors.Errorf("unknown task type %v", taskType)
-	}
-
+	cpuFactor, cpuFactorName := getCPUFactor(p, taskType)
 	rowCount := getCardinality(p, option.CostFlag)
-	aggCost := rowCount * float64(len(p.AggFuncs)+len(p.GroupByItems)) * cpuFactor
+	aggCost := rowCount * float64(len(p.AggFuncs)) * cpuFactor
 	recordCost(p, option.CostFlag, cpuFactorName, aggCost)
+
+	groupCost := rowCount * float64(len(p.GroupByItems)) * cpuFactor
+	recordCost(p, option.CostFlag, cpuFactorName, groupCost)
 
 	childCost, err := p.children[0].GetPlanCost(taskType, option)
 	if err != nil {
 		return 0, err
 	}
 
-	p.planCost = childCost + aggCost
+	p.planCost = childCost + aggCost + groupCost
 	p.planCostInit = true
 	return p.planCost, nil
+}
+
+/*
+	plan-cost = child-cost + agg-cost
+	agg-cost = (agg-cpu-cost + group-cpu-cost + hash-cost) / concurrency
+	agg-cup-cost = rows * len(agg-funcs) * cpu-factor
+	group-cpu-cost = rows * len(group-funcs) * cpu-factor
+	hash-cost = rows * len(group-funcs) * hash-factor : cost of maintaining the hash table.
+*/
+func (p *PhysicalHashAgg) getPlanCostVer2(taskType property.TaskType, option *PlanCostOption) (float64, error) {
+	cpuFactor, cpuFactorName := getCPUFactor(p, taskType)
+	rowCount := getCardinality(p, option.CostFlag)
+
+	aggCost := rowCount * float64(len(p.AggFuncs)) * cpuFactor
+	recordCost(p, option.CostFlag, cpuFactorName, aggCost)
+
+	groupCost := rowCount * float64(len(p.GroupByItems)) * cpuFactor
+	recordCost(p, option.CostFlag, cpuFactorName, groupCost)
+
+	hashFactor, hashFactorName := getHashFactor(p, taskType)
+	hashCost := rowCount * float64(len(p.GroupByItems)) * hashFactor
+	recordCost(p, option.CostFlag, hashFactorName, hashCost)
+
+	concurrency := float64(1)
+	if taskType == property.RootTaskType {
+		concurrency = float64(p.SCtx().GetSessionVars().ExecutorConcurrency)
+	}
+
+	childCost, err := p.children[0].GetPlanCost(taskType, option)
+	if err != nil {
+		return 0, err
+	}
+
+	p.planCost = (aggCost+groupCost+hashCost)/concurrency + childCost
+	p.planCostInit = true
+	return p.planCost, nil
+}
+
+func getCPUFactor(p PhysicalPlan, taskType property.TaskType) (float64, string) {
+	switch taskType {
+	case property.RootTaskType:
+		return p.SCtx().GetSessionVars().GetCPUFactor(), variable.TiDBOptCPUFactorV2
+	case property.CopSingleReadTaskType, property.CopDoubleReadTaskType:
+		return p.SCtx().GetSessionVars().GetCopCPUFactor(), variable.TiDBOptCopCPUFactorV2
+	default: // MPP
+		return p.SCtx().GetSessionVars().GetTiFlashCPUFactor(), variable.TiDBOptTiFlashCPUFactorV2
+	}
+}
+
+func getHashFactor(p PhysicalPlan, taskType property.TaskType) (float64, string) {
+	switch taskType {
+	case property.MppTaskType:
+		return p.SCtx().GetSessionVars().GetTiFlashHashTableFactor(), variable.TiDBOptTiFlashHashTableFactorV2
+	default:
+		return p.SCtx().GetSessionVars().GetHashTableFactor(), variable.TiDBOptHashTableFactorV2
+	}
 }
