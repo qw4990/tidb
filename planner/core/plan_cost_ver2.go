@@ -9,8 +9,8 @@ import (
 )
 
 /*
-	plan-cost = child-cost + sel-cost
-	sel-cost = rows * len(filters) * cpu-factor
+plan-cost = child-cost + sel-cost
+sel-cost = rows * len(filters) * cpu-factor
 */
 func (p *PhysicalSelection) getPlanCostVer2(taskType property.TaskType, option *PlanCostOption) (float64, error) {
 	cpuFactor, cpuFactorName := getCPUFactor(p, taskType)
@@ -28,8 +28,8 @@ func (p *PhysicalSelection) getPlanCostVer2(taskType property.TaskType, option *
 }
 
 /*
-	plan-cost = child-cost + proj-cost
-	proj-cost = rows * len(exprs) * cpu-factor / concurrency
+plan-cost = child-cost + proj-cost
+proj-cost = rows * len(exprs) * cpu-factor / concurrency
 */
 func (p *PhysicalProjection) getPlanCostVer2(taskType property.TaskType, option *PlanCostOption) (float64, error) {
 	cpuFactor, cpuFactorName := getCPUFactor(p, taskType)
@@ -48,8 +48,8 @@ func (p *PhysicalProjection) getPlanCostVer2(taskType property.TaskType, option 
 }
 
 /*
-	plan-cost = (child-cost + net-cost) / concurrency
-	net-cost = rows * row-size * net-factor
+plan-cost = (child-cost + net-cost) / concurrency
+net-cost = rows * row-size * net-factor
 */
 func (p *PhysicalIndexReader) getPlanCostVer2(_ property.TaskType, option *PlanCostOption) (float64, error) {
 	rowCount := getCardinality(p.indexPlan, option.CostFlag)
@@ -69,8 +69,8 @@ func (p *PhysicalIndexReader) getPlanCostVer2(_ property.TaskType, option *PlanC
 }
 
 /*
-	plan-cost = (child-cost + net-cost) / concurrency
-	net-cost = rows * row-size * net-factor
+plan-cost = (child-cost + net-cost) / concurrency
+net-cost = rows * row-size * net-factor
 */
 func (p *PhysicalTableReader) getPlanCostVer2(_ property.TaskType, option *PlanCostOption) (float64, error) {
 	var concurrency float64
@@ -100,7 +100,7 @@ func (p *PhysicalTableReader) getPlanCostVer2(_ property.TaskType, option *PlanC
 }
 
 /*
-	plan-cost = rows * log2(row-size) * scan-factor
+plan-cost = rows * log2(row-size) * scan-factor
 */
 func (p *PhysicalTableScan) getPlanCostVer2(taskType property.TaskType, option *PlanCostOption) (float64, error) {
 	var scanFactor float64
@@ -136,7 +136,7 @@ func (p *PhysicalTableScan) getPlanCostVer2(taskType property.TaskType, option *
 }
 
 /*
-	plan-cost = rows * log2(row-size) * scan-factor
+plan-cost = rows * log2(row-size) * scan-factor
 */
 func (p *PhysicalIndexScan) getPlanCostVer2(_ property.TaskType, option *PlanCostOption) (float64, error) {
 	scanFactor := p.ctx.GetSessionVars().GetScanFactor(p.Table)
@@ -157,14 +157,14 @@ func (p *PhysicalIndexScan) getPlanCostVer2(_ property.TaskType, option *PlanCos
 }
 
 /*
-	plan-cost = child-cost + agg-cost
-	agg-cost = agg-cpu-cost + group-cpu-cost
-	agg-cpu-cost = rows * len(agg-funcs) * cpu-factor
-	group-cpu-cost = rows * len(group-funcs) * cpu-factor
+plan-cost = child-cost + agg-cost
+agg-cost = agg-cpu-cost + group-cpu-cost
+agg-cpu-cost = rows * len(agg-funcs) * cpu-factor
+group-cpu-cost = rows * len(group-funcs) * cpu-factor
 */
 func (p *PhysicalStreamAgg) getPlanCostVer2(taskType property.TaskType, option *PlanCostOption) (float64, error) {
 	cpuFactor, cpuFactorName := getCPUFactor(p, taskType)
-	rowCount := getCardinality(p, option.CostFlag)
+	rowCount := getCardinality(p.children[0], option.CostFlag)
 	aggCost := rowCount * float64(len(p.AggFuncs)) * cpuFactor
 	recordCost(p, option.CostFlag, cpuFactorName, aggCost)
 
@@ -182,15 +182,15 @@ func (p *PhysicalStreamAgg) getPlanCostVer2(taskType property.TaskType, option *
 }
 
 /*
-	plan-cost = child-cost + agg-cost
-	agg-cost = (agg-cpu-cost + group-cpu-cost + hash-cost) / concurrency
-	agg-cup-cost = rows * len(agg-funcs) * cpu-factor
-	group-cpu-cost = rows * len(group-funcs) * cpu-factor
-	hash-cost = rows * len(group-funcs) * hash-factor : cost of maintaining the hash table.
+plan-cost = child-cost + agg-cost
+agg-cost = (agg-cpu-cost + group-cpu-cost + hash-cost) / concurrency
+agg-cup-cost = rows * len(agg-funcs) * cpu-factor
+group-cpu-cost = rows * len(group-funcs) * cpu-factor
+hash-cost = rows * len(group-funcs) * hash-factor : cost of maintaining the hash table.
 */
 func (p *PhysicalHashAgg) getPlanCostVer2(taskType property.TaskType, option *PlanCostOption) (float64, error) {
 	cpuFactor, cpuFactorName := getCPUFactor(p, taskType)
-	rowCount := getCardinality(p, option.CostFlag)
+	rowCount := getCardinality(p.children[0], option.CostFlag)
 
 	aggCost := rowCount * float64(len(p.AggFuncs)) * cpuFactor
 	recordCost(p, option.CostFlag, cpuFactorName, aggCost)
@@ -218,8 +218,8 @@ func (p *PhysicalHashAgg) getPlanCostVer2(taskType property.TaskType, option *Pl
 }
 
 /*
-	plan-cost = child-cost + net-cost
-	net-cost = rows * row-size * net-factor
+plan-cost = child-cost + net-cost
+net-cost = rows * row-size * net-factor
 */
 func (p *PhysicalExchangeReceiver) getPlanCostVer2(taskType property.TaskType, option *PlanCostOption) (float64, error) {
 	rows := getCardinality(p.children[0], option.CostFlag)
