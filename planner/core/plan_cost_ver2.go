@@ -1,6 +1,8 @@
 package core
 
 import (
+	"fmt"
+	"github.com/pingcap/errors"
 	"math"
 
 	"github.com/pingcap/tidb/kv"
@@ -320,3 +322,21 @@ func getHashFactor(p PhysicalPlan, taskType property.TaskType) (float64, string)
 		return p.SCtx().GetSessionVars().GetHashTableFactor(), variable.TiDBOptHashTableFactorV2
 	}
 }
+
+func costDebug(p PhysicalPlan, format string, args ...interface{}) {
+	if !p.SCtx().GetSessionVars().StmtCtx.DEBUG {
+		return
+	}
+	msg := fmt.Sprintf("[COST-DEBUG-ver%v] %v %v", p.SCtx().GetSessionVars().CostModelVersion, p.ExplainID().String(), fmt.Sprintf(format, args...))
+	p.SCtx().GetSessionVars().StmtCtx.AppendNote(errors.New(msg))
+}
+
+func (p *BatchPointGetPlan) RecordFactorCost(factor string, weight float64) {
+}
+
+func (p *BatchPointGetPlan) FactorCosts() map[string]float64 { return nil }
+
+func (p *PointGetPlan) RecordFactorCost(factor string, weight float64) {
+}
+
+func (p *PointGetPlan) FactorCosts() map[string]float64 { return nil }
