@@ -65,18 +65,6 @@ func (p *PhysicalProjection) getPlanCostVer2(taskType property.TaskType, option 
 }
 
 /*
-	TODO
-*/
-func (p *PhysicalIndexLookUpReader) getPlanCostVer2(_ property.TaskType, option *PlanCostOption) (float64, error) {
-	// index-net-cost = index-rows * row-size * net-factor
-	// table-net-cost = table-rows * row-size * net-factor
-	// double-read-cost = num-tasks * seek-factor
-
-	// TODO
-	return 0, nil
-}
-
-/*
 	plan-cost = (child-cost + net-cost) / concurrency
 	net-cost = rows * row-size * net-factor
 */
@@ -242,6 +230,26 @@ func (p *PhysicalHashAgg) getPlanCostVer2(taskType property.TaskType, option *Pl
 	}
 
 	p.planCost = (aggCost+groupCost+hashCost)/concurrency + childCost
+	p.planCostInit = true
+	return p.planCost, nil
+}
+
+/*
+	plan-cost = child-cost + net-cost
+	net-cost = rows * row-size * net-factor
+*/
+func (p *PhysicalExchangeReceiver) getPlanCostVer2(taskType property.TaskType, option *PlanCostOption) (float64, error) {
+	rows := getCardinality(p.children[0], option.CostFlag)
+	rowSize := getTblStats(p.children[0]).GetAvgRowSize(p.ctx, p.children[0].Schema().Columns, false, false)
+	netCost := rows * rowSize * p.ctx.GetSessionVars().GetNetworkFactor(nil)
+	recordCost(p, option.CostFlag, variable.TiDBOptNetworkFactorV2, netCost)
+
+	childCost, err := p.children[0].GetPlanCost(taskType, option)
+	if err != nil {
+		return 0, err
+	}
+
+	p.planCost = netCost + childCost
 	p.planCostInit = true
 	return p.planCost, nil
 }
