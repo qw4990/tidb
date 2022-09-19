@@ -157,9 +157,65 @@ func (p *PhysicalTableScan) getPlanCostVer2(taskType property.TaskType, option *
 	if p.StoreType == kv.TiFlash {
 		scanCost += 2000 * logRowSize * scanFactor
 	}
-
 	recordCost(p, option.CostFlag, scanFactorName, scanCost)
+
 	p.planCost = scanCost
+	p.planCostInit = true
+	return p.planCost, nil
+}
+
+/*
+	plan-cost = rows * log2(row-size) * scan-factor
+*/
+func (p *PhysicalIndexScan) getPlanCostVer2(_ property.TaskType, option *PlanCostOption) (float64, error) {
+	scanFactor := p.ctx.GetSessionVars().GetScanFactor(p.Table)
+	scanFactorName := variable.TiDBOptScanFactorV2
+	if p.Desc {
+		scanFactor = p.ctx.GetSessionVars().GetDescScanFactor(p.Table)
+		scanFactorName = variable.TiDBOptDescScanFactorV2
+	}
+	rowCount := getCardinality(p, option.CostFlag)
+	rowSize := math.Max(p.getScanRowSize(), 2.0)
+	logRowSize := math.Log2(rowSize)
+	scanCost := rowCount * logRowSize * scanFactor
+	recordCost(p, option.CostFlag, scanFactorName, scanCost)
+
+	p.planCost = scanCost
+	p.planCostInit = true
+	return p.planCost, nil
+}
+
+/*
+	plan-cost = child-cost + agg-cost
+	agg-cost = rows * (len(agg-funcs)+len(group-funcs)) * cpu-factor
+*/
+func (p *PhysicalStreamAgg) getPlanCostVer2(taskType property.TaskType, option *PlanCostOption) (float64, error) {
+	var cpuFactor float64
+	var cpuFactorName string
+	switch taskType {
+	case property.RootTaskType:
+		cpuFactor = p.ctx.GetSessionVars().GetCPUFactor()
+		cpuFactorName = variable.TiDBOptCPUFactorV2
+	case property.CopSingleReadTaskType, property.CopDoubleReadTaskType:
+		cpuFactor = p.ctx.GetSessionVars().GetCopCPUFactor()
+		cpuFactorName = variable.TiDBOptCopCPUFactorV2
+	case property.MppTaskType:
+		cpuFactor = p.ctx.GetSessionVars().GetTiFlashCPUFactor()
+		cpuFactorName = variable.TiDBOptTiFlashCPUFactorV2
+	default:
+		return 0, errors.Errorf("unknown task type %v", taskType)
+	}
+
+	rowCount := getCardinality(p, option.CostFlag)
+	aggCost := rowCount * float64(len(p.AggFuncs)+len(p.GroupByItems)) * cpuFactor
+	recordCost(p, option.CostFlag, cpuFactorName, aggCost)
+
+	childCost, err := p.children[0].GetPlanCost(taskType, option)
+	if err != nil {
+		return 0, err
+	}
+
+	p.planCost = childCost + aggCost
 	p.planCostInit = true
 	return p.planCost, nil
 }
