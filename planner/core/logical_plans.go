@@ -1066,6 +1066,8 @@ type LogicalApply struct {
 	LogicalJoin
 
 	CorCols []*expression.CorrelatedColumn
+	// NoDecorrelate is from /*+ no_decorrelate() */ hint.
+	NoDecorrelate bool
 }
 
 // ExtractCorrelatedCols implements LogicalPlan interface.

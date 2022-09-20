@@ -116,6 +116,7 @@ import (
 	hintStraightJoin          "STRAIGHT_JOIN"
 	hintLeading               "LEADING"
 	hintSemiJoinRewrite       "SEMI_JOIN_REWRITE"
+	hintNoDecorrelate         "NO_DECORRELATE"
 
 	/* Other keywords */
 	hintOLAP            "OLAP"
@@ -601,6 +602,7 @@ NullaryHintName:
 |	"IGNORE_PLAN_CACHE"
 |	"STRAIGHT_JOIN"
 |	"SEMI_JOIN_REWRITE"
+|	"NO_DECORRELATE"
 
 HintQueryType:
 	"OLAP"
@@ -676,6 +678,7 @@ Identifier:
 |	"STRAIGHT_JOIN"
 |	"LEADING"
 |	"SEMI_JOIN_REWRITE"
+|	"NO_DECORRELATE"
 /* other keywords */
 |	"OLAP"
 |	"OLTP"
