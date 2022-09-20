@@ -829,6 +829,8 @@ type SessionVars struct {
 	tiflashCPUFactorV2 float64
 	// hashTableFactorV2 ...
 	hashTableFactorV2 float64
+	// copHashTableFactorV2 ...
+	copHashTableFactorV2 float64
 	// tiflashHashTableFactorV2 ...
 	tiflashHashTableFactorV2 float64
 	// networkFactorV2 is the network factor for the Cost Model Ver2.
@@ -2944,6 +2946,11 @@ func (s *SessionVars) GetTiFlashCPUFactor() float64 {
 // GetHashTableFactor ...
 func (s *SessionVars) GetHashTableFactor() float64 {
 	return s.hashTableFactorV2
+}
+
+// GetCopHashTableFactor ...
+func (s *SessionVars) GetCopHashTableFactor() float64 {
+	return s.copHashTableFactorV2
 }
 
 // GetTiFlashHashTableFactor ...

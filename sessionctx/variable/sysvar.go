@@ -1248,6 +1248,10 @@ var defaultSysVars = []*SysVar{
 		s.hashTableFactorV2 = tidbOptFloat64(val, DefOptHashTableFactorV2)
 		return nil
 	}},
+	{Scope: ScopeGlobal | ScopeSession, Name: TiDBOptCopHashTableFactorV2, Value: strconv.FormatFloat(DefOptHashTableFactorV2, 'f', -1, 64), Hidden: true, Type: TypeFloat, MinValue: 0, MaxValue: math.MaxUint64, SetSession: func(s *SessionVars, val string) error {
+		s.hashTableFactorV2 = tidbOptFloat64(val, DefOptHashTableFactorV2)
+		return nil
+	}},
 	{Scope: ScopeGlobal | ScopeSession, Name: TiDBOptTiFlashHashTableFactorV2, Value: strconv.FormatFloat(DefOptTiFlashHashTableFactorV2, 'f', -1, 64), Hidden: true, Type: TypeFloat, MinValue: 0, MaxValue: math.MaxUint64, SetSession: func(s *SessionVars, val string) error {
 		s.tiflashHashTableFactorV2 = tidbOptFloat64(val, DefOptTiFlashHashTableFactorV2)
 		return nil
