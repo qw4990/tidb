@@ -79,7 +79,7 @@ plan-cost = child-cost + sel-cost
 sel-cost = rows * len(filters) * cpu-factor
 */
 func (p *PhysicalSelection) getPlanCostVer2(taskType property.TaskType, option *PlanCostOption) (float64, error) {
-	cpuFactor, cpuFactorName := getCPUFactor(p, taskType)
+	cpuFactor, cpuFactorName := getCPUFactorVer2(p, taskType)
 	rowCount := getCardinality(p.children[0], option.CostFlag)
 	selfCost := rowCount * float64(len(p.Conditions)) * cpuFactor
 	recordCost(p, option.CostFlag, cpuFactorName, selfCost)
@@ -98,7 +98,7 @@ plan-cost = child-cost + proj-cost
 proj-cost = rows * len(exprs) * cpu-factor / concurrency
 */
 func (p *PhysicalProjection) getPlanCostVer2(taskType property.TaskType, option *PlanCostOption) (float64, error) {
-	cpuFactor, cpuFactorName := getCPUFactor(p, taskType)
+	cpuFactor, cpuFactorName := getCPUFactorVer2(p, taskType)
 	rowCount := getCardinality(p, option.CostFlag)
 	projCost := rowCount * float64(len(p.Exprs)) * cpuFactor
 	projCost /= float64(p.ctx.GetSessionVars().ProjectionConcurrency())
@@ -229,7 +229,7 @@ agg-cpu-cost = rows * len(agg-funcs) * cpu-factor
 group-cpu-cost = rows * len(group-funcs) * cpu-factor
 */
 func (p *PhysicalStreamAgg) getPlanCostVer2(taskType property.TaskType, option *PlanCostOption) (float64, error) {
-	cpuFactor, cpuFactorName := getCPUFactor(p, taskType)
+	cpuFactor, cpuFactorName := getCPUFactorVer2(p, taskType)
 	rowCount := getCardinality(p.children[0], option.CostFlag)
 	aggCost := rowCount * float64(len(p.AggFuncs)) * cpuFactor
 	recordCost(p, option.CostFlag, cpuFactorName, aggCost)
@@ -255,7 +255,7 @@ group-cpu-cost = rows * len(group-funcs) * cpu-factor
 hash-cost = rows * len(group-funcs) * hash-factor : cost of maintaining the hash table.
 */
 func (p *PhysicalHashAgg) getPlanCostVer2(taskType property.TaskType, option *PlanCostOption) (float64, error) {
-	cpuFactor, cpuFactorName := getCPUFactor(p, taskType)
+	cpuFactor, cpuFactorName := getCPUFactorVer2(p, taskType)
 	rowCount := getCardinality(p.children[0], option.CostFlag)
 
 	aggCost := rowCount * float64(len(p.AggFuncs)) * cpuFactor
@@ -264,7 +264,7 @@ func (p *PhysicalHashAgg) getPlanCostVer2(taskType property.TaskType, option *Pl
 	groupCost := rowCount * float64(len(p.GroupByItems)) * cpuFactor
 	recordCost(p, option.CostFlag, cpuFactorName, groupCost)
 
-	hashFactor, hashFactorName := getHashFactor(p, taskType)
+	hashFactor, hashFactorName := getHashFactorVer2(p, taskType)
 	hashCost := rowCount * float64(len(p.GroupByItems)) * hashFactor
 	recordCost(p, option.CostFlag, hashFactorName, hashCost)
 
@@ -303,7 +303,7 @@ func (p *PhysicalExchangeReceiver) getPlanCostVer2(taskType property.TaskType, o
 	return p.planCost, nil
 }
 
-func getCPUFactor(p PhysicalPlan, taskType property.TaskType) (float64, string) {
+func getCPUFactorVer2(p PhysicalPlan, taskType property.TaskType) (float64, string) {
 	switch taskType {
 	case property.RootTaskType:
 		return p.SCtx().GetSessionVars().GetCPUFactor(), variable.TiDBOptCPUFactorV2
@@ -314,12 +314,14 @@ func getCPUFactor(p PhysicalPlan, taskType property.TaskType) (float64, string) 
 	}
 }
 
-func getHashFactor(p PhysicalPlan, taskType property.TaskType) (float64, string) {
+func getHashFactorVer2(p PhysicalPlan, taskType property.TaskType) (float64, string) {
 	switch taskType {
-	case property.MppTaskType:
-		return p.SCtx().GetSessionVars().GetTiFlashHashTableFactor(), variable.TiDBOptTiFlashHashTableFactorV2
-	default:
+	case property.RootTaskType:
 		return p.SCtx().GetSessionVars().GetHashTableFactor(), variable.TiDBOptHashTableFactorV2
+	case property.CopSingleReadTaskType, property.CopDoubleReadTaskType:
+		return p.SCtx().GetSessionVars().GetCopHashTableFactor(), variable.TiDBOptCopHashTableFactorV2
+	default: // MPP
+		return p.SCtx().GetSessionVars().GetTiFlashHashTableFactor(), variable.TiDBOptTiFlashHashTableFactorV2
 	}
 }
 
