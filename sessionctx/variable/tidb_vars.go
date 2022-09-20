@@ -319,6 +319,8 @@ const (
 	TiDBOptTiFlashHashTableFactorV2 = "tidb_opt_tiflash_hash_table_factor_v2"
 	// TiDBOptNetworkFactorV2 is the network factor for the Cost Model Ver2
 	TiDBOptNetworkFactorV2 = "tidb_opt_network_factor_v2"
+	// TiDBOptMPPNetworkFactorV2 ...
+	TiDBOptMPPNetworkFactorV2 = "tidb_opt_mpp_network_factor_v2"
 	// TiDBOptScanFactorV2 is the scan factor for the Cost Model Ver2
 	TiDBOptScanFactorV2 = "tidb_opt_scan_factor_v2"
 	// TiDBOptDescScanFactorV2 is the desc scan factor for the Cost Model Ver2

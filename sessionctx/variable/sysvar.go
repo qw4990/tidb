@@ -1260,6 +1260,10 @@ var defaultSysVars = []*SysVar{
 		s.networkFactorV2 = tidbOptFloat64(val, DefOptNetworkFactorV2)
 		return nil
 	}},
+	{Scope: ScopeGlobal | ScopeSession, Name: TiDBOptMPPNetworkFactorV2, Value: strconv.FormatFloat(DefOptNetworkFactorV2, 'f', -1, 64), Hidden: true, Type: TypeFloat, MinValue: 0, MaxValue: math.MaxUint64, SetSession: func(s *SessionVars, val string) error {
+		s.networkFactorV2 = tidbOptFloat64(val, DefOptNetworkFactorV2)
+		return nil
+	}},
 	{Scope: ScopeGlobal | ScopeSession, Name: TiDBOptScanFactorV2, Value: strconv.FormatFloat(DefOptScanFactorV2, 'f', -1, 64), Hidden: true, Type: TypeFloat, MinValue: 0, MaxValue: math.MaxUint64, SetSession: func(s *SessionVars, val string) error {
 		s.scanFactorV2 = tidbOptFloat64(val, DefOptScanFactorV2)
 		return nil
