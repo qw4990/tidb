@@ -257,7 +257,7 @@ plan-cost = child-cost + agg-cost
 agg-cost = (agg-cpu-cost + group-cpu-cost + hash-cost) / concurrency
 agg-cup-cost = rows * len(agg-funcs) * cpu-factor
 group-cpu-cost = rows * len(group-funcs) * cpu-factor
-hash-cost = rows * len(group-funcs) * hash-factor : cost of maintaining the hash table.
+hash-cost = (rows + output_rows) * len(group-funcs) * hash-factor : cost of maintaining the hash table.
 */
 func (p *PhysicalHashAgg) getPlanCostVer2(taskType property.TaskType, option *PlanCostOption) (float64, error) {
 	cpuFactor, cpuFactorName := getCPUFactorVer2(p, taskType)
@@ -270,7 +270,8 @@ func (p *PhysicalHashAgg) getPlanCostVer2(taskType property.TaskType, option *Pl
 	recordCost(p, option.CostFlag, cpuFactorName, groupCost)
 
 	hashFactor, hashFactorName := getHashFactorVer2(p, taskType)
-	hashCost := rowCount * float64(len(p.GroupByItems)) * hashFactor
+	outputRowCount := getCardinality(p, option.CostFlag)
+	hashCost := (rowCount + outputRowCount) * float64(len(p.GroupByItems)) * hashFactor
 	recordCost(p, option.CostFlag, hashFactorName, hashCost)
 
 	concurrency := float64(1)
