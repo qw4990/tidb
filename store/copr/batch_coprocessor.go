@@ -364,6 +364,10 @@ func balanceBatchCopTask(ctx context.Context, kvStore *kvStore, originalTasks []
 					return
 				}
 
+				if lastAny == nil {
+					logutil.BgLogger().Warn("lastAny is nil")
+					return
+				}
 				if cur.Sub(lastAny.(time.Time)) < ttl {
 					logutil.BgLogger().Warn("Cannot detect store's availability because the current time has not reached MPPStoreLastFailTime + MPPStoreFailTTL", zap.String("store address", s.GetAddr()), zap.Time("last fail time", lastAny.(time.Time)))
 					return
