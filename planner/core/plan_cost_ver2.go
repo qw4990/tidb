@@ -295,8 +295,8 @@ net-cost = rows * row-size * net-factor
 func (p *PhysicalExchangeReceiver) getPlanCostVer2(taskType property.TaskType, option *PlanCostOption) (float64, error) {
 	rows := getCardinality(p.children[0], option.CostFlag)
 	rowSize := getTblStats(p.children[0]).GetAvgRowSize(p.ctx, p.children[0].Schema().Columns, false, false)
-	netCost := rows * rowSize * p.ctx.GetSessionVars().GetNetworkFactor(nil)
-	recordCost(p, option.CostFlag, variable.TiDBOptNetworkFactorV2, netCost)
+	netCost := rows * rowSize * p.ctx.GetSessionVars().GetMPPNetworkFactor()
+	recordCost(p, option.CostFlag, variable.TiDBOptMPPNetworkFactorV2, netCost)
 
 	childCost, err := p.children[0].GetPlanCost(taskType, option)
 	if err != nil {
