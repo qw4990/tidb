@@ -141,19 +141,24 @@ net-cost = rows * row-size * net-factor
 func (p *PhysicalTableReader) getPlanCostVer2(_ property.TaskType, option *PlanCostOption) (float64, error) {
 	var concurrency float64
 	var childTaskType property.TaskType
+	var netFactor float64
+	var netFactorName string
 	if _, isMPP := p.tablePlan.(*PhysicalExchangeSender); isMPP && p.StoreType == kv.TiFlash { // mpp protocol
 		concurrency = p.ctx.GetSessionVars().CopTiFlashConcurrencyFactor
 		childTaskType = property.MppTaskType
+		netFactor = p.ctx.GetSessionVars().GetMPPNetworkFactor()
+		netFactorName = variable.TiDBOptMPPNetworkFactorV2
 	} else { // cop protocol
 		concurrency = float64(p.ctx.GetSessionVars().DistSQLScanConcurrency())
 		childTaskType = property.CopSingleReadTaskType
+		netFactor = p.ctx.GetSessionVars().GetNetworkFactor(nil)
+		netFactorName = variable.TiDBOptNetworkFactorV2
 	}
 
 	rowSize := getTblStats(p.tablePlan).GetAvgRowSize(p.ctx, p.tablePlan.Schema().Columns, false, false)
 	rowCount := getCardinality(p.tablePlan, option.CostFlag)
-	netFactor := getTableNetFactor(p.tablePlan)
 	netCost := rowCount * rowSize * netFactor
-	recordCost(p, option.CostFlag, variable.TiDBOptNetworkFactorV2, netCost)
+	recordCost(p, option.CostFlag, netFactorName, netCost)
 
 	childCost, err := p.tablePlan.GetPlanCost(childTaskType, option)
 	if err != nil {
