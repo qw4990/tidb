@@ -610,12 +610,6 @@ func costWeights(sctx sessionctx.Context, costs map[string]float64) string {
 			factor = sctx.GetSessionVars().GetTiFlashScanFactor()
 		case variable.TiDBOptSeekFactorV2:
 			factor = sctx.GetSessionVars().GetSeekFactor(nil)
-		case variable.TiDBOptMemoryFactorV2:
-			factor = sctx.GetSessionVars().GetMemoryFactor()
-		case variable.TiDBOptDiskFactorV2:
-			factor = sctx.GetSessionVars().GetDiskFactor()
-		case variable.TiDBOptConcurrencyFactorV2:
-			factor = sctx.GetSessionVars().GetConcurrencyFactor()
 		}
 		weights[k] = v / factor
 	}
@@ -632,9 +626,6 @@ func costWeights(sctx sessionctx.Context, costs map[string]float64) string {
 		variable.TiDBOptDescScanFactorV2,
 		variable.TiDBOptTiFlashScanFactorV2,
 		variable.TiDBOptSeekFactorV2,
-		variable.TiDBOptMemoryFactorV2,
-		variable.TiDBOptDiskFactorV2,
-		variable.TiDBOptConcurrencyFactorV2,
 	} {
 		vals = append(vals, fmt.Sprintf("%v=%.4f", k, weights[k]))
 	}

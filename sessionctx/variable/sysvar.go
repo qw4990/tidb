@@ -1272,18 +1272,6 @@ var defaultSysVars = []*SysVar{
 		s.seekFactorV2 = tidbOptFloat64(val, DefOptSeekFactorV2)
 		return nil
 	}},
-	{Scope: ScopeGlobal | ScopeSession, Name: TiDBOptMemoryFactorV2, Value: strconv.FormatFloat(DefOptMemoryFactorV2, 'f', -1, 64), Hidden: true, Type: TypeFloat, MinValue: 0, MaxValue: math.MaxUint64, SetSession: func(s *SessionVars, val string) error {
-		s.memoryFactorV2 = tidbOptFloat64(val, DefOptMemoryFactorV2)
-		return nil
-	}},
-	{Scope: ScopeGlobal | ScopeSession, Name: TiDBOptDiskFactorV2, Value: strconv.FormatFloat(DefOptDiskFactorV2, 'f', -1, 64), Hidden: true, Type: TypeFloat, MinValue: 0, MaxValue: math.MaxUint64, SetSession: func(s *SessionVars, val string) error {
-		s.diskFactorV2 = tidbOptFloat64(val, DefOptDiskFactorV2)
-		return nil
-	}},
-	{Scope: ScopeGlobal | ScopeSession, Name: TiDBOptConcurrencyFactorV2, Value: strconv.FormatFloat(DefOptConcurrencyFactorV2, 'f', -1, 64), Hidden: true, Type: TypeFloat, MinValue: 0, MaxValue: math.MaxUint64, SetSession: func(s *SessionVars, val string) error {
-		s.concurrencyFactorV2 = tidbOptFloat64(val, DefOptConcurrencyFactorV2)
-		return nil
-	}},
 	{Scope: ScopeGlobal | ScopeSession, Name: TiDBOptForceInlineCTE, Value: BoolToOnOff(DefOptForceInlineCTE), Type: TypeBool, SetSession: func(s *SessionVars, val string) error {
 		s.enableForceInlineCTE = TiDBOptOn(val)
 		return nil
