@@ -898,9 +898,6 @@ const (
 	DefOptDescScanFactorV2                         = 150.0
 	DefOptTiFlashScanFactorV2                      = 15.0
 	DefOptSeekFactorV2                             = 9500000.0
-	DefOptMemoryFactorV2                           = 0.001
-	DefOptDiskFactorV2                             = 1.5
-	DefOptConcurrencyFactorV2                      = 3.0
 	DefOptForceInlineCTE                           = false
 	DefOptInSubqToJoinAndAgg                       = true
 	DefOptPreferRangeScan                          = false
