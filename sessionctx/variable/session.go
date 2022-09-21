@@ -835,8 +835,8 @@ type SessionVars struct {
 	tiflashHashTableFactorV2 float64
 	// networkFactorV2 is the network factor for the Cost Model Ver2.
 	networkFactorV2 float64
-	// mppNetworkFactorV2 is the network factor for the Cost Model Ver2.
-	mppNetworkFactorV2 float64
+	// tidbMPPNetworkFactorV2 ...
+	tidbMPPNetworkFactorV2 float64
 	// scanFactorV2 is the scan factor for the Cost Model Ver2.
 	scanFactorV2 float64
 	// descScanFactorV2 is the desc-scan factor for the Cost Model Ver2.
@@ -2989,8 +2989,8 @@ func (s *SessionVars) GetNetworkFactor(tbl *model.TableInfo) float64 {
 	return s.networkFactor
 }
 
-func (s *SessionVars) GetMPPNetworkFactor() float64 {
-	return s.mppNetworkFactorV2
+func (s *SessionVars) GetTiDBMPPNetworkFactor() float64 {
+	return s.tidbMPPNetworkFactorV2
 }
 
 // GetScanFactor returns the session variable scanFactor

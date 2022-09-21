@@ -604,8 +604,8 @@ func costWeights(sctx sessionctx.Context, costs map[string]float64) string {
 			factor = sctx.GetSessionVars().GetTiFlashHashTableFactor()
 		case variable.TiDBOptNetworkFactorV2:
 			factor = sctx.GetSessionVars().GetNetworkFactor(nil)
-		case variable.TiDBOptMPPNetworkFactorV2:
-			factor = sctx.GetSessionVars().GetMPPNetworkFactor()
+		case variable.TiDBOptTiDBMPPNetworkFactorV2:
+			factor = sctx.GetSessionVars().GetTiDBMPPNetworkFactor()
 		case variable.TiDBOptScanFactorV2:
 			factor = sctx.GetSessionVars().GetScanFactor(nil)
 		case variable.TiDBOptDescScanFactorV2:
@@ -627,7 +627,7 @@ func costWeights(sctx sessionctx.Context, costs map[string]float64) string {
 		variable.TiDBOptCopHashTableFactorV2,
 		variable.TiDBOptTiFlashHashTableFactorV2,
 		variable.TiDBOptNetworkFactorV2,
-		variable.TiDBOptMPPNetworkFactorV2,
+		variable.TiDBOptTiDBMPPNetworkFactorV2,
 		variable.TiDBOptScanFactorV2,
 		variable.TiDBOptDescScanFactorV2,
 		variable.TiDBOptTiFlashScanFactorV2,
