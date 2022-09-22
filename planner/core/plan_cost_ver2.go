@@ -290,6 +290,53 @@ func (p *PhysicalHashAgg) getPlanCostVer2(taskType property.TaskType, option *Pl
 }
 
 /*
+plan-cost = child-cost + sort-cost
+sort-cost = rows * log2(rows) * len(sort-items) * cpu-factor
+*/
+func (p *PhysicalSort) getPlanCostVer2(taskType property.TaskType, option *PlanCostOption) (float64, error) {
+	cpuFactor, cpuFactorName := getCPUFactorVer2(p, taskType)
+	rowCount := getCardinality(p.children[0], option.CostFlag)
+	if rowCount < 1 {
+		rowCount = 1 // make log2(rowCount) always valid
+	}
+	sortCost := rowCount * math.Log2(rowCount) * float64(len(p.ByItems)) * cpuFactor
+	recordCost(p, option.CostFlag, cpuFactorName, sortCost)
+
+	childCost, err := p.children[0].GetPlanCost(taskType, option)
+	if err != nil {
+		return 0, err
+	}
+
+	p.planCost = childCost + sortCost
+	p.planCostInit = true
+	return p.planCost, nil
+}
+
+/*
+plan-cost = child-cost + topn-cost
+topn-cost = rows * log2(N) * len(sort-items) * cpu-factor
+*/
+func (p *PhysicalTopN) getPlanCostVer2(taskType property.TaskType, option *PlanCostOption) (float64, error) {
+	cpuFactor, cpuFactorName := getCPUFactorVer2(p, taskType)
+	rowCount := getCardinality(p.children[0], option.CostFlag)
+	n := float64(p.Offset + p.Count)
+	if n < 1 {
+		n = 1 // make log2(n) always valid
+	}
+	topnCost := rowCount * math.Log2(n) * float64(len(p.ByItems)) * cpuFactor
+	recordCost(p, option.CostFlag, cpuFactorName, topnCost)
+
+	childCost, err := p.children[0].GetPlanCost(taskType, option)
+	if err != nil {
+		return 0, err
+	}
+
+	p.planCost = childCost + topnCost
+	p.planCostInit = true
+	return p.planCost, nil
+}
+
+/*
 plan-cost = child-cost + net-cost
 net-cost = rows * row-size * net-factor
 */
