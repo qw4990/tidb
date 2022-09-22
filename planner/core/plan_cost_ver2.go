@@ -10,13 +10,6 @@ import (
 	"github.com/pingcap/tidb/sessionctx/variable"
 )
 
-func recordFactorCost(p PhysicalPlan, costFlag uint64, factor string, cost float64) {
-	if p.SCtx().GetSessionVars().CostModelVersion != 2 || !hasCostFlag(costFlag, CostFlagUseTrueCardinality) {
-		return
-	}
-	p.RecordFactorCost(factor, cost)
-}
-
 // RecordFactorCost ...
 func (p *basePhysicalPlan) RecordFactorCost(factor string, weight float64) {
 	if p.costWeights == nil {
