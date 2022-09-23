@@ -248,26 +248,29 @@ func (p *PhysicalStreamAgg) getPlanCostVer2(taskType property.TaskType, option *
 /*
 plan-cost = child-cost + agg-cost
 agg-cost = (agg-cpu-cost + group-cpu-cost + hash-cpu-cost) / concurrency + hash-mem-cost
-agg-cup-cost = rows * len(agg-funcs) * cpu-factor
+agg-cpu-cost = rows * len(agg-funcs) * cpu-factor
 group-cpu-cost = rows * len(group-funcs) * cpu-factor
 hash-cpu-cost = rows * len(group-funcs) * cpu-factor
 hash-mem-cost = output-rows * output-row-size * mem-factor
 */
 func (p *PhysicalHashAgg) getPlanCostVer2(taskType property.TaskType, option *PlanCostOption) (float64, error) {
 	cpuFactor, cpuFactorName := getCPUFactorVer2(p, taskType)
+	memFactor, memFactorName := getMemFactorVer2(p, taskType)
 	rowCount := getCardinality(p.children[0], option.CostFlag)
 	outputRowCount := getCardinality(p, option.CostFlag)
+	outputRowSize := getAvgRowSize(p.stats, p.schema)
 
-	aggCost := rowCount * float64(len(p.AggFuncs)) * cpuFactor
-	recordCost(p, option.CostFlag, cpuFactorName, aggCost)
+	aggCPUCost := rowCount * float64(len(p.AggFuncs)) * cpuFactor
+	recordCost(p, option.CostFlag, cpuFactorName, aggCPUCost)
 
-	groupCost := rowCount * float64(len(p.GroupByItems)) * cpuFactor
-	recordCost(p, option.CostFlag, cpuFactorName, groupCost)
+	groupCPUCost := rowCount * float64(len(p.GroupByItems)) * cpuFactor
+	recordCost(p, option.CostFlag, cpuFactorName, groupCPUCost)
 
-	hashCPUFactor := rowCount * float64(len(p.GroupByItems)) * cpuFactor
-	recordCost(p, option.CostFlag, cpuFactorName, hashCPUFactor)
+	hashCPUCost := rowCount * float64(len(p.GroupByItems)) * cpuFactor
+	recordCost(p, option.CostFlag, cpuFactorName, hashCPUCost)
 
-	//hashMemFactor :=
+	hashMemCost := outputRowCount * outputRowSize * memFactor
+	recordCost(p, option.CostFlag, memFactorName, hashMemCost)
 
 	concurrency := float64(1)
 	if taskType == property.RootTaskType {
@@ -279,54 +282,67 @@ func (p *PhysicalHashAgg) getPlanCostVer2(taskType property.TaskType, option *Pl
 		return 0, err
 	}
 
-	p.planCost = (aggCost+groupCost+hashCost)/concurrency + childCost
+	p.planCost = childCost + (aggCPUCost+groupCPUCost+hashCPUCost)/concurrency + hashMemCost
 	p.planCostInit = true
 	return p.planCost, nil
 }
 
 /*
-plan-cost = child-cost + sort-cost
-sort-cost = rows * log2(rows) * len(sort-items) * cpu-factor
+plan-cost = child-cost + sort-cpu-cost + sort-mem-cost
+sort-cpu-cost = rows * log2(rows) * len(sort-items) * cpu-factor
+sort-mem-cost = rows * row-size * mem-factor
 */
 func (p *PhysicalSort) getPlanCostVer2(taskType property.TaskType, option *PlanCostOption) (float64, error) {
 	cpuFactor, cpuFactorName := getCPUFactorVer2(p, taskType)
+	memFactor, memFactorName := getMemFactorVer2(p, taskType)
 	rowCount := getCardinality(p.children[0], option.CostFlag)
 	if rowCount < 1 {
 		rowCount = 1 // make log2(rowCount) always valid
 	}
-	sortCost := rowCount * math.Log2(rowCount) * float64(len(p.ByItems)) * cpuFactor
-	recordCost(p, option.CostFlag, cpuFactorName, sortCost)
+	rowSize := getAvgRowSize(p.stats, p.Schema())
+
+	sortCPUCost := rowCount * math.Log2(rowCount) * float64(len(p.ByItems)) * cpuFactor
+	recordCost(p, option.CostFlag, cpuFactorName, sortCPUCost)
+
+	sortMemCost := rowCount * rowSize * memFactor
+	recordCost(p, option.CostFlag, memFactorName, sortMemCost)
 
 	childCost, err := p.children[0].GetPlanCost(taskType, option)
 	if err != nil {
 		return 0, err
 	}
 
-	p.planCost = childCost + sortCost
+	p.planCost = childCost + sortCPUCost + sortMemCost
 	p.planCostInit = true
 	return p.planCost, nil
 }
 
 /*
-plan-cost = child-cost + topn-cost
-topn-cost = rows * log2(N) * len(sort-items) * cpu-factor
+plan-cost = child-cost + topn-cpu-cost + topn-mem-cost
+topn-cpu-cost = rows * log2(N) * len(sort-items) * cpu-factor
+topn-mem-cost = N * row-size * mem-factor
 */
 func (p *PhysicalTopN) getPlanCostVer2(taskType property.TaskType, option *PlanCostOption) (float64, error) {
 	cpuFactor, cpuFactorName := getCPUFactorVer2(p, taskType)
+	memFactor, memFactorName := getMemFactorVer2(p, taskType)
 	rowCount := getCardinality(p.children[0], option.CostFlag)
+	rowSize := getAvgRowSize(p.stats, p.Schema())
 	n := float64(p.Offset + p.Count)
 	if n < 1 {
 		n = 1 // make log2(n) always valid
 	}
-	topnCost := rowCount * math.Log2(n) * float64(len(p.ByItems)) * cpuFactor
-	recordCost(p, option.CostFlag, cpuFactorName, topnCost)
+	topnCPUCost := rowCount * math.Log2(n) * float64(len(p.ByItems)) * cpuFactor
+	recordCost(p, option.CostFlag, cpuFactorName, topnCPUCost)
+
+	topnMemCost := n * rowSize * memFactor
+	recordCost(p, option.CostFlag, memFactorName, topnMemCost)
 
 	childCost, err := p.children[0].GetPlanCost(taskType, option)
 	if err != nil {
 		return 0, err
 	}
 
-	p.planCost = childCost + topnCost
+	p.planCost = childCost + topnCPUCost + topnMemCost
 	p.planCostInit = true
 	return p.planCost, nil
 }
@@ -368,10 +384,26 @@ func (p *PhysicalMergeJoin) getPlanCostVer2(taskType property.TaskType, option *
 }
 
 /*
-plan-cost = left-child-cost + right-child-cost + hj-cost
+plan-cost = build-child-cost + probe-child-cost + hj-cost
+hj-cost = build-cost + (probe-cost + join-cost) / concurrency
+
+build-cost = build-filter-cost + build-hash-cpu-cost + build-hash-mem-cost
+build-filter-cost = build-rows * len(filters) * cpu-factor
+build-hash-cpu-cost = build-rows * len(keys) * cpu-factor
+build-hash-mem-cost = build-rows * build-row-size * mem-factor
+
+probe-cost = probe-fitler-cost + probe-hash-cpu-cost
+probe-fitler-cost = probe-rows * len(fitlers) * cpu-factor
+probe-hash-cpu-cost = probe-rows * len(keys) * cpu-factor
+
+join-cost = join-filter-cost + join-cpu-cost
+join-filter-cost = output-rows * len(other-fitlers) * cpu-factor
+join-cpu-cost = output-rows * len(output-columns) * cpu-factor
+
 TODO: handle BCast Join specially
 */
 func (p *PhysicalHashJoin) getPlanCostVer2(taskType property.TaskType, option *PlanCostOption) (float64, error) {
+
 	// TODO:
 	return 0, nil
 }
@@ -394,6 +426,11 @@ func (p *PhysicalExchangeReceiver) getPlanCostVer2(taskType property.TaskType, o
 	p.planCost = netCost + childCost
 	p.planCostInit = true
 	return p.planCost, nil
+}
+
+func getMemFactorVer2(p PhysicalPlan, taskType property.TaskType) (float64, string) {
+	// TODO
+	return 0, ""
 }
 
 func getCPUFactorVer2(p PhysicalPlan, taskType property.TaskType) (float64, string) {
