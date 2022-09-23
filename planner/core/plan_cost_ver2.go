@@ -337,12 +337,32 @@ group-cost = (left-rows * len(left-keys) * cpu-factor) + (right-rows * len(right
 merge-cost = output-rows * len(output-columns) * cpu-factor
 */
 func (p *PhysicalMergeJoin) getPlanCostVer2(taskType property.TaskType, option *PlanCostOption) (float64, error) {
-	//cpuFactor, cpuFactorName := getCPUFactorVer2(p, taskType)
-	//leftRows := getCardinality(p.children[0], option.CostFlag)
-	//rightRows := getCardinality(p.children[1], option.CostFlag)
-	//
-	//filterCost := (leftRows * )
-	return 0, nil
+	cpuFactor, cpuFactorName := getCPUFactorVer2(p, taskType)
+	leftRows := getCardinality(p.children[0], option.CostFlag)
+	rightRows := getCardinality(p.children[1], option.CostFlag)
+	outputRows := getCardinality(p, option.CostFlag)
+
+	filterCost := (leftRows*float64(len(p.LeftConditions)) + rightRows*float64(len(p.RightConditions))) * cpuFactor
+	recordCost(p, option.CostFlag, cpuFactorName, filterCost)
+
+	groupCost := (leftRows*float64(len(p.LeftJoinKeys)) + rightRows*float64(len(p.RightJoinKeys))) * cpuFactor
+	recordCost(p, option.CostFlag, cpuFactorName, groupCost)
+
+	mergeCost := outputRows * float64(len(p.schema.Columns)) * cpuFactor
+	recordCost(p, option.CostFlag, cpuFactorName, mergeCost)
+
+	leftChildCost, err := p.children[0].GetPlanCost(taskType, option)
+	if err != nil {
+		return 0, err
+	}
+	rightChildCost, err := p.children[1].GetPlanCost(taskType, option)
+	if err != nil {
+		return 0, err
+	}
+
+	p.planCost = leftChildCost + rightChildCost + (filterCost + groupCost + mergeCost)
+	p.planCostInit = true
+	return p.planCost, nil
 }
 
 /*
