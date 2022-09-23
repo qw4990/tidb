@@ -340,7 +340,7 @@ func (p *PhysicalMergeJoin) getPlanCostVer2(taskType property.TaskType, option *
 	cpuFactor, cpuFactorName := getCPUFactorVer2(p, taskType)
 	leftRows := getCardinality(p.children[0], option.CostFlag)
 	rightRows := getCardinality(p.children[1], option.CostFlag)
-	outputRows := getCardinality(p, option.CostFlag)
+	outputRows := getCardinality(p, option.CostFlag) // TODO: calculate output rows again since Join Keys may be updated
 
 	filterCost := (leftRows*float64(len(p.LeftConditions)) + rightRows*float64(len(p.RightConditions))) * cpuFactor
 	recordCost(p, option.CostFlag, cpuFactorName, filterCost)
