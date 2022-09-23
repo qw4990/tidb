@@ -403,9 +403,46 @@ join-cpu-cost = output-rows * len(output-columns) * cpu-factor
 TODO: handle BCast Join specially
 */
 func (p *PhysicalHashJoin) getPlanCostVer2(taskType property.TaskType, option *PlanCostOption) (float64, error) {
+	build, probe := 0, 1
+	if (p.InnerChildIdx == 1 && !p.UseOuterToBuild) || (p.InnerChildIdx == 0 && p.UseOuterToBuild) {
+		build, probe = 1, 0
+	}
+	buildRows := getCardinality(p.children[build], option.CostFlag)
+	buildRowSize := getAvgRowSize(p.children[build].Stats(), p.children[build].Schema())
+	probeRows := getCardinality(p.children[probe], option.CostFlag)
+	outputRows := getCardinality(p, option.CostFlag)
+	cpuFactor, cpuFactorName := getCPUFactorVer2(p, taskType)
+	memFactor, memFactorName := getMemFactorVer2(p, taskType)
 
-	// TODO:
-	return 0, nil
+	buildFilterCost := buildRows * float64(len(p.LeftConditions)) * cpuFactor
+	buildHashCPUCost := buildRows * float64(len(p.LeftJoinKeys)) * cpuFactor
+	recordCost(p, option.CostFlag, cpuFactorName, buildFilterCost+buildHashCPUCost)
+	buildHashMemCost := buildRows * buildRowSize * memFactor
+	recordCost(p, option.CostFlag, memFactorName, buildHashMemCost)
+	buildCost := buildFilterCost + buildHashCPUCost + buildHashMemCost
+
+	probeFilterCost := probeRows * float64(len(p.RightConditions)) * cpuFactor
+	probeHashCPUCost := probeRows * float64(len(p.RightJoinKeys)) * cpuFactor
+	probeCost := probeFilterCost + probeHashCPUCost
+	recordCost(p, option.CostFlag, cpuFactorName, probeCost)
+
+	joinFilterCost := outputRows * float64(len(p.OtherConditions)) * cpuFactor
+	joinCPUCost := outputRows * float64(len(p.schema.Columns)) * cpuFactor
+	joinCost := joinFilterCost + joinCPUCost
+	recordCost(p, option.CostFlag, cpuFactorName, joinCost)
+
+	buildChildCost, err := p.children[build].GetPlanCost(taskType, option)
+	if err != nil {
+		return 0, err
+	}
+	probeChildCost, err := p.children[probe].GetPlanCost(taskType, option)
+	if err != nil {
+		return 0, err
+	}
+
+	p.planCost = buildChildCost + probeChildCost + buildCost + (probeCost+joinCost)/float64(p.Concurrency)
+	p.planCostInit = true
+	return p.planCost, nil
 }
 
 /*
