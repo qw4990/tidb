@@ -330,6 +330,22 @@ func (p *PhysicalTopN) getPlanCostVer2(taskType property.TaskType, option *PlanC
 }
 
 /*
+plan-cost = left-child-cost + right-child-cost + mj-cost
+mj-cost = filter-cost + group-cost + merge-cost
+filter-cost = (left-rows * len(left-conds) * cpu-factor) + (right-rows * len(right-conds) * cpu-factor)
+group-cost = (left-rows * len(left-keys) * cpu-factor) + (right-rows * len(right-keys) * cpu-factor)
+merge-cost = output-rows * len(output-columns) * cpu-factor
+*/
+func (p *PhysicalMergeJoin) getPlanCostVer2(taskType property.TaskType, option *PlanCostOption) (float64, error) {
+	//cpuFactor, cpuFactorName := getCPUFactorVer2(p, taskType)
+	//leftRows := getCardinality(p.children[0], option.CostFlag)
+	//rightRows := getCardinality(p.children[1], option.CostFlag)
+	//
+	//filterCost := (leftRows * )
+	return 0, nil
+}
+
+/*
 plan-cost = child-cost + net-cost
 net-cost = rows * row-size * net-factor
 */
