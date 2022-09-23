@@ -366,6 +366,15 @@ func (p *PhysicalMergeJoin) getPlanCostVer2(taskType property.TaskType, option *
 }
 
 /*
+plan-cost = left-child-cost + right-child-cost + hj-cost
+TODO: handle BCast Join specially
+*/
+func (p *PhysicalHashJoin) getPlanCostVer2(taskType property.TaskType, option *PlanCostOption) (float64, error) {
+	// TODO:
+	return 0, nil
+}
+
+/*
 plan-cost = child-cost + net-cost
 net-cost = rows * row-size * net-factor
 */

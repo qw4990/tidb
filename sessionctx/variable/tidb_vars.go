@@ -306,31 +306,19 @@ const (
 
 	// Variables for the Cost Model Ver2
 	// TiDBOptCPUFactorV2 is the CPU factor for the Cost Model Ver2
-	TiDBOptCPUFactorV2 = "tidb_opt_cpu_factor_v2"
-	// TiDBOptCopCPUFactorV2 is the CopCPU factor for the Cost Model Ver2
-	TiDBOptCopCPUFactorV2 = "tidb_opt_copcpu_factor_v2"
-	// TiDBOptTiFlashCPUFactorV2 is the TiFlashCPU factor for the Cost Model Ver2
-	TiDBOptTiFlashCPUFactorV2 = "tidb_opt_tiflash_cpu_factor_v2"
-	// TiDBOptHashTableFactorV2 ...
-	TiDBOptHashTableFactorV2 = "tidb_opt_hash_table_factor_v2"
-	// TiDBOptCopHashTableFactorV2 ...
-	TiDBOptCopHashTableFactorV2 = "tidb_opt_cop_hash_table_factor_v2"
-	// TiDBOptTiFlashHashTableFactorV2 ...
-	TiDBOptTiFlashHashTableFactorV2 = "tidb_opt_tiflash_hash_table_factor_v2"
-	// TiDBOptNetworkFactorV2 is the network factor for the Cost Model Ver2
-	TiDBOptNetworkFactorV2 = "tidb_opt_network_factor_v2"
-	// TiDBOptTiDBMPPNetworkFactorV2 ...
-	TiDBOptTiDBMPPNetworkFactorV2 = "tidb_opt_tidb_mpp_network_factor_v2"
-	// TiDBOptTiFlashMPPNetworkFactorV2 ...
-	TiDBOptTiFlashMPPNetworkFactorV2 = "tidb_opt_tiflash_mpp_network_factor_v2"
-	// TiDBOptScanFactorV2 is the scan factor for the Cost Model Ver2
-	TiDBOptScanFactorV2 = "tidb_opt_scan_factor_v2"
-	// TiDBOptDescScanFactorV2 is the desc scan factor for the Cost Model Ver2
-	TiDBOptDescScanFactorV2 = "tidb_opt_desc_factor_v2"
-	// TiDBOptTiFlashScanFactorV2 is the TiFlashScan factor for the Cost Model Ver2
-	TiDBOptTiFlashScanFactorV2 = "tidb_opt_tiflash_scan_factor_v2"
-	// TiDBOptSeekFactorV2 is the seek factor for the Cost Model Ver2
-	TiDBOptSeekFactorV2 = "tidb_opt_seek_factor_v2"
+	TiDBOptCPUFactorV2               = "tidb_opt_cpu_factor_v2"
+	TiDBOptCopCPUFactorV2            = "tidb_opt_copcpu_factor_v2"
+	TiDBOptTiFlashCPUFactorV2        = "tidb_opt_tiflash_cpu_factor_v2"
+	TiDBOptHashTableFactorV2         = "tidb_opt_hash_table_factor_v2"
+	TiDBOptCopHashTableFactorV2      = "tidb_opt_cop_hash_table_factor_v2"
+	TiDBOptTiFlashHashTableFactorV2  = "tidb_opt_tiflash_hash_table_factor_v2"
+	TiDBOptNetworkFactorV2           = "tidb_opt_network_factor_v2"             // TiDB <--> TiKV
+	TiDBOptTiDBMPPNetworkFactorV2    = "tidb_opt_tidb_mpp_network_factor_v2"    // TiDB <--> TiFlash using MPP proto
+	TiDBOptTiFlashMPPNetworkFactorV2 = "tidb_opt_tiflash_mpp_network_factor_v2" // TiFlash <--> TiFlash
+	TiDBOptScanFactorV2              = "tidb_opt_scan_factor_v2"                // TiKV Scan
+	TiDBOptDescScanFactorV2          = "tidb_opt_desc_factor_v2"                // TiKV Desc Scan
+	TiDBOptTiFlashScanFactorV2       = "tidb_opt_tiflash_scan_factor_v2"
+	TiDBOptSeekFactorV2              = "tidb_opt_seek_factor_v2"
 
 	// TiDBIndexJoinBatchSize is used to set the batch size of an index lookup join.
 	// The index lookup join fetches batches of data from outer executor and constructs ranges for inner executor.
