@@ -247,14 +247,16 @@ func (p *PhysicalStreamAgg) getPlanCostVer2(taskType property.TaskType, option *
 
 /*
 plan-cost = child-cost + agg-cost
-agg-cost = (agg-cpu-cost + group-cpu-cost + hash-cost) / concurrency
+agg-cost = (agg-cpu-cost + group-cpu-cost + hash-cpu-cost) / concurrency + hash-mem-cost
 agg-cup-cost = rows * len(agg-funcs) * cpu-factor
 group-cpu-cost = rows * len(group-funcs) * cpu-factor
-hash-cost = (rows + output_rows) * len(group-funcs) * hash-factor : cost of maintaining the hash table.
+hash-cpu-cost = rows * len(group-funcs) * cpu-factor
+hash-mem-cost = output-rows * output-row-size * mem-factor
 */
 func (p *PhysicalHashAgg) getPlanCostVer2(taskType property.TaskType, option *PlanCostOption) (float64, error) {
 	cpuFactor, cpuFactorName := getCPUFactorVer2(p, taskType)
 	rowCount := getCardinality(p.children[0], option.CostFlag)
+	outputRowCount := getCardinality(p, option.CostFlag)
 
 	aggCost := rowCount * float64(len(p.AggFuncs)) * cpuFactor
 	recordCost(p, option.CostFlag, cpuFactorName, aggCost)
@@ -262,10 +264,10 @@ func (p *PhysicalHashAgg) getPlanCostVer2(taskType property.TaskType, option *Pl
 	groupCost := rowCount * float64(len(p.GroupByItems)) * cpuFactor
 	recordCost(p, option.CostFlag, cpuFactorName, groupCost)
 
-	hashFactor, hashFactorName := getHashFactorVer2(p, taskType)
-	outputRowCount := getCardinality(p, option.CostFlag)
-	hashCost := (rowCount + outputRowCount) * float64(len(p.GroupByItems)) * hashFactor
-	recordCost(p, option.CostFlag, hashFactorName, hashCost)
+	hashCPUFactor := rowCount * float64(len(p.GroupByItems)) * cpuFactor
+	recordCost(p, option.CostFlag, cpuFactorName, hashCPUFactor)
+
+	//hashMemFactor :=
 
 	concurrency := float64(1)
 	if taskType == property.RootTaskType {
@@ -405,16 +407,16 @@ func getCPUFactorVer2(p PhysicalPlan, taskType property.TaskType) (float64, stri
 	}
 }
 
-func getHashFactorVer2(p PhysicalPlan, taskType property.TaskType) (float64, string) {
-	switch taskType {
-	case property.RootTaskType:
-		return p.SCtx().GetSessionVars().GetHashTableFactor(), variable.TiDBOptHashTableFactorV2
-	case property.CopSingleReadTaskType, property.CopDoubleReadTaskType:
-		return p.SCtx().GetSessionVars().GetCopHashTableFactor(), variable.TiDBOptCopHashTableFactorV2
-	default: // MPP
-		return p.SCtx().GetSessionVars().GetTiFlashHashTableFactor(), variable.TiDBOptTiFlashHashTableFactorV2
-	}
-}
+//func getHashFactorVer2(p PhysicalPlan, taskType property.TaskType) (float64, string) {
+//	switch taskType {
+//	case property.RootTaskType:
+//		return p.SCtx().GetSessionVars().GetHashTableFactor(), variable.TiDBOptHashTableFactorV2
+//	case property.CopSingleReadTaskType, property.CopDoubleReadTaskType:
+//		return p.SCtx().GetSessionVars().GetCopHashTableFactor(), variable.TiDBOptCopHashTableFactorV2
+//	default: // MPP
+//		return p.SCtx().GetSessionVars().GetTiFlashHashTableFactor(), variable.TiDBOptTiFlashHashTableFactorV2
+//	}
+//}
 
 func costDebug(p PhysicalPlan, format string, args ...interface{}) {
 	if !p.SCtx().GetSessionVars().StmtCtx.DEBUG {
