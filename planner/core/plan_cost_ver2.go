@@ -220,6 +220,14 @@ func (p *PhysicalIndexScan) getPlanCostVer2(_ property.TaskType, option *PlanCos
 	return p.planCost, nil
 }
 
+func (p *PhysicalIndexLookUpReader) getPlanCostVer2(taskType property.TaskType, option *PlanCostOption) (float64, error) {
+	panic("not support")
+}
+
+func (p *PhysicalIndexMergeReader) getPlanCostVer2(taskType property.TaskType, option *PlanCostOption) (float64, error) {
+	panic("not support")
+}
+
 /*
 plan-cost = child-cost + agg-cost
 agg-cost = agg-cpu-cost + group-cpu-cost
@@ -445,6 +453,10 @@ func (p *PhysicalHashJoin) getPlanCostVer2(taskType property.TaskType, option *P
 	p.planCost = buildChildCost + probeChildCost + buildCost + (probeCost+joinCost)/float64(p.Concurrency)
 	p.planCostInit = true
 	return p.planCost, nil
+}
+
+func (p *PhysicalIndexJoin) getPlanCostVer2(taskType property.TaskType, option *PlanCostOption) (float64, error) {
+	panic("not support")
 }
 
 /*
