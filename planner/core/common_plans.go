@@ -325,6 +325,8 @@ type Insert struct {
 	AllAssignmentsAreConstant bool
 
 	RowLen int
+
+	FKChecks []*FKCheck
 }
 
 // Update represents Update plan.
