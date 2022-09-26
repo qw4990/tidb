@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"github.com/pingcap/tipb/go-tipb"
 	"math"
 
 	"github.com/pingcap/errors"
@@ -467,6 +468,11 @@ func (p *PhysicalExchangeReceiver) getPlanCostVer2(taskType property.TaskType, o
 	rows := getCardinality(p.children[0], option.CostFlag)
 	rowSize := getTblStats(p.children[0]).GetAvgRowSize(p.ctx, p.children[0].Schema().Columns, false, false)
 	netCost := rows * rowSize * p.ctx.GetSessionVars().GetTiFlashMPPNetworkFactor()
+	if sender, ok := p.children[0].(*PhysicalExchangeSender); ok {
+		if sender.ExchangeType == tipb.ExchangeType_Broadcast {
+			netCost *= float64(len(sender.Tasks))
+		}
+	}
 	recordCost(p, option.CostFlag, variable.TiDBOptTiFlashMPPNetworkFactorV2, netCost)
 
 	childCost, err := p.children[0].GetPlanCost(taskType, option)
