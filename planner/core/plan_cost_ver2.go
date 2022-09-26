@@ -399,10 +399,12 @@ probe-hash-cpu-cost = probe-rows * len(keys) * cpu-factor
 join-cost = join-filter-cost + join-cpu-cost
 join-filter-cost = output-rows * len(other-fitlers) * cpu-factor
 join-cpu-cost = output-rows * len(output-columns) * cpu-factor
-
-TODO: handle BCast Join specially
 */
 func (p *PhysicalHashJoin) getPlanCostVer2(taskType property.TaskType, option *PlanCostOption) (float64, error) {
+	if p.mppShuffleJoin {
+		// TODO: handle BCast Join specially
+	}
+
 	build, probe := 0, 1
 	if (p.InnerChildIdx == 1 && !p.UseOuterToBuild) || (p.InnerChildIdx == 0 && p.UseOuterToBuild) {
 		build, probe = 1, 0
