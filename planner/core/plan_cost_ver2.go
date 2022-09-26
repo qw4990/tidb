@@ -221,8 +221,52 @@ func (p *PhysicalIndexScan) getPlanCostVer2(_ property.TaskType, option *PlanCos
 	return p.planCost, nil
 }
 
+/*
+plan-cost = index-child-cost + index-net-cost + double-read-cpu-cost + (table-child-cost + table-net-cost + double-read-seek-cost) / concurrency
+index-net-cost = index-rows * row-size * net-factor
+table-net-cost = table-rows * row-size * net-factor
+double-read-cpu-cost = index-rows * cpu-factor
+double-read-seek-cost = num-tasks * seek-factor
+num-tasks = index-rows / batch-size * dist-ratio
+*/
 func (p *PhysicalIndexLookUpReader) getPlanCostVer2(taskType property.TaskType, option *PlanCostOption) (float64, error) {
-	panic("not support")
+	indexRows := getCardinality(p.indexPlan, option.CostFlag)
+	tableRows := getCardinality(p.tablePlan, option.CostFlag)
+	indexRowSize := getAvgRowSize(p.stats, p.indexPlan.Schema())
+	tableRowSize := getAvgRowSize(p.stats, p.tablePlan.Schema())
+	cpuFactor, cpuFactorName := getCPUFactorVer2(p, taskType)
+	netFactor, netFactorName := p.ctx.GetSessionVars().GetNetworkFactor(nil), variable.TiDBOptNetworkFactorV2
+	seekFactor, seekFactorName := p.ctx.GetSessionVars().GetSeekFactor(nil), variable.TiDBOptSeekFactorV2
+
+	indexChildCost, err := p.indexPlan.GetPlanCost(taskType, option)
+	if err != nil {
+		return 0, err
+	}
+	indexNetCost := indexRows * indexRowSize * netFactor
+	recordCost(p, option.CostFlag, netFactorName, indexNetCost)
+
+	tableChildCost, err := p.tablePlan.GetPlanCost(taskType, option)
+	if err != nil {
+		return 0, err
+	}
+	tableNetCost := tableRows * tableRowSize * netFactor
+	recordCost(p, option.CostFlag, netFactorName, tableNetCost)
+
+	doubleReadCPUCost := indexRows * cpuFactor
+	recordCost(p, option.CostFlag, cpuFactorName, doubleReadCPUCost)
+
+	batchSize := float64(p.ctx.GetSessionVars().IndexLookupSize)
+	// distRatio indicates how many requests corresponding to a batch, current value is from experiments.
+	// TODO: estimate it by using index correlation or make it configurable.
+	distRatio := 40.0
+	numDoubleReadTasks := (indexRows / batchSize) * distRatio // use Float64 instead of Int like `Ceil(...)` to make the cost continuous.
+	doubleReadSeekCost := numDoubleReadTasks * seekFactor
+	recordCost(p, option.CostFlag, seekFactorName, doubleReadSeekCost)
+
+	concurrency := math.Max(1.0, float64(p.ctx.GetSessionVars().IndexLookupConcurrency()))
+	p.planCost = indexChildCost + indexNetCost + doubleReadCPUCost + (tableChildCost+tableNetCost+doubleReadSeekCost)/concurrency
+	p.planCostInit = true
+	return p.planCost, nil
 }
 
 func (p *PhysicalIndexMergeReader) getPlanCostVer2(taskType property.TaskType, option *PlanCostOption) (float64, error) {
