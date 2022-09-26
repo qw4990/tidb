@@ -466,8 +466,14 @@ func (p *PhysicalExchangeReceiver) getPlanCostVer2(taskType property.TaskType, o
 }
 
 func getMemFactorVer2(p PhysicalPlan, taskType property.TaskType) (float64, string) {
-	// TODO
-	return 0, ""
+	switch taskType {
+	case property.RootTaskType:
+		return p.SCtx().GetSessionVars().GetMemoryFactor(), variable.TiDBOptMemoryFactorV2
+	case property.CopSingleReadTaskType, property.CopDoubleReadTaskType:
+		return p.SCtx().GetSessionVars().GetCopMemoryFactor(), variable.TiDBOptCopMemoryFactorV2
+	default: // MPP
+		return p.SCtx().GetSessionVars().GetTiFlashMemoryFactor(), variable.TiDBOptTiFlashMemoryFactorV2
+	}
 }
 
 func getCPUFactorVer2(p PhysicalPlan, taskType property.TaskType) (float64, string) {
