@@ -412,9 +412,6 @@ func (p *PhysicalIndexMergeReader) GetPlanCost(taskType property.TaskType, optio
 	if p.planCostInit && !hasCostFlag(costFlag, CostFlagRecalculate) {
 		return p.planCost, nil
 	}
-	if p.ctx.GetSessionVars().CostModelVersion == modelVer2 {
-		return p.getPlanCostVer2(taskType, option)
-	}
 
 	p.planCost = 0
 	if tblScan := p.tablePlan; tblScan != nil {
@@ -637,9 +634,6 @@ func (p *PhysicalIndexJoin) GetPlanCost(taskType property.TaskType, option *Plan
 	if p.planCostInit && !hasCostFlag(costFlag, CostFlagRecalculate) {
 		return p.planCost, nil
 	}
-	if p.ctx.GetSessionVars().CostModelVersion == modelVer2 {
-		return p.getPlanCostVer2(taskType, option)
-	}
 
 	outerChild, innerChild := p.children[1-p.InnerChildIdx], p.children[p.InnerChildIdx]
 	outerCost, err := outerChild.GetPlanCost(taskType, option)
@@ -729,9 +723,6 @@ func (p *PhysicalIndexHashJoin) GetPlanCost(taskType property.TaskType, option *
 	costFlag := option.CostFlag
 	if p.planCostInit && !hasCostFlag(costFlag, CostFlagRecalculate) {
 		return p.planCost, nil
-	}
-	if p.ctx.GetSessionVars().CostModelVersion == modelVer2 {
-		return p.getPlanCostVer2(taskType, option)
 	}
 
 	outerChild, innerChild := p.children[1-p.InnerChildIdx], p.children[p.InnerChildIdx]
@@ -824,9 +815,6 @@ func (p *PhysicalIndexMergeJoin) GetPlanCost(taskType property.TaskType, option 
 	costFlag := option.CostFlag
 	if p.planCostInit && !hasCostFlag(costFlag, CostFlagRecalculate) {
 		return p.planCost, nil
-	}
-	if p.ctx.GetSessionVars().CostModelVersion == modelVer2 {
-		return p.getPlanCostVer2(taskType, option)
 	}
 
 	outerChild, innerChild := p.children[1-p.InnerChildIdx], p.children[p.InnerChildIdx]
