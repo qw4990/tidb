@@ -847,6 +847,11 @@ type SessionVars struct {
 	descScanFactorV2 float64
 	// tiflashScanFactorV2 is the tiflash-scan factor for the Cost Model Ver2.
 	tiflashScanFactorV2 float64
+
+	memFactorV2        float64
+	copMemFactorV2     float64
+	tiflashMemFactorV2 float64
+
 	// seekFactorV2 is the seek factor for the Cost Model Ver2.
 	seekFactorV2 float64
 	// enableForceInlineCTE is used to enable/disable force inline CTE.
@@ -2966,7 +2971,18 @@ func (s *SessionVars) GetTiFlashHashTableFactor() float64 {
 
 // GetMemoryFactor returns the session variable memoryFactor
 func (s *SessionVars) GetMemoryFactor() float64 {
+	if s.CostModelVersion == 2 {
+		return s.memFactorV2
+	}
 	return s.memoryFactor
+}
+
+func (s *SessionVars) GetCopMemoryFactor() float64 {
+	return s.copMemFactorV2
+}
+
+func (s *SessionVars) GetTiFlashMemoryFactor() float64 {
+	return s.tiflashMemFactorV2
 }
 
 // GetDiskFactor returns the session variable diskFactor
