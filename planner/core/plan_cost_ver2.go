@@ -17,6 +17,7 @@ package core
 import (
 	"fmt"
 	"math"
+	"strings"
 
 	"github.com/pingcap/tidb/expression"
 	"github.com/pingcap/tidb/expression/aggregation"
@@ -49,7 +50,13 @@ func newZeroCostVer2(trace bool) costVer2 {
 }
 
 func newCostVer2(trace bool, cost float64, factor, formula string) costVer2 {
-
+	ret := newZeroCostVer2(trace)
+	ret.cost = cost
+	if trace {
+		ret.factorCosts[factor] = cost
+		ret.formula = formula
+	}
+	return ret
 }
 
 func sumCostVer2(trace bool, costs ...costVer2) costVer2 {
@@ -63,6 +70,19 @@ func sumCostVer2(trace bool, costs ...costVer2) costVer2 {
 			}
 			subFormulas = append(subFormulas, fmt.Sprintf("(%v)", c.formula))
 		}
+	}
+	ret.formula = strings.Join(subFormulas, " + ")
+	return ret
+}
+
+func divCostVer2(trace bool, cost costVer2, denominator float64) costVer2 {
+	ret := newZeroCostVer2(trace)
+	ret.cost = cost.cost / denominator
+	if trace {
+		for f, c := range cost.factorCosts {
+			ret.factorCosts[f] = c / denominator
+		}
+		ret.formula = fmt.Sprintf("(%v)/%v", cost.formula, denominator)
 	}
 	return ret
 }
@@ -712,30 +732,30 @@ func (p *BatchPointGetPlan) getPlanCostVer2(taskType property.TaskType, option *
 	return p.planCostVer2, nil
 }
 
-func scanCostVer2(rows, rowSize float64, scanFactor costVer2Factor) float64 {
+func scanCostVer2(rows, rowSize float64, scanFactor costVer2Factor) costVer2 {
 	// log2 from experiments
 	return rows * math.Log2(math.Max(1, rowSize)) * scanFactor.Value
 }
 
-func netCostVer2(rows, rowSize float64, netFactor costVer2Factor) float64 {
+func netCostVer2(rows, rowSize float64, netFactor costVer2Factor) costVer2 {
 	return rows * rowSize * netFactor.Value
 }
 
-func filterCostVer2(rows float64, filters []expression.Expression, cpuFactor costVer2Factor) float64 {
+func filterCostVer2(rows float64, filters []expression.Expression, cpuFactor costVer2Factor) costVer2 {
 	// TODO: consider types of filters
 	return rows * float64(len(filters)) * cpuFactor.Value
 }
 
-func aggCostVer2(rows float64, aggFuncs []*aggregation.AggFuncDesc, cpuFactor costVer2Factor) float64 {
+func aggCostVer2(rows float64, aggFuncs []*aggregation.AggFuncDesc, cpuFactor costVer2Factor) costVer2 {
 	// TODO: consider types of agg-funcs
 	return rows * float64(len(aggFuncs)) * cpuFactor.Value
 }
 
-func groupCostVer2(rows float64, groupItems []expression.Expression, cpuFactor costVer2Factor) float64 {
+func groupCostVer2(rows float64, groupItems []expression.Expression, cpuFactor costVer2Factor) costVer2 {
 	return rows * float64(len(groupItems)) * cpuFactor.Value
 }
 
-func hashBuildCostVer2(buildRows, buildRowSize float64, keys []expression.Expression, cpuFactor, memFactor costVer2Factor) float64 {
+func hashBuildCostVer2(buildRows, buildRowSize float64, keys []expression.Expression, cpuFactor, memFactor costVer2Factor) costVer2 {
 	// TODO: 1) consider types of keys, 2) dedicated factor for build-probe hash table
 	hashKeyCost := buildRows * float64(len(keys)) * cpuFactor.Value
 	hashMemCost := buildRows * buildRowSize * memFactor.Value
@@ -743,7 +763,7 @@ func hashBuildCostVer2(buildRows, buildRowSize float64, keys []expression.Expres
 	return hashKeyCost + hashMemCost + hashBuildCost
 }
 
-func hashProbeCostVer2(probeRows float64, keys []expression.Expression, cpuFactor costVer2Factor) float64 {
+func hashProbeCostVer2(probeRows float64, keys []expression.Expression, cpuFactor costVer2Factor) costVer2 {
 	// TODO: 1) consider types of keys, 2) dedicated factor for build-probe hash table
 	hashKeyCost := probeRows * float64(len(keys)) * cpuFactor.Value
 	hashProbeCost := probeRows * float64(len(keys)) * cpuFactor.Value
