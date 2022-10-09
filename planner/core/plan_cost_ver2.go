@@ -754,13 +754,9 @@ func (p *BatchPointGetPlan) getPlanCostVer2(taskType property.TaskType, option *
 }
 
 func seekCostVer2(numTasks float64, seekFactor costVer2Factor) costVer2 {
-	trace := traceCost()
-	seekCost := numTasks * seekFactor.Value
-	if trace {
-		formula := fmt.Sprintf("seek(tasks(%v)*%v)", numTasks, seekFactor.Value)
-		return newCostVer2(trace, seekCost, seekFactor, formula)
-	}
-	return newCostVer2(trace, seekCost, "", "")
+	return newCostVer2(traceCost(), seekFactor,
+		numTasks*seekFactor.Value,
+		newLazyFormula("seek(tasks(%v)*%v)", numTasks, seekFactor.Value))
 }
 
 func scanCostVer2(rows, rowSize float64, scanFactor costVer2Factor) costVer2 {
@@ -784,68 +780,41 @@ func filterCostVer2(rows float64, filters []expression.Expression, cpuFactor cos
 }
 
 func aggCostVer2(rows float64, aggFuncs []*aggregation.AggFuncDesc, cpuFactor costVer2Factor) costVer2 {
-	trace := traceCost()
-	// TODO: consider types of agg-funcs
-	aggCost := rows * float64(len(aggFuncs)) * cpuFactor.Value
-	if trace {
-		formula := fmt.Sprintf("agg(%v*aggs(%v)*%v)", rows, len(aggFuncs), cpuFactor.Value)
-		return newCostVer2(trace, aggCost, cpuFactor.Name, formula)
-	}
-	return newCostVer2(trace, aggCost, "", "")
+	return newCostVer2(traceCost(), cpuFactor,
+		// TODO: consider types of agg-funcs
+		rows*float64(len(aggFuncs))*cpuFactor.Value,
+		newLazyFormula("agg(%v*aggs(%v)*%v)", rows, len(aggFuncs), cpuFactor.Value))
 }
 
 func groupCostVer2(rows float64, groupItems []expression.Expression, cpuFactor costVer2Factor) costVer2 {
-	trace := traceCost()
-	groupCost := rows * float64(len(groupItems)) * cpuFactor.Value
-	if trace {
-		formula := fmt.Sprintf("group(%v*cols(%v)*%v)", rows, len(groupItems), cpuFactor.Value)
-		return newCostVer2(trace, groupCost, cpuFactor.Name, formula)
-	}
-	return newCostVer2(trace, groupCost, "", "")
+	return newCostVer2(traceCost(), cpuFactor,
+		rows*float64(len(groupItems))*cpuFactor.Value,
+		newLazyFormula("group(%v*cols(%v)*%v)", rows, len(groupItems), cpuFactor.Value))
 }
 
 func hashBuildCostVer2(buildRows, buildRowSize float64, keys []expression.Expression, cpuFactor, memFactor costVer2Factor) costVer2 {
-	trace := traceCost()
 	// TODO: 1) consider types of keys, 2) dedicated factor for build-probe hash table
-	hashKeyCost := buildRows * float64(len(keys)) * cpuFactor.Value
-	hashMemCost := buildRows * buildRowSize * memFactor.Value
-	hashBuildCost := buildRows * float64(len(keys)) * cpuFactor.Value
-
-	var hashKeyCostVer2, hashMemCostVer2, hashBuildCostVer2 costVer2
-	if trace {
-		hashKeyCostVer2 = newCostVer2(trace, hashKeyCost, cpuFactor.Name,
-			fmt.Sprintf("hashkey(%v*%v*%v)", buildRows, len(keys), cpuFactor.Value))
-		hashMemCostVer2 = newCostVer2(trace, hashMemCost, memFactor.Name,
-			fmt.Sprintf("hashmem(%v*%v*%v)", buildRows, buildRowSize, memFactor.Value))
-		hashBuildCostVer2 = newCostVer2(trace, hashBuildCost, cpuFactor.Name,
-			fmt.Sprintf("hashbuild(%v*%v*%v)", buildRows, len(keys), cpuFactor.Value))
-	} else {
-		hashKeyCostVer2 = newCostVer2(trace, hashKeyCost, "", "")
-		hashMemCostVer2 = newCostVer2(trace, hashMemCost, "", "")
-		hashBuildCostVer2 = newCostVer2(trace, hashBuildCost, "", "")
-	}
-
-	return sumCostVer2(hashKeyCostVer2, hashMemCostVer2, hashBuildCostVer2)
+	hashKeyCost := newCostVer2(traceCost(), cpuFactor,
+		buildRows*float64(len(keys))*cpuFactor.Value,
+		newLazyFormula("hashkey(%v*%v*%v)", buildRows, len(keys), cpuFactor.Value)))
+	hashMemCost := newCostVer2(traceCost(), memFactor,
+		buildRows*buildRowSize*memFactor.Value,
+		newLazyFormula("hashmem(%v*%v*%v)", buildRows, buildRowSize, memFactor.Value)))
+	hashBuildCost := newCostVer2(traceCost(), cpuFactor,
+		buildRows*float64(len(keys))*cpuFactor.Value,
+		newLazyFormula("hashbuild(%v*%v*%v)", buildRows, len(keys), cpuFactor.Value))
+	return sumCostVer2(hashKeyCost, hashMemCost, hashBuildCost)
 }
 
 func hashProbeCostVer2(probeRows float64, keys []expression.Expression, cpuFactor costVer2Factor) costVer2 {
-	trace := traceCost()
 	// TODO: 1) consider types of keys, 2) dedicated factor for build-probe hash table
-	hashKeyCost := probeRows * float64(len(keys)) * cpuFactor.Value
-	hashProbeCost := probeRows * float64(len(keys)) * cpuFactor.Value
-
-	var hashKeyCostVer2, hashProbeCostVer2 costVer2
-	if trace {
-		hashKeyCostVer2 = newCostVer2(trace, hashKeyCost, cpuFactor.Name,
-			fmt.Sprintf("hashkey(%v*%v*%v)", probeRows, len(keys), cpuFactor.Value))
-		hashProbeCostVer2 = newCostVer2(trace, hashProbeCost, cpuFactor.Name,
-			fmt.Sprintf("hashmem(%v*%v*%v)", probeRows, len(keys), cpuFactor.Value))
-	} else {
-		hashKeyCostVer2 = newCostVer2(trace, hashKeyCost, "", "")
-		hashProbeCostVer2 = newCostVer2(trace, hashProbeCost, "", "")
-	}
-
-	return sumCostVer2(hashKeyCostVer2, hashProbeCostVer2)
+	hashKeyCost := newCostVer2(traceCost(), cpuFactor,
+		probeRows*float64(len(keys))*cpuFactor.Value,
+		newLazyFormula("hashkey(%v*%v*%v)", probeRows, len(keys), cpuFactor.Value))
+	hashProbeCost := newCostVer2(traceCost(), cpuFactor,
+		probeRows*float64(len(keys))*cpuFactor.Value,
+		newLazyFormula("hashmem(%v*%v*%v)", probeRows, len(keys), cpuFactor.Value))
+	return sumCostVer2(hashKeyCost, hashProbeCost)
 }
 
 type costVer2Factor struct {
