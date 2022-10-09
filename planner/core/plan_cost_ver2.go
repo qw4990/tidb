@@ -15,6 +15,7 @@
 package core
 
 import (
+	"fmt"
 	"math"
 
 	"github.com/pingcap/tidb/expression"
@@ -35,8 +36,8 @@ func getPlanCost(p PhysicalPlan, taskType property.TaskType, option *PlanCostOpt
 
 type costVer2 struct {
 	cost        float64
-	factorCosts map[string]float64 // map[factorName]cost
-	formula     string
+	factorCosts map[string]float64 // map[factorName]cost, used to calibrate the cost model
+	formula     string             // It used to trace the cost calculation.
 }
 
 func newZeroCostVer2(trace bool) costVer2 {
@@ -47,21 +48,42 @@ func newZeroCostVer2(trace bool) costVer2 {
 	return c
 }
 
+func sumCostVer2(trace bool, costs ...costVer2) costVer2 {
+	ret := newZeroCostVer2(trace)
+	var subFormulas []string
+	for _, c := range costs {
+		ret.cost += c.cost
+		if trace {
+			for factor, factorCost := range c.factorCosts {
+				ret.factorCosts[factor] += factorCost
+			}
+			subFormulas = append(subFormulas, fmt.Sprintf("(%v)", c.formula))
+		}
+	}
+	return ret
+}
+
 var zeroCostVer2 = newZeroCostVer2(false)
+
+func traceCost() bool {
+	// TODO
+	return false
+}
 
 // getPlanCostVer2 calculates the cost of the plan if it has not been calculated yet and returns the cost.
 func (p *basePhysicalPlan) getPlanCostVer2(taskType property.TaskType, option *PlanCostOption) (costVer2, error) {
 	if p.planCostInit && !hasCostFlag(option.CostFlag, CostFlagRecalculate) {
 		return p.planCostVer2, nil
 	}
-	p.planCost = 0 // the default implementation, the operator have no cost
+	var childCosts []costVer2
 	for _, child := range p.children {
 		childCost, err := child.getPlanCostVer2(taskType, option)
 		if err != nil {
 			return zeroCostVer2, err
 		}
-		p.planCost += childCost
+		childCosts = append(childCosts, childCost)
 	}
+	p.planCostVer2 = sumCostVer2(traceCost(), childCosts...)
 	p.planCostInit = true
 	return p.planCostVer2, nil
 }
