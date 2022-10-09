@@ -42,6 +42,14 @@ type costVer2 struct {
 	formula     string             // It used to trace the cost calculation.
 }
 
+type lazyFormula func() string
+
+func newLazyFormula(format string, args ...any) lazyFormula {
+	return func() string {
+		return fmt.Sprintf(format, args...)
+	}
+}
+
 func newZeroCostVer2(trace bool) (ret costVer2) {
 	if trace {
 		ret.trace = true
@@ -50,11 +58,11 @@ func newZeroCostVer2(trace bool) (ret costVer2) {
 	return
 }
 
-func newCostVer2(trace bool, cost float64, factor, formula string) costVer2 {
+func newCostVer2(trace bool, factor costVer2Factor, cost float64, formula lazyFormula) costVer2 {
 	ret := newZeroCostVer2(trace)
 	if trace {
-		ret.factorCosts[factor] = cost
-		ret.formula = formula
+		ret.factorCosts[factor.Name] = cost
+		ret.formula = formula()
 	}
 	return ret
 }
@@ -750,41 +758,29 @@ func seekCostVer2(numTasks float64, seekFactor costVer2Factor) costVer2 {
 	seekCost := numTasks * seekFactor.Value
 	if trace {
 		formula := fmt.Sprintf("seek(tasks(%v)*%v)", numTasks, seekFactor.Value)
-		return newCostVer2(trace, seekCost, seekFactor.Name, formula)
+		return newCostVer2(trace, seekCost, seekFactor, formula)
 	}
 	return newCostVer2(trace, seekCost, "", "")
 }
 
 func scanCostVer2(rows, rowSize float64, scanFactor costVer2Factor) costVer2 {
-	trace := traceCost()
-	// log2 from experiments
-	scanCost := rows * math.Log2(math.Max(1, rowSize)) * scanFactor.Value
-	if trace {
-		formula := fmt.Sprintf("scan(%v*log2-rowsize(%v)*%v)", rows, rowSize, scanFactor.Value)
-		return newCostVer2(trace, scanCost, scanFactor.Name, formula)
-	}
-	return newCostVer2(trace, scanCost, "", "")
+	return newCostVer2(traceCost(), scanFactor,
+		// rows * log(row-size) * scanFactor, log2 from experiments
+		rows*math.Log2(math.Max(1, rowSize))*scanFactor.Value,
+		newLazyFormula("scan(%v*log2-rowsize(%v)*%v)", rows, rowSize, scanFactor.Value),
+	)
 }
 
 func netCostVer2(rows, rowSize float64, netFactor costVer2Factor) costVer2 {
-	trace := traceCost()
-	netCost := rows * rowSize * netFactor.Value
-	if trace {
-		formula := fmt.Sprintf("net(%v*rowsize(%v)*%v)", rows, rowSize, netFactor.Value)
-		return newCostVer2(trace, netCost, netFactor.Name, formula)
-	}
-	return newCostVer2(trace, netCost, "", "")
+	return newCostVer2(traceCost(), netFactor,
+		rows*rowSize*netFactor.Value,
+		newLazyFormula("net(%v*rowsize(%v)*%v)", rows, rowSize, netFactor.Value))
 }
 
 func filterCostVer2(rows float64, filters []expression.Expression, cpuFactor costVer2Factor) costVer2 {
-	trace := traceCost()
-	// TODO: consider types of filters
-	cpuCost := rows * float64(len(filters)) * cpuFactor.Value
-	if trace {
-		formula := fmt.Sprintf("cpu(%v*filters(%v)*%v)", rows, len(filters), cpuFactor.Value)
-		return newCostVer2(trace, cpuCost, cpuFactor.Name, formula)
-	}
-	return newCostVer2(trace, cpuCost, "", "")
+	return newCostVer2(traceCost(), cpuFactor,
+		rows*float64(len(filters))*cpuFactor.Value,
+		newLazyFormula("cpu(%v*filters(%v)*%v)", rows, len(filters), cpuFactor.Value))
 }
 
 func aggCostVer2(rows float64, aggFuncs []*aggregation.AggFuncDesc, cpuFactor costVer2Factor) costVer2 {
