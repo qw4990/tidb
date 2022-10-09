@@ -37,21 +37,21 @@ func getPlanCost(p PhysicalPlan, taskType property.TaskType, option *PlanCostOpt
 
 type costVer2 struct {
 	cost        float64
+	trace       bool               // Whether to trace the cost calculation.
 	factorCosts map[string]float64 // map[factorName]cost, used to calibrate the cost model
 	formula     string             // It used to trace the cost calculation.
 }
 
-func newZeroCostVer2(trace bool) costVer2 {
-	var c costVer2
+func newZeroCostVer2(trace bool) (ret costVer2) {
 	if trace {
-		c.factorCosts = make(map[string]float64)
+		ret.trace = true
+		ret.factorCosts = make(map[string]float64)
 	}
-	return c
+	return
 }
 
 func newCostVer2(trace bool, cost float64, factor, formula string) costVer2 {
 	ret := newZeroCostVer2(trace)
-	ret.cost = cost
 	if trace {
 		ret.factorCosts[factor] = cost
 		ret.formula = formula
@@ -59,26 +59,28 @@ func newCostVer2(trace bool, cost float64, factor, formula string) costVer2 {
 	return ret
 }
 
-func sumCostVer2(trace bool, costs ...costVer2) costVer2 {
-	ret := newZeroCostVer2(trace)
+func sumCostVer2(costs ...costVer2) costVer2 {
+	ret := newZeroCostVer2(costs[0].trace)
 	var subFormulas []string
 	for _, c := range costs {
 		ret.cost += c.cost
-		if trace {
+		if ret.trace {
 			for factor, factorCost := range c.factorCosts {
 				ret.factorCosts[factor] += factorCost
 			}
 			subFormulas = append(subFormulas, fmt.Sprintf("(%v)", c.formula))
 		}
 	}
-	ret.formula = strings.Join(subFormulas, " + ")
+	if ret.trace {
+		ret.formula = strings.Join(subFormulas, " + ")
+	}
 	return ret
 }
 
-func divCostVer2(trace bool, cost costVer2, denominator float64) costVer2 {
-	ret := newZeroCostVer2(trace)
+func divCostVer2(cost costVer2, denominator float64) costVer2 {
+	ret := newZeroCostVer2(cost.trace)
 	ret.cost = cost.cost / denominator
-	if trace {
+	if ret.trace {
 		for f, c := range cost.factorCosts {
 			ret.factorCosts[f] = c / denominator
 		}
@@ -107,7 +109,7 @@ func (p *basePhysicalPlan) getPlanCostVer2(taskType property.TaskType, option *P
 		}
 		childCosts = append(childCosts, childCost)
 	}
-	p.planCostVer2 = sumCostVer2(traceCost(), childCosts...)
+	p.planCostVer2 = sumCostVer2(childCosts...)
 	p.planCostInit = true
 	return p.planCostVer2, nil
 }
@@ -129,7 +131,7 @@ func (p *PhysicalSelection) getPlanCostVer2(taskType property.TaskType, option *
 		return zeroCostVer2, err
 	}
 
-	p.planCostVer2 = sumCostVer2(traceCost(), filterCost, childCost)
+	p.planCostVer2 = sumCostVer2(filterCost, childCost)
 	p.planCostInit = true
 	return p.planCostVer2, nil
 }
@@ -153,8 +155,7 @@ func (p *PhysicalProjection) getPlanCostVer2(taskType property.TaskType, option 
 		return zeroCostVer2, err
 	}
 
-	trace := traceCost()
-	p.planCostVer2 = divCostVer2(trace, sumCostVer2(trace, childCost, projCost), concurrency)
+	p.planCostVer2 = divCostVer2(sumCostVer2(childCost, projCost), concurrency)
 	p.planCostInit = true
 	return p.planCostVer2, nil
 }
