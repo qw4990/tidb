@@ -193,7 +193,7 @@ func (p *PhysicalTableScan) getPlanCostVer2(taskType property.TaskType, option *
 
 	// give TiFlash a start-up cost to let the optimizer prefers to use TiKV to process small table scans.
 	if p.StoreType == kv.TiFlash {
-		p.planCostVer2 = sumCostVer2(traceCost(), p.planCostVer2, scanCostVer2(10000, rowSize, scanFactor))
+		p.planCostVer2 = sumCostVer2(p.planCostVer2, scanCostVer2(10000, rowSize, scanFactor))
 	}
 
 	p.planCostInit = true
@@ -222,7 +222,7 @@ func (p *PhysicalIndexReader) getPlanCostVer2(taskType property.TaskType, option
 		return zeroCostVer2, err
 	}
 
-	p.planCost = (childCost + netCost + seekCost) / concurrency
+	p.planCostVer2 = divCostVer2(sumCostVer2(childCost, netCost, seekCost), concurrency)
 	p.planCostInit = true
 	return p.planCostVer2, nil
 }
@@ -249,14 +249,14 @@ func (p *PhysicalTableReader) getPlanCostVer2(taskType property.TaskType, option
 		return zeroCostVer2, err
 	}
 
-	p.planCost = (childCost + netCost + seekCost) / concurrency
+	p.planCostVer2 = divCostVer2(sumCostVer2(childCost, netCost, seekCost), concurrency)
 	p.planCostInit = true
 
 	// consider tidb_enforce_mpp
 	_, isMPP := p.tablePlan.(*PhysicalExchangeSender)
 	if isMPP && p.ctx.GetSessionVars().IsMPPEnforced() &&
 		!hasCostFlag(option.CostFlag, CostFlagRecalculate) { // show the real cost in explain-statements
-		p.planCost /= 1000000000
+		p.planCostVer2 = divCostVer2(p.planCostVer2, 1000000000)
 	}
 	return p.planCostVer2, nil
 }
@@ -291,7 +291,7 @@ func (p *PhysicalIndexLookUpReader) getPlanCostVer2(taskType property.TaskType, 
 	if err != nil {
 		return zeroCostVer2, err
 	}
-	indexSideCost := (indexNetCost + indexSeekCost + indexChildCost) / distConcurrency
+	indexSideCost := divCostVer2(sumCostVer2(indexNetCost, indexSeekCost, indexChildCost), distConcurrency)
 
 	// table-side
 	tableNetCost := netCostVer2(tableRows, tableRowSize, netFactor)
@@ -300,7 +300,7 @@ func (p *PhysicalIndexLookUpReader) getPlanCostVer2(taskType property.TaskType, 
 	if err != nil {
 		return zeroCostVer2, err
 	}
-	tableSideCost := (tableNetCost + tableSeekCost + tableChildCost) / distConcurrency
+	tableSideCost := divCostVer2(sumCostVer2(tableNetCost, tableSeekCost, tableChildCost), distConcurrency)
 
 	// double-read
 	doubleReadCPUCost := indexRows * cpuFactor.Value
@@ -310,7 +310,7 @@ func (p *PhysicalIndexLookUpReader) getPlanCostVer2(taskType property.TaskType, 
 	doubleReadSeekCost := doubleReadTasks * seekFactor.Value
 	doubleReadCost := doubleReadCPUCost + doubleReadSeekCost
 
-	p.planCost = indexSideCost + (tableSideCost+doubleReadCost)/doubleReadConcurrency
+	p.planCostVer2 = sumCostVer2(indexSideCost, divCostVer2(sumCostVer2(tableSideCost, doubleReadCost), doubleReadConcurrency))
 	p.planCostInit = true
 	return p.planCostVer2, nil
 }
