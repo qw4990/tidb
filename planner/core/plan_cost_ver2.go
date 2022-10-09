@@ -405,15 +405,23 @@ func (p *PhysicalSort) getPlanCostVer2(taskType property.TaskType, option *PlanC
 		memQuota > 0 && // mem-quota is set
 		rowSize*rows > float64(memQuota) // exceed the mem-quota
 
-	sortCPUCost := rows * math.Log2(rows) * float64(len(p.ByItems)) * cpuFactor.Value
+	sortCPUCost := newCostVer2(traceCost(), cpuFactor,
+		rows*math.Log2(rows)*float64(len(p.ByItems))*cpuFactor.Value,
+		newLazyFormula("%v*log2(%v)*%v*%v", rows, rows, len(p.ByItems), cpuFactor.Value))
 
-	var sortMemCost, sortDiskCost float64
+	var sortMemCost, sortDiskCost costVer2
 	if !spill {
-		sortMemCost = rows * rowSize * memFactor.Value
-		sortDiskCost = 0
+		sortMemCost = newCostVer2(traceCost(), memFactor,
+			rows*rowSize*memFactor.Value,
+			newLazyFormula("%v*%v*%v", rows, rowSize, memFactor.Value))
+		sortDiskCost = zeroCostVer2
 	} else {
-		sortMemCost = float64(memQuota) * memFactor.Value
-		sortDiskCost = rows * rowSize * diskFactor.Value
+		sortMemCost = newCostVer2(traceCost(), memFactor,
+			float64(memQuota)*memFactor.Value,
+			newLazyFormula("%v*%v", memQuota, memFactor.Value))
+		sortDiskCost = newCostVer2(traceCost(), diskFactor,
+			rows*rowSize*diskFactor.Value,
+			newLazyFormula("%v*%v*%v", rows, rowSize, diskFactor.Value))
 	}
 
 	childCost, err := p.children[0].getPlanCostVer2(taskType, option)
@@ -441,8 +449,12 @@ func (p *PhysicalTopN) getPlanCostVer2(taskType property.TaskType, option *PlanC
 	cpuFactor := getTaskCPUFactorVer2(p, taskType)
 	memFactor := getTaskMemFactorVer2(p, taskType)
 
-	topNCPUCost := rows * math.Log2(N) * float64(len(p.ByItems)) * cpuFactor.Value
-	topNMemCost := N * rowSize * memFactor.Value
+	topNCPUCost := newCostVer2(traceCost(), cpuFactor,
+		rows*math.Log2(N)*float64(len(p.ByItems))*cpuFactor.Value,
+		newLazyFormula("%v*%v*%v*%v", rows, math.Log2(N), len(p.ByItems), cpuFactor.Value))
+	topNMemCost := newCostVer2(traceCost(), memFactor,
+		N*rowSize*memFactor.Value,
+		newLazyFormula("%v*%v*%v", N, rowSize, memFactor.Value))
 
 	childCost, err := p.children[0].getPlanCostVer2(taskType, option)
 	if err != nil {
@@ -796,10 +808,10 @@ func hashBuildCostVer2(buildRows, buildRowSize float64, keys []expression.Expres
 	// TODO: 1) consider types of keys, 2) dedicated factor for build-probe hash table
 	hashKeyCost := newCostVer2(traceCost(), cpuFactor,
 		buildRows*float64(len(keys))*cpuFactor.Value,
-		newLazyFormula("hashkey(%v*%v*%v)", buildRows, len(keys), cpuFactor.Value)))
+		newLazyFormula("hashkey(%v*%v*%v)", buildRows, len(keys), cpuFactor.Value))
 	hashMemCost := newCostVer2(traceCost(), memFactor,
 		buildRows*buildRowSize*memFactor.Value,
-		newLazyFormula("hashmem(%v*%v*%v)", buildRows, buildRowSize, memFactor.Value)))
+		newLazyFormula("hashmem(%v*%v*%v)", buildRows, buildRowSize, memFactor.Value))
 	hashBuildCost := newCostVer2(traceCost(), cpuFactor,
 		buildRows*float64(len(keys))*cpuFactor.Value,
 		newLazyFormula("hashbuild(%v*%v*%v)", buildRows, len(keys), cpuFactor.Value))
