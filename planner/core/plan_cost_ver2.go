@@ -733,33 +733,69 @@ func (p *BatchPointGetPlan) getPlanCostVer2(taskType property.TaskType, option *
 }
 
 func scanCostVer2(rows, rowSize float64, scanFactor costVer2Factor) costVer2 {
+	trace := traceCost()
 	// log2 from experiments
-	return rows * math.Log2(math.Max(1, rowSize)) * scanFactor.Value
+	scanCost := rows * math.Log2(math.Max(1, rowSize)) * scanFactor.Value
+	if trace {
+		formula := fmt.Sprintf("scan(%v*log2-rowsize(%v)*%v)", rows, rowSize, scanFactor.Value)
+		return newCostVer2(trace, scanCost, scanFactor.Name, formula)
+	}
+	return newCostVer2(trace, scanCost, "", "")
 }
 
 func netCostVer2(rows, rowSize float64, netFactor costVer2Factor) costVer2 {
-	return rows * rowSize * netFactor.Value
+	trace := traceCost()
+	netCost := rows * rowSize * netFactor.Value
+	if trace {
+		formula := fmt.Sprintf("net(%v*rowsize(%v)*%v)", rows, rowSize, netFactor.Value)
+		return newCostVer2(trace, netCost, netFactor.Name, formula)
+	}
+	return newCostVer2(trace, netCost, "", "")
 }
 
 func filterCostVer2(rows float64, filters []expression.Expression, cpuFactor costVer2Factor) costVer2 {
+	trace := traceCost()
 	// TODO: consider types of filters
-	return rows * float64(len(filters)) * cpuFactor.Value
+	cpuCost := rows * float64(len(filters)) * cpuFactor.Value
+	if trace {
+		formula := fmt.Sprintf("cpu(%v*filters(%v)*%v)", rows, len(filters), cpuFactor.Value)
+		return newCostVer2(trace, cpuCost, cpuFactor.Name, formula)
+	}
+	return newCostVer2(trace, cpuCost, "", "")
 }
 
 func aggCostVer2(rows float64, aggFuncs []*aggregation.AggFuncDesc, cpuFactor costVer2Factor) costVer2 {
+	trace := traceCost()
 	// TODO: consider types of agg-funcs
-	return rows * float64(len(aggFuncs)) * cpuFactor.Value
+	aggCost := rows * float64(len(aggFuncs)) * cpuFactor.Value
+	if trace {
+		formula := fmt.Sprintf("agg(%v*aggs(%v)*%v)", rows, len(aggFuncs), cpuFactor.Value)
+		return newCostVer2(trace, aggCost, cpuFactor.Name, formula)
+	}
+	return newCostVer2(trace, aggCost, "", "")
 }
 
 func groupCostVer2(rows float64, groupItems []expression.Expression, cpuFactor costVer2Factor) costVer2 {
-	return rows * float64(len(groupItems)) * cpuFactor.Value
+	trace := traceCost()
+	groupCost := rows * float64(len(groupItems)) * cpuFactor.Value
+	if trace {
+		formula := fmt.Sprintf("group(%v*cols(%v)*%v)", rows, len(groupItems), cpuFactor.Value)
+		return newCostVer2(trace, groupCost, cpuFactor.Name, formula)
+	}
+	return newCostVer2(trace, groupCost, "", "")
 }
 
 func hashBuildCostVer2(buildRows, buildRowSize float64, keys []expression.Expression, cpuFactor, memFactor costVer2Factor) costVer2 {
+	trace := traceCost()
 	// TODO: 1) consider types of keys, 2) dedicated factor for build-probe hash table
 	hashKeyCost := buildRows * float64(len(keys)) * cpuFactor.Value
 	hashMemCost := buildRows * buildRowSize * memFactor.Value
 	hashBuildCost := buildRows * float64(len(keys)) * cpuFactor.Value
+
+	if trace {
+
+	}
+
 	return hashKeyCost + hashMemCost + hashBuildCost
 }
 
