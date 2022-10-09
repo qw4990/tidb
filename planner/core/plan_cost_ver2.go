@@ -129,7 +129,7 @@ func (p *PhysicalSelection) getPlanCostVer2(taskType property.TaskType, option *
 		return zeroCostVer2, err
 	}
 
-	p.planCost = filterCost + childCost
+	p.planCostVer2 = sumCostVer2(traceCost(), filterCost, childCost)
 	p.planCostInit = true
 	return p.planCostVer2, nil
 }
@@ -146,14 +146,15 @@ func (p *PhysicalProjection) getPlanCostVer2(taskType property.TaskType, option 
 	cpuFactor := getTaskCPUFactorVer2(p, taskType)
 	concurrency := float64(p.ctx.GetSessionVars().ProjectionConcurrency())
 
-	projCost := inputRows * float64(len(p.Exprs)) * cpuFactor.Value
+	projCost := filterCostVer2(inputRows, p.Exprs, cpuFactor)
 
 	childCost, err := p.children[0].getPlanCostVer2(taskType, option)
 	if err != nil {
 		return zeroCostVer2, err
 	}
 
-	p.planCost = childCost + projCost/concurrency
+	trace := traceCost()
+	p.planCostVer2 = divCostVer2(trace, sumCostVer2(trace, childCost, projCost), concurrency)
 	p.planCostInit = true
 	return p.planCostVer2, nil
 }
@@ -170,7 +171,7 @@ func (p *PhysicalIndexScan) getPlanCostVer2(taskType property.TaskType, option *
 	rowSize := math.Max(p.getScanRowSize(), 2.0)
 	scanFactor := getTaskScanFactorVer2(p, taskType)
 
-	p.planCost = scanCostVer2(rows, rowSize, scanFactor)
+	p.planCostVer2 = scanCostVer2(rows, rowSize, scanFactor)
 	p.planCostInit = true
 	return p.planCostVer2, nil
 }
@@ -187,11 +188,11 @@ func (p *PhysicalTableScan) getPlanCostVer2(taskType property.TaskType, option *
 	rowSize := math.Max(p.getScanRowSize(), 2.0)
 	scanFactor := getTaskScanFactorVer2(p, taskType)
 
-	p.planCost = scanCostVer2(rows, rowSize, scanFactor)
+	p.planCostVer2 = scanCostVer2(rows, rowSize, scanFactor)
 
 	// give TiFlash a start-up cost to let the optimizer prefers to use TiKV to process small table scans.
 	if p.StoreType == kv.TiFlash {
-		p.planCost += scanCostVer2(10000, rowSize, scanFactor)
+		p.planCostVer2 = sumCostVer2(traceCost(), p.planCostVer2, scanCostVer2(10000, rowSize, scanFactor))
 	}
 
 	p.planCostInit = true
