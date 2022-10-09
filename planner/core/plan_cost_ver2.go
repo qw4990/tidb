@@ -48,6 +48,10 @@ func newZeroCostVer2(trace bool) costVer2 {
 	return c
 }
 
+func newCostVer2(trace bool, cost float64, factor, formula string) costVer2 {
+
+}
+
 func sumCostVer2(trace bool, costs ...costVer2) costVer2 {
 	ret := newZeroCostVer2(trace)
 	var subFormulas []string
