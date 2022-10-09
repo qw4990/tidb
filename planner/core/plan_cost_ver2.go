@@ -224,10 +224,11 @@ func (p *PhysicalIndexReader) getPlanCostVer2(taskType property.TaskType, option
 	rows := getCardinality(p.indexPlan, option.CostFlag)
 	rowSize := getAvgRowSize(p.indexPlan.Stats(), p.indexPlan.Schema())
 	netFactor := getTaskNetFactorVer2(p, taskType)
+	seekFactor := getTaskSeekFactorVer2(p, taskType)
 	concurrency := float64(p.ctx.GetSessionVars().DistSQLScanConcurrency())
 
 	netCost := netCostVer2(rows, rowSize, netFactor)
-	seekCost := estimateNetSeekCost(p.indexPlan)
+	seekCost := seekCostVer2(estimateNumTasks(p.indexPlan), seekFactor)
 
 	childCost, err := p.indexPlan.getPlanCostVer2(property.CopSingleReadTaskType, option)
 	if err != nil {
@@ -251,10 +252,11 @@ func (p *PhysicalTableReader) getPlanCostVer2(taskType property.TaskType, option
 	rows := getCardinality(p.tablePlan, option.CostFlag)
 	rowSize := getAvgRowSize(p.tablePlan.Stats(), p.tablePlan.Schema())
 	netFactor := getTaskNetFactorVer2(p, taskType)
+	seekFactor := getTaskSeekFactorVer2(p, taskType)
 	concurrency := float64(p.ctx.GetSessionVars().DistSQLScanConcurrency())
 
 	netCost := netCostVer2(rows, rowSize, netFactor)
-	seekCost := estimateNetSeekCost(p.tablePlan)
+	seekCost := seekCostVer2(estimateNetSeekCost(p.tablePlan), seekFactor)
 
 	childCost, err := p.tablePlan.getPlanCostVer2(property.CopSingleReadTaskType, option)
 	if err != nil {
@@ -277,9 +279,7 @@ func (p *PhysicalTableReader) getPlanCostVer2(taskType property.TaskType, option
 // plan-cost = index-side-cost + (table-side-cost + double-read-cost) / double-read-concurrency
 // index-side-cost = (index-child-cost + index-net-cost + index-seek-cost) / dist-concurrency # same with IndexReader
 // table-side-cost = (table-child-cost + table-net-cost + table-seek-cost) / dist-concurrency # same with TableReader
-// double-read-cost = double-read-seek-cost + double-read-cpu-cost
-// double-read-seek-cost = double-read-tasks * seek-factor
-// double-read-cpu-cost = index-rows * cpu-factor
+// double-read-cost = double-read-tasks * seek-factor
 // double-read-tasks = index-rows / batch-size * task-per-batch # task-per-batch is a magic number now
 func (p *PhysicalIndexLookUpReader) getPlanCostVer2(taskType property.TaskType, option *PlanCostOption) (costVer2, error) {
 	if p.planCostInit && !hasCostFlag(option.CostFlag, CostFlagRecalculate) {
@@ -290,7 +290,6 @@ func (p *PhysicalIndexLookUpReader) getPlanCostVer2(taskType property.TaskType, 
 	tableRows := getCardinality(p.indexPlan, option.CostFlag)
 	indexRowSize := getTblStats(p.indexPlan).GetAvgRowSize(p.ctx, p.indexPlan.Schema().Columns, true, false)
 	tableRowSize := getTblStats(p.tablePlan).GetAvgRowSize(p.ctx, p.tablePlan.Schema().Columns, false, false)
-	cpuFactor := getTaskCPUFactorVer2(p, taskType)
 	netFactor := getTaskNetFactorVer2(p, taskType)
 	seekFactor := getTaskSeekFactorVer2(p, taskType)
 	distConcurrency := float64(p.ctx.GetSessionVars().DistSQLScanConcurrency())
@@ -298,7 +297,7 @@ func (p *PhysicalIndexLookUpReader) getPlanCostVer2(taskType property.TaskType, 
 
 	// index-side
 	indexNetCost := netCostVer2(indexRows, indexRowSize, netFactor)
-	indexSeekCost := estimateNetSeekCost(p.indexPlan)
+	indexSeekCost := seekCostVer2(estimateNumTasks(p.indexPlan), seekFactor)
 	indexChildCost, err := p.indexPlan.getPlanCostVer2(property.CopDoubleReadTaskType, option)
 	if err != nil {
 		return zeroCostVer2, err
@@ -307,7 +306,7 @@ func (p *PhysicalIndexLookUpReader) getPlanCostVer2(taskType property.TaskType, 
 
 	// table-side
 	tableNetCost := netCostVer2(tableRows, tableRowSize, netFactor)
-	tableSeekCost := estimateNetSeekCost(p.tablePlan)
+	tableSeekCost := seekCostVer2(estimateNumTasks(p.tablePlan), seekFactor)
 	tableChildCost, err := p.tablePlan.getPlanCostVer2(property.CopDoubleReadTaskType, option)
 	if err != nil {
 		return zeroCostVer2, err
@@ -315,14 +314,12 @@ func (p *PhysicalIndexLookUpReader) getPlanCostVer2(taskType property.TaskType, 
 	tableSideCost := divCostVer2(sumCostVer2(tableNetCost, tableSeekCost, tableChildCost), distConcurrency)
 
 	// double-read
-	doubleReadCPUCost := indexRows * cpuFactor.Value
 	batchSize := float64(p.ctx.GetSessionVars().IndexLookupSize)
 	taskPerBatch := 40.0 // TODO: remove this magic number
 	doubleReadTasks := indexRows / batchSize * taskPerBatch
-	doubleReadSeekCost := doubleReadTasks * seekFactor.Value
-	doubleReadCost := doubleReadCPUCost + doubleReadSeekCost
+	doubleReadSeekCost := seekCostVer2(doubleReadTasks, seekFactor)
 
-	p.planCostVer2 = sumCostVer2(indexSideCost, divCostVer2(sumCostVer2(tableSideCost, doubleReadCost), doubleReadConcurrency))
+	p.planCostVer2 = sumCostVer2(indexSideCost, divCostVer2(sumCostVer2(tableSideCost, doubleReadSeekCost), doubleReadConcurrency))
 	p.planCostInit = true
 	return p.planCostVer2, nil
 }
@@ -337,6 +334,7 @@ func (p *PhysicalIndexMergeReader) getPlanCostVer2(taskType property.TaskType, o
 	}
 
 	netFactor := getTaskNetFactorVer2(p, taskType)
+	seekFactor := getTaskSeekFactorVer2(p, taskType)
 	distConcurrency := float64(p.ctx.GetSessionVars().DistSQLScanConcurrency())
 
 	var tableSideCost costVer2
@@ -345,7 +343,7 @@ func (p *PhysicalIndexMergeReader) getPlanCostVer2(taskType property.TaskType, o
 		rowSize := getAvgRowSize(tablePath.Stats(), tablePath.Schema())
 
 		tableNetCost := netCostVer2(rows, rowSize, netFactor)
-		tableSeekCost := estimateNetSeekCost(tablePath)
+		tableSeekCost := seekCostVer2(estimateNumTasks(tablePath), seekFactor)
 		tableChildCost, err := tablePath.getPlanCostVer2(taskType, option)
 		if err != nil {
 			return zeroCostVer2, err
@@ -359,7 +357,7 @@ func (p *PhysicalIndexMergeReader) getPlanCostVer2(taskType property.TaskType, o
 		rowSize := getAvgRowSize(indexPath.Stats(), indexPath.Schema())
 
 		indexNetCost := netCostVer2(rows, rowSize, netFactor)
-		indexSeekCost := estimateNetSeekCost(indexPath)
+		indexSeekCost := seekCostVer2(estimateNumTasks(indexPath), seekFactor)
 		indexChildCost, err := indexPath.getPlanCostVer2(taskType, option)
 		if err != nil {
 			return zeroCostVer2, err
@@ -715,7 +713,7 @@ func (p *PointGetPlan) getPlanCostVer2(taskType property.TaskType, option *PlanC
 	seekFactor := getTaskSeekFactorVer2(p, taskType)
 
 	netCost := netCostVer2(1, rowSize, netFactor)
-	seekCost := 1 * seekFactor.Value / 20 // 20 times faster than general request
+	seekCost := divCostVer2(seekCostVer2(1, seekFactor), 20) // 20 times faster than general request
 
 	p.planCostVer2 = sumCostVer2(netCost, seekCost)
 	p.planCostInit = true
@@ -740,11 +738,21 @@ func (p *BatchPointGetPlan) getPlanCostVer2(taskType property.TaskType, option *
 	seekFactor := getTaskSeekFactorVer2(p, taskType)
 
 	netCost := netCostVer2(rows, rowSize, netFactor)
-	seekCost := 1 * seekFactor.Value / 20 // in one batch
+	seekCost := divCostVer2(seekCostVer2(1, seekFactor), 20) // in one batch
 
 	p.planCostVer2 = sumCostVer2(netCost, seekCost)
 	p.planCostInit = true
 	return p.planCostVer2, nil
+}
+
+func seekCostVer2(numTasks float64, seekFactor costVer2Factor) costVer2 {
+	trace := traceCost()
+	seekCost := numTasks * seekFactor.Value
+	if trace {
+		formula := fmt.Sprintf("seek(tasks(%v)*%v)", numTasks, seekFactor.Value)
+		return newCostVer2(trace, seekCost, seekFactor.Name, formula)
+	}
+	return newCostVer2(trace, seekCost, "", "")
 }
 
 func scanCostVer2(rows, rowSize float64, scanFactor costVer2Factor) costVer2 {
@@ -978,6 +986,20 @@ func getTableInfo(p PhysicalPlan) *model.TableInfo {
 			return nil
 		}
 		return getTableInfo(x.Children()[0])
+	}
+}
+
+func estimateNumTasks(copTaskPlan PhysicalPlan) float64 {
+	switch x := copTaskPlan.(type) {
+	case *PhysicalTableScan:
+		if x.StoreType == kv.TiFlash { // the old TiFlash interface uses cop-task protocol
+			return float64(len(x.Ranges)) * float64(len(x.Columns))
+		}
+		return float64(len(x.Ranges)) // TiKV
+	case *PhysicalIndexScan:
+		return float64(len(x.Ranges)) // TiKV
+	default:
+		return estimateNetSeekCost(copTaskPlan.Children()[0])
 	}
 }
 
