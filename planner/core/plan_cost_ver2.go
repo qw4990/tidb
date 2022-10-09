@@ -792,18 +792,41 @@ func hashBuildCostVer2(buildRows, buildRowSize float64, keys []expression.Expres
 	hashMemCost := buildRows * buildRowSize * memFactor.Value
 	hashBuildCost := buildRows * float64(len(keys)) * cpuFactor.Value
 
+	var hashKeyCostVer2, hashMemCostVer2, hashBuildCostVer2 costVer2
 	if trace {
-
+		hashKeyCostVer2 = newCostVer2(trace, hashKeyCost, cpuFactor.Name,
+			fmt.Sprintf("hashkey(%v*%v*%v)", buildRows, len(keys), cpuFactor.Value))
+		hashMemCostVer2 = newCostVer2(trace, hashMemCost, memFactor.Name,
+			fmt.Sprintf("hashmem(%v*%v*%v)", buildRows, buildRowSize, memFactor.Value))
+		hashBuildCostVer2 = newCostVer2(trace, hashBuildCost, cpuFactor.Name,
+			fmt.Sprintf("hashbuild(%v*%v*%v)", buildRows, len(keys), cpuFactor.Value))
+	} else {
+		hashKeyCostVer2 = newCostVer2(trace, hashKeyCost, "", "")
+		hashMemCostVer2 = newCostVer2(trace, hashMemCost, "", "")
+		hashBuildCostVer2 = newCostVer2(trace, hashBuildCost, "", "")
 	}
 
-	return hashKeyCost + hashMemCost + hashBuildCost
+	return sumCostVer2(trace, hashKeyCostVer2, hashMemCostVer2, hashBuildCostVer2)
 }
 
 func hashProbeCostVer2(probeRows float64, keys []expression.Expression, cpuFactor costVer2Factor) costVer2 {
+	trace := traceCost()
 	// TODO: 1) consider types of keys, 2) dedicated factor for build-probe hash table
 	hashKeyCost := probeRows * float64(len(keys)) * cpuFactor.Value
 	hashProbeCost := probeRows * float64(len(keys)) * cpuFactor.Value
-	return hashKeyCost + hashProbeCost
+
+	var hashKeyCostVer2, hashProbeCostVer2 costVer2
+	if trace {
+		hashKeyCostVer2 = newCostVer2(trace, hashKeyCost, cpuFactor.Name,
+			fmt.Sprintf("hashkey(%v*%v*%v)", probeRows, len(keys), cpuFactor.Value))
+		hashProbeCostVer2 = newCostVer2(trace, hashProbeCost, cpuFactor.Name,
+			fmt.Sprintf("hashmem(%v*%v*%v)", probeRows, len(keys), cpuFactor.Value))
+	} else {
+		hashKeyCostVer2 = newCostVer2(trace, hashKeyCost, "", "")
+		hashProbeCostVer2 = newCostVer2(trace, hashProbeCost, "", "")
+	}
+
+	return sumCostVer2(trace, hashKeyCostVer2, hashProbeCostVer2)
 }
 
 type costVer2Factor struct {
