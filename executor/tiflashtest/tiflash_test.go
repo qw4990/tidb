@@ -1232,6 +1232,7 @@ func TestTiFlashHint(t *testing.T) {
 			fmt.Println(">>> ", r)
 		}
 		warns := tk.MustQuery("show warnings").Rows()
+		fmt.Println("> len warnings > ", len(warns))
 		for _, w := range warns {
 			fmt.Println("> w ", w)
 		}
