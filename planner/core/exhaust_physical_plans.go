@@ -2758,6 +2758,7 @@ func (la *LogicalAggregation) tryToGetMppHashAggs(prop *property.PhysicalPropert
 			preMode = true
 			mppMode = MppScalar
 		}
+		fmt.Println(">>>>>>>> spec >> ", mppMode)
 		if preMode {
 			var tmp []PhysicalPlan
 			for _, agg := range hashAggs {

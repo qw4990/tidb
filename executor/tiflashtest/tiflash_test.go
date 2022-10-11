@@ -1211,6 +1211,7 @@ func TestTiFlashHint(t *testing.T) {
 	tk.MustExec("use test")
 	tk.MustExec("create table t (a int, b int)")
 	tk.MustExec("alter table t set tiflash replica 1")
+	tk.MustExec("set @@session.tidb_allow_mpp=ON")
 	tb := external.GetTableByName(t, tk, "test", "t")
 	err := domain.GetDomain(tk.Session()).DDL().UpdateTableReplicaInfo(tk.Session(), tb.Meta().ID, true)
 	require.NoError(t, err)
@@ -1224,6 +1225,7 @@ func TestTiFlashHint(t *testing.T) {
 		"explain /*+ read_from_storage(tiflash[t1, t2]), shuffle_join(t1, t2) */ select * from t t1, t t2 where t1.a=t2.a",
 		"explain /*+ read_from_storage(tiflash[t1, t2]), broadcast_join(t1, t2) */ select * from t t1, t t2 where t1.a=t2.a",
 	} {
+		fmt.Println("===================================================================")
 		fmt.Println(">>>> ", sql)
 		rs := tk.MustQuery(sql).Rows()
 		for _, r := range rs {
