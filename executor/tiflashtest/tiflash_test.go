@@ -1209,13 +1209,18 @@ func TestTiFlashHint(t *testing.T) {
 	store := testkit.CreateMockStore(t, withMockTiFlash(2))
 	tk := testkit.NewTestKit(t, store)
 	tk.MustExec("use test")
-	tk.MustExec("create table t (a int)")
+	tk.MustExec("create table t (a int, b int)")
 	tk.MustExec("alter table t set tiflash replica 1")
 	tb := external.GetTableByName(t, tk, "test", "t")
 	err := domain.GetDomain(tk.Session()).DDL().UpdateTableReplicaInfo(tk.Session(), tb.Meta().ID, true)
 	require.NoError(t, err)
 
 	for _, sql := range []string{
+		"explain /*+ read_from_storage(tiflash[t]), MPP_1PHASE_AGG(t) */ select a, sum(b) from t group by a",
+		"explain /*+ read_from_storage(tiflash[t]), MPP_2PHASE_AGG(t) */ select a, sum(b) from t group by a",
+		"explain /*+ read_from_storage(tiflash[t]), MPP_TIDB_AGG(t) */ select a, sum(b) from t group by a",
+		"explain /*+ read_from_storage(tiflash[t]), MPP_SCALAR_AGG(t) */ select a, sum(b) from t group by a",
+
 		"explain /*+ read_from_storage(tiflash[t1, t2]), shuffle_join(t1, t2) */ select * from t t1, t t2 where t1.a=t2.a",
 		"explain /*+ read_from_storage(tiflash[t1, t2]), broadcast_join(t1, t2) */ select * from t t1, t t2 where t1.a=t2.a",
 	} {
