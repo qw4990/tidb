@@ -552,6 +552,7 @@ func getCPUFactorVer2(p PhysicalPlan, taskType property.TaskType) (float64, stri
 //	default: // MPP
 //		return p.SCtx().GetSessionVars().GetTiFlashHashTableFactor(), variable.TiDBOptTiFlashHashTableFactorV2
 //	}
+//
 //}
 
 func costDebug(p PhysicalPlan, format string, args ...interface{}) {
