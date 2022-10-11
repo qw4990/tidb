@@ -1217,13 +1217,13 @@ func TestTiFlashHint(t *testing.T) {
 	require.NoError(t, err)
 
 	for _, sql := range []string{
-		"explain /*+ read_from_storage(tiflash[t]), MPP_1PHASE_AGG(t) */ select a, sum(b) from t group by a",
-		"explain /*+ read_from_storage(tiflash[t]), MPP_2PHASE_AGG(t) */ select a, sum(b) from t group by a",
-		"explain /*+ read_from_storage(tiflash[t]), MPP_TIDB_AGG(t) */ select a, sum(b) from t group by a",
-		"explain /*+ read_from_storage(tiflash[t]), MPP_SCALAR_AGG(t) */ select a, sum(b) from t group by a",
+		"explain select /*+ read_from_storage(tiflash[t]), MPP_1PHASE_AGG() */ a, sum(b) from t group by a",
+		"explain select /*+ read_from_storage(tiflash[t]), MPP_2PHASE_AGG() */ a, sum(b) from t group by a",
+		"explain select /*+ read_from_storage(tiflash[t]), MPP_TIDB_AGG() */ a, sum(b) from t group by a",
+		"explain select /*+ read_from_storage(tiflash[t]), MPP_SCALAR_AGG() */ a, sum(b) from t group by a",
 
-		"explain /*+ read_from_storage(tiflash[t1, t2]), shuffle_join(t1, t2) */ select * from t t1, t t2 where t1.a=t2.a",
-		"explain /*+ read_from_storage(tiflash[t1, t2]), broadcast_join(t1, t2) */ select * from t t1, t t2 where t1.a=t2.a",
+		"explain select /*+ read_from_storage(tiflash[t1, t2]), shuffle_join(t1, t2) */ * from t t1, t t2 where t1.a=t2.a",
+		"explain select /*+ read_from_storage(tiflash[t1, t2]), broadcast_join(t1, t2) */ * from t t1, t t2 where t1.a=t2.a",
 	} {
 		fmt.Println("===================================================================")
 		fmt.Println(">>>> ", sql)
