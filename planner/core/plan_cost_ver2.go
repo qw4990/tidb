@@ -44,6 +44,7 @@ func (p *basePhysicalPlan) getPlanCostVer2(taskType property.TaskType, option *P
 	for _, child := range p.children {
 		childCost, err := child.getPlanCostVer2(taskType, option)
 		if err != nil {
+			// xx
 			return zeroCostVer2, err
 		}
 		childCosts = append(childCosts, childCost)
