@@ -17,6 +17,20 @@ package variable
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/pingcap/errors"
+	"github.com/pingcap/tidb/metrics"
+	"github.com/pingcap/tidb/parser"
+	"github.com/pingcap/tidb/parser/charset"
+	"github.com/pingcap/tidb/sessionctx/sessionstates"
+	"github.com/pingcap/tidb/util/collate"
+	"github.com/pingcap/tidb/util/memory"
+	"github.com/pingcap/tidb/util/stmtsummary"
+	"github.com/pingcap/tidb/util/tikvutil"
+	"github.com/pingcap/tidb/util/tls"
+	topsqlstate "github.com/pingcap/tidb/util/topsql/state"
+	tikvcfg "github.com/tikv/client-go/v2/config"
+	tikvstore "github.com/tikv/client-go/v2/kv"
+	"github.com/tikv/client-go/v2/tikv"
 	"math"
 	"runtime"
 	"strconv"
@@ -24,28 +38,14 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb/config"
 	"github.com/pingcap/tidb/kv"
-	"github.com/pingcap/tidb/metrics"
-	"github.com/pingcap/tidb/parser"
-	"github.com/pingcap/tidb/parser/charset"
 	"github.com/pingcap/tidb/parser/mysql"
-	"github.com/pingcap/tidb/sessionctx/sessionstates"
 	"github.com/pingcap/tidb/sessionctx/stmtctx"
 	"github.com/pingcap/tidb/types"
 	_ "github.com/pingcap/tidb/types/parser_driver" // for parser driver
-	"github.com/pingcap/tidb/util/collate"
 	"github.com/pingcap/tidb/util/logutil"
-	"github.com/pingcap/tidb/util/mathutil"
-	"github.com/pingcap/tidb/util/memory"
-	"github.com/pingcap/tidb/util/stmtsummary"
-	"github.com/pingcap/tidb/util/tikvutil"
-	"github.com/pingcap/tidb/util/tls"
-	topsqlstate "github.com/pingcap/tidb/util/topsql/state"
 	"github.com/pingcap/tidb/util/versioninfo"
-	tikvcfg "github.com/tikv/client-go/v2/config"
-	tikvstore "github.com/tikv/client-go/v2/kv"
 	atomic2 "go.uber.org/atomic"
 )
 
@@ -474,6 +474,12 @@ var defaultSysVars = []*SysVar{
 		return nil
 	}, GetGlobal: func(s *SessionVars) (string, error) {
 		return BoolToOnOff(EnableRCReadCheckTS.Load()), nil
+	}},
+	{Scope: ScopeInstance, Name: "enable_udp", Value: BoolToOnOff(false), Type: TypeBool, SetGlobal: func(s *SessionVars, val string) error {
+		tikv.SetEnableUDP(TiDBOptOn(val))
+		return nil
+	}, GetGlobal: func(s *SessionVars) (string, error) {
+		return BoolToOnOff(tikv.GetEnableUDP()), nil
 	}},
 
 	/* The system variables below have GLOBAL scope  */
