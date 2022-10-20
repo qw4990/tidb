@@ -812,8 +812,8 @@ github.com/prometheus/prometheus v0.0.0-20190525122359-d20e84d0fb64/go.mod h1:oY
 github.com/prometheus/tsdb v0.7.1/go.mod h1:qhTCs0VvXwvX/y3TZrWD7rabWM+ijKTux40TwIPHuXU=
 github.com/prometheus/tsdb v0.8.0 h1:w1tAGxsBMLkuGrFMhqgcCeBkM5d1YI24udArs+aASuQ=
 github.com/prometheus/tsdb v0.8.0/go.mod h1:fSI0j+IUQrDd7+ZtR9WKIGtoYAYAJUKcKhYLG25tN4g=
-github.com/qw4990/client-go/v2 v2.0.0-20221020122607-4f5270ea0b80 h1:Xkd3hTzu4ZUGuLcVps6RGtZzAyd5gTAhDFLnuzIzc8k=
-github.com/qw4990/client-go/v2 v2.0.0-20221020122607-4f5270ea0b80/go.mod h1:9hmGJFrWdehClHg0lv2cYgzvCUEhwLZkH67/PHl75tg=
+github.com/qw4990/client-go/v2 v2.0.0-20221020131437-21d9914d433a h1:IykE+hxj4dYSfvK7S8lOsuHH+lMmUBk4U3q/URf9OsM=
+github.com/qw4990/client-go/v2 v2.0.0-20221020131437-21d9914d433a/go.mod h1:9hmGJFrWdehClHg0lv2cYgzvCUEhwLZkH67/PHl75tg=
 github.com/rcrowley/go-metrics v0.0.0-20201227073835-cf1acfcdf475 h1:N/ElC8H3+5XpJzTSTfLsJV/mx9Q9g7kxmchpfZyxgzM=
 github.com/rcrowley/go-metrics v0.0.0-20201227073835-cf1acfcdf475/go.mod h1:bCqnVzQkZxMG4s8nGwiZ5l3QUCyqpo9Y+/ZMZ9VjZe4=
 github.com/remyoudompheng/bigfft v0.0.0-20200410134404-eec4a21b6bb0 h1:OdAsTTz6OkFY5QxjkYwrChwuRruF69c169dPK26NUlk=
