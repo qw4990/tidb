@@ -240,6 +240,7 @@ require (
 replace (
 	github.com/dgrijalva/jwt-go => github.com/form3tech-oss/jwt-go v3.2.6-0.20210809144907-32ab6a8243d7+incompatible
 	github.com/pingcap/tidb/parser => ./parser
-	github.com/tikv/client-go/v2 => github.com/qw4990/client-go/v2 v2.0.0-20221020131437-21d9914d433a
 	go.opencensus.io => go.opencensus.io v0.23.1-0.20220331163232-052120675fac
 )
+
+replace github.com/tikv/client-go/v2 => github.com/qw4990/client-go/v2 v2.0.0-20221021092235-6f101676b368
