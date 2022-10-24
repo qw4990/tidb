@@ -185,11 +185,15 @@ func (p *PhysicalTableReader) getPlanCostVer2(taskType property.TaskType, option
 	netFactor := getTaskNetFactorVer2(p, taskType)
 	seekFactor := getTaskSeekFactorVer2(p, taskType)
 	concurrency := float64(p.ctx.GetSessionVars().DistSQLScanConcurrency())
+	childType := property.CopSingleReadTaskType
+	if _, isMPP := p.tablePlan.(*PhysicalExchangeSender); isMPP && p.StoreType == kv.TiFlash { // mpp protocol
+		childType = property.MppTaskType
+	}
 
 	netCost := netCostVer2(option, rows, rowSize, netFactor)
 	seekCost := seekCostVer2(option, estimateNumTasks(p.tablePlan), seekFactor)
 
-	childCost, err := p.tablePlan.getPlanCostVer2(property.CopSingleReadTaskType, option)
+	childCost, err := p.tablePlan.getPlanCostVer2(childType, option)
 	if err != nil {
 		return zeroCostVer2, err
 	}
