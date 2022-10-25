@@ -753,7 +753,7 @@ func hashProbeCostVer2(option *PlanCostOption, probeRows float64, keys []express
 		"hashkey(%v*%v*%v)", probeRows, len(keys), cpuFactor)
 	hashProbeCost := newCostVer2(option, cpuFactor,
 		probeRows*cpuFactor.Value,
-		"hashprobe(%v*%v*%v)", probeRows, cpuFactor)
+		"hashprobe(%v*%v)", probeRows, cpuFactor)
 	return sumCostVer2(hashKeyCost, hashProbeCost)
 }
 
