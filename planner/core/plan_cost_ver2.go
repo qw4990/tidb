@@ -436,7 +436,7 @@ func (p *PhysicalHashAgg) getPlanCostVer2(taskType property.TaskType, option *Pl
 	outputRowSize := getAvgRowSize(p.Stats(), p.Schema())
 	cpuFactor := getTaskCPUFactorVer2(p, taskType)
 	memFactor := getTaskMemFactorVer2(p, taskType)
-	concurrency := p.ctx.GetSessionVars().GetConcurrencyFactor()
+	concurrency := float64(p.ctx.GetSessionVars().HashAggFinalConcurrency())
 
 	aggCost := aggCostVer2(option, inputRows, p.AggFuncs, cpuFactor)
 	groupCost := groupCostVer2(option, inputRows, p.GroupByItems, cpuFactor)
@@ -615,7 +615,7 @@ func (p *PhysicalUnionAll) getPlanCostVer2(taskType property.TaskType, option *P
 		return p.planCostVer2, nil
 	}
 
-	concurrency := p.ctx.GetSessionVars().GetConcurrencyFactor()
+	concurrency := float64(p.ctx.GetSessionVars().UnionConcurrency())
 	childCosts := make([]costVer2, 0, len(p.children))
 	for _, child := range p.children {
 		childCost, err := child.getPlanCostVer2(taskType, option)
