@@ -741,8 +741,8 @@ func hashBuildCostVer2(option *PlanCostOption, buildRows, buildRowSize float64, 
 		buildRows*buildRowSize*memFactor.Value,
 		"hashmem(%v*%v*%v)", buildRows, buildRowSize, memFactor)
 	hashBuildCost := newCostVer2(option, cpuFactor,
-		buildRows*cpuFactor.Value,
-		"hashbuild(%v*%v)", buildRows, cpuFactor)
+		buildRows*float64(len(keys))*cpuFactor.Value,
+		"hashbuild(%v*%v*%v)", buildRows, len(keys), cpuFactor)
 	return sumCostVer2(hashKeyCost, hashMemCost, hashBuildCost)
 }
 
@@ -752,8 +752,8 @@ func hashProbeCostVer2(option *PlanCostOption, probeRows float64, keys []express
 		probeRows*float64(len(keys))*cpuFactor.Value,
 		"hashkey(%v*%v*%v)", probeRows, len(keys), cpuFactor)
 	hashProbeCost := newCostVer2(option, cpuFactor,
-		probeRows*cpuFactor.Value,
-		"hashprobe(%v*%v)", probeRows, cpuFactor)
+		probeRows*float64(len(keys))*cpuFactor.Value,
+		"hashprobe(%v*%v*%v)", probeRows, len(keys), cpuFactor)
 	return sumCostVer2(hashKeyCost, hashProbeCost)
 }
 
