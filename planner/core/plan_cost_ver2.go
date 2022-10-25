@@ -734,21 +734,27 @@ func groupCostVer2(option *PlanCostOption, rows float64, groupItems []expression
 
 func hashBuildCostVer2(option *PlanCostOption, buildRows, buildRowSize float64, keys []expression.Expression, cpuFactor, memFactor costVer2Factor) costVer2 {
 	// TODO: 1) consider types of keys, 2) dedicated factor for build-probe hash table
+	hashKeyCost := newCostVer2(option, cpuFactor,
+		buildRows*float64(len(keys))*cpuFactor.Value,
+		"hashkey(%v*%v*%v)", buildRows, len(keys), cpuFactor)
 	hashMemCost := newCostVer2(option, memFactor,
 		buildRows*buildRowSize*memFactor.Value,
 		"hashmem(%v*%v*%v)", buildRows, buildRowSize, memFactor)
 	hashBuildCost := newCostVer2(option, cpuFactor,
-		buildRows*float64(len(keys))*cpuFactor.Value,
-		"hashbuild(%v*%v*%v)", buildRows, len(keys), cpuFactor)
-	return sumCostVer2(hashMemCost, hashBuildCost)
+		buildRows*cpuFactor.Value,
+		"hashbuild(%v*%v)", buildRows, cpuFactor)
+	return sumCostVer2(hashKeyCost, hashMemCost, hashBuildCost)
 }
 
 func hashProbeCostVer2(option *PlanCostOption, probeRows float64, keys []expression.Expression, cpuFactor costVer2Factor) costVer2 {
 	// TODO: 1) consider types of keys, 2) dedicated factor for build-probe hash table
-	hashProbeCost := newCostVer2(option, cpuFactor,
+	hashKeyCost := newCostVer2(option, cpuFactor,
 		probeRows*float64(len(keys))*cpuFactor.Value,
-		"hashprobe(%v*%v*%v)", probeRows, len(keys), cpuFactor)
-	return hashProbeCost
+		"hashkey(%v*%v*%v)", probeRows, len(keys), cpuFactor)
+	hashProbeCost := newCostVer2(option, cpuFactor,
+		probeRows*cpuFactor.Value,
+		"hashprobe(%v*%v)", probeRows, cpuFactor)
+	return sumCostVer2(hashKeyCost, hashProbeCost)
 }
 
 func seekCostVer2(option *PlanCostOption, numTasks float64, seekFactor costVer2Factor) costVer2 {
