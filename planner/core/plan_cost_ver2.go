@@ -738,12 +738,13 @@ func orderCostVer2(option *PlanCostOption, rows, N float64, byItems []*util.ByIt
 			numFuncs++
 		}
 	}
-	if numFuncs == 0 {
-		numFuncs = 1
-	}
-	return newCostVer2(option, cpuFactor,
-		rows*math.Log2(N)*float64(numFuncs)*cpuFactor.Value,
-		"orderCPU(%v*log2(%v)*%v*%v)", rows, N, numFuncs, cpuFactor)
+	exprCost := newCostVer2(option, cpuFactor,
+		rows*float64(numFuncs)*cpuFactor.Value,
+		"exprCPU(%v*%v*%v)", rows, numFuncs, cpuFactor)
+	orderCost := newCostVer2(option, cpuFactor,
+		rows*math.Log2(N)*cpuFactor.Value,
+		"orderCPU(%v*log(%v)*%v)", rows, N, cpuFactor)
+	return sumCostVer2(exprCost, orderCost)
 }
 
 func hashBuildCostVer2(option *PlanCostOption, buildRows, buildRowSize float64, keys []expression.Expression, cpuFactor, memFactor costVer2Factor) costVer2 {
