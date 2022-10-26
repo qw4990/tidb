@@ -17,6 +17,7 @@ package core
 import (
 	"fmt"
 	"github.com/pingcap/tidb/planner/util"
+	"github.com/pingcap/tipb/go-tipb"
 	"math"
 	"strings"
 
@@ -490,7 +491,8 @@ func (p *PhysicalHashJoin) getPlanCostVer2(taskType property.TaskType, option *P
 	buildRows := getCardinality(build, option.CostFlag)
 	probeRows := getCardinality(probe, option.CostFlag)
 	buildRowSize := getAvgRowSize(build.Stats(), build.Schema())
-	concurrency := float64(p.Concurrency)
+	tidbConcurrency := float64(p.Concurrency)
+	mppConcurrency := float64(3) // TODO: remove this empirical value
 	cpuFactor := getTaskCPUFactorVer2(p, taskType)
 	memFactor := getTaskMemFactorVer2(p, taskType)
 
@@ -509,8 +511,19 @@ func (p *PhysicalHashJoin) getPlanCostVer2(taskType property.TaskType, option *P
 		return zeroCostVer2, err
 	}
 
-	p.planCostVer2 = sumCostVer2(buildChildCost, probeChildCost, buildHashCost, buildFilterCost,
-		divCostVer2(sumCostVer2(probeFilterCost, probeHashCost), concurrency))
+	if taskType == property.MppTaskType {
+		if p.mppShuffleJoin { // Shuffle Join
+			p.planCostVer2 = sumCostVer2(buildChildCost, probeChildCost,
+				divCostVer2(sumCostVer2(buildHashCost, buildFilterCost, probeHashCost, probeHashCost), mppConcurrency))
+		} else { // BCast Join
+			p.planCostVer2 = sumCostVer2(buildChildCost, probeChildCost,
+				divCostVer2(sumCostVer2(buildHashCost, buildFilterCost, probeHashCost, probeHashCost), mppConcurrency))
+		}
+	} else { // TiDB HashJoin
+		p.planCostVer2 = sumCostVer2(buildChildCost, probeChildCost, buildHashCost, buildFilterCost,
+			divCostVer2(sumCostVer2(probeFilterCost, probeHashCost), tidbConcurrency))
+	}
+
 	p.planCostInit = true
 	return p.planCostVer2.label(p), nil
 }
@@ -629,8 +642,16 @@ func (p *PhysicalExchangeReceiver) getPlanCostVer2(taskType property.TaskType, o
 	rows := getCardinality(p, option.CostFlag)
 	rowSize := getAvgRowSize(p.stats, p.Schema())
 	netFactor := getTaskNetFactorVer2(p, taskType)
+	isBCast := false
+	if sender, ok := p.children[0].(*PhysicalExchangeSender); ok {
+		isBCast = sender.ExchangeType == tipb.ExchangeType_Broadcast
+	}
+	numNode := float64(3) // TODO: remove this empirical value
 
 	netCost := netCostVer2(option, rows, rowSize, netFactor)
+	if isBCast {
+		netCost = mulCostVer2(netCost, numNode)
+	}
 	childCost, err := p.children[0].getPlanCostVer2(taskType, option)
 	if err != nil {
 		return zeroCostVer2, err
