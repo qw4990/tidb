@@ -468,8 +468,9 @@ func (p *PhysicalMergeJoin) getPlanCostVer2(taskType property.TaskType, option *
 	if err != nil {
 		return zeroCostVer2, err
 	}
+	childCost := divCostVer2(sumCostVer2(leftChildCost, rightChildCost), 2) // consider concurrency
 
-	p.planCostVer2 = sumCostVer2(leftChildCost, rightChildCost, filterCost, groupCost)
+	p.planCostVer2 = sumCostVer2(childCost, filterCost, groupCost)
 	p.planCostInit = true
 	return p.planCostVer2.label(p), nil
 }
