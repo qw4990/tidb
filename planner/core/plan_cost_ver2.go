@@ -16,6 +16,7 @@ package core
 
 import (
 	"fmt"
+	"github.com/pingcap/tidb/planner/util"
 	"math"
 	"strings"
 
@@ -331,9 +332,7 @@ func (p *PhysicalSort) getPlanCostVer2(taskType property.TaskType, option *PlanC
 		memQuota > 0 && // mem-quota is set
 		rowSize*rows > float64(memQuota) // exceed the mem-quota
 
-	sortCPUCost := newCostVer2(option, cpuFactor,
-		rows*math.Log2(rows)*float64(len(p.ByItems))*cpuFactor.Value,
-		"sortCPU(%v*log2(%v)*%v*%v)", rows, rows, len(p.ByItems), cpuFactor)
+	sortCPUCost := orderCostVer2(option, rows, rows, p.ByItems, cpuFactor)
 
 	var sortMemCost, sortDiskCost costVer2
 	if !spill {
@@ -375,9 +374,7 @@ func (p *PhysicalTopN) getPlanCostVer2(taskType property.TaskType, option *PlanC
 	cpuFactor := getTaskCPUFactorVer2(p, taskType)
 	memFactor := getTaskMemFactorVer2(p, taskType)
 
-	topNCPUCost := newCostVer2(option, cpuFactor,
-		rows*math.Log2(N)*float64(len(p.ByItems))*cpuFactor.Value,
-		"topCPU(%v*%v*%v*%v)", rows, math.Log2(N), len(p.ByItems), cpuFactor)
+	topNCPUCost := orderCostVer2(option, rows, N, p.ByItems, cpuFactor)
 	topNMemCost := newCostVer2(option, memFactor,
 		N*rowSize*memFactor.Value,
 		"topMem(%v*%v*%v)", N, rowSize, memFactor)
@@ -732,6 +729,21 @@ func numFunctions(exprs []expression.Expression) int {
 		}
 	}
 	return num
+}
+
+func orderCostVer2(option *PlanCostOption, rows, N float64, byItems []*util.ByItems, cpuFactor costVer2Factor) costVer2 {
+	numFuncs := 0
+	for _, byItem := range byItems {
+		if _, ok := byItem.Expr.(*expression.ScalarFunction); ok {
+			numFuncs++
+		}
+	}
+	if numFuncs == 0 {
+		numFuncs = 1
+	}
+	return newCostVer2(option, cpuFactor,
+		rows*math.Log2(N)*float64(numFuncs)*cpuFactor.Value,
+		"orderCPU(%v*log2(%v)*%v*%v)", rows, N, numFuncs, cpuFactor)
 }
 
 func hashBuildCostVer2(option *PlanCostOption, buildRows, buildRowSize float64, keys []expression.Expression, cpuFactor, memFactor costVer2Factor) costVer2 {
