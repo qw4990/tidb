@@ -250,7 +250,7 @@ func (p *PhysicalIndexLookUpReader) getPlanCostVer2(taskType property.TaskType, 
 		indexRows*cpuFactor.Value,
 		"double-read-cpu(%v*%v)", indexRows, cpuFactor)
 	batchSize := float64(p.ctx.GetSessionVars().IndexLookupSize)
-	taskPerBatch := 64.0 // TODO: remove this magic number
+	taskPerBatch := 32.0 // TODO: remove this magic number
 	doubleReadTasks := indexRows / batchSize * taskPerBatch
 	doubleReadSeekCost := seekCostVer2(option, doubleReadTasks, seekFactor)
 	doubleReadCost := sumCostVer2(doubleReadCPUCost, doubleReadSeekCost)
