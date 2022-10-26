@@ -250,7 +250,7 @@ func (p *PhysicalIndexLookUpReader) getPlanCostVer2(taskType property.TaskType, 
 		indexRows*cpuFactor.Value,
 		"double-read-cpu(%v*%v)", indexRows, cpuFactor)
 	batchSize := float64(p.ctx.GetSessionVars().IndexLookupSize)
-	taskPerBatch := 40.0 // TODO: remove this magic number
+	taskPerBatch := 64.0 // TODO: remove this magic number
 	doubleReadTasks := indexRows / batchSize * taskPerBatch
 	doubleReadSeekCost := seekCostVer2(option, doubleReadTasks, seekFactor)
 	doubleReadCost := sumCostVer2(doubleReadCPUCost, doubleReadSeekCost)
@@ -551,7 +551,7 @@ func (p *PhysicalIndexJoin) getPlanCostVer2(taskType property.TaskType, option *
 	//  `innerCostPerBatch * numberOfBatches` instead of `innerCostPerRow * numberOfOuterRow`.
 	// Use an empirical value batchRatio to handle this now.
 	// TODO: remove this empirical value.
-	batchRatio := 30.0
+	batchRatio := 2048.0
 	probeCost := divCostVer2(mulCostVer2(probeChildCost, buildRows), batchRatio)
 	seekCost := seekCostVer2(option, buildRows/batchRatio, seekFactor)
 
