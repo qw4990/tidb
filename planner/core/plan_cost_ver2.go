@@ -114,7 +114,7 @@ func (p *PhysicalIndexScan) getPlanCostVer2(taskType property.TaskType, option *
 	}
 
 	rows := getCardinality(p, option.CostFlag)
-	rowSize := math.Max(getAvgRowSize(p.statsInfo(), p.Schema()), 2.0)
+	rowSize := math.Max(p.getScanRowSize(), 2.0)
 	scanFactor := getTaskScanFactorVer2(p, taskType)
 
 	p.planCostVer2 = scanCostVer2(option, rows, rowSize, scanFactor)
@@ -131,7 +131,7 @@ func (p *PhysicalTableScan) getPlanCostVer2(taskType property.TaskType, option *
 	}
 
 	rows := getCardinality(p, option.CostFlag)
-	rowSize := math.Max(getAvgRowSize(p.statsInfo(), p.Schema()), 2.0)
+	rowSize := math.Max(p.getScanRowSize(), 2.0)
 	scanFactor := getTaskScanFactorVer2(p, taskType)
 
 	p.planCostVer2 = scanCostVer2(option, rows, rowSize, scanFactor)
