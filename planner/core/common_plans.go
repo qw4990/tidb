@@ -718,6 +718,7 @@ func (e *Explain) RenderResult() error {
 	}
 
 	if e.Analyze && strings.ToLower(e.Format) == types.ExplainFormatTrueCardCost {
+		// true_card_cost mode is used to calibrate the cost model.
 		pp, ok := e.TargetPlan.(PhysicalPlan)
 		if ok {
 			if _, err := getPlanCost(pp, property.RootTaskType,
@@ -734,32 +735,19 @@ func (e *Explain) RenderResult() error {
 				}
 				pp.SCtx().GetSessionVars().StmtCtx.AppendWarning(errors.Errorf("factor costs: %v", string(data)))
 
-				factors := map[string]float64{
-					"tidb_temp_table_factor": defaultVer2Factors.TiDBTemp.Value,
-					"tikv_scan_factor":       defaultVer2Factors.TiKVScan.Value,
-					"tikv_desc_scan_factor":  defaultVer2Factors.TiKVDescScan.Value,
-					"tiflash_scan_factor":    defaultVer2Factors.TiFlashScan.Value,
-					"tidb_cpu_factor":        defaultVer2Factors.TiDBCPU.Value,
-					"tikv_cpu_factor":        defaultVer2Factors.TiKVCPU.Value,
-					"tiflash_cpu_factor":     defaultVer2Factors.TiFlashCPU.Value,
-					"tidb_kv_net_factor":     defaultVer2Factors.TiDB2KVNet.Value,
-					"tidb_flash_net_factor":  defaultVer2Factors.TiDB2FlashNet.Value,
-					"tiflash_mpp_net_factor": defaultVer2Factors.TiFlashMPPNet.Value,
-					"tidb_mem_factor":        defaultVer2Factors.TiDBMem.Value,
-					"tikv_mem_factor":        defaultVer2Factors.TiKVMem.Value,
-					"tiflash_mem_factor":     defaultVer2Factors.TiFlashMem.Value,
-					"tidb_disk_factor":       defaultVer2Factors.TiDBDisk.Value,
-					"tidb_request_factor":    defaultVer2Factors.TiDBRequest.Value,
-				}
+				// output cost factor weights for cost calibration
+				factors := defaultVer2Factors.tolist()
 				weights := make(map[string]float64)
-				for factor, cost := range trace.factorCosts {
-					weights[factor] = cost / factors[factor]
+				for _, factor := range factors {
+					if factorCost, ok := trace.factorCosts[factor.Name]; ok && factor.Value > 0 {
+						weights[factor.Name] = factorCost / factor.Value // cost = [factors] * [weights]
+					}
 				}
-				wstr, err := json.Marshal(weights)
-				if err != nil {
+				if wstr, err := json.Marshal(weights); err != nil {
 					pp.SCtx().GetSessionVars().StmtCtx.AppendWarning(errors.Errorf("marshal weights error %v", err))
+				} else {
+					pp.SCtx().GetSessionVars().StmtCtx.AppendWarning(errors.Errorf("factor weights: %v", string(wstr)))
 				}
-				pp.SCtx().GetSessionVars().StmtCtx.AppendWarning(errors.Errorf("factor weights: %v", string(wstr)))
 			}
 		} else {
 			e.SCtx().GetSessionVars().StmtCtx.AppendWarning(errors.Errorf("'explain format=true_card_cost' cannot support this plan"))
