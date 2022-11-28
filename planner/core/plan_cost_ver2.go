@@ -276,6 +276,9 @@ func (p *PhysicalIndexLookUpReader) getPlanCostVer2(taskType property.TaskType, 
 	}
 
 	p.planCostInit = true
+	if doubleReadRows < 5 { // prefer to use IndexLookup if double-read data-size is very small
+		p.planCostVer2 = mulCostVer2(p.planCostVer2, 0.6)
+	}
 	return p.planCostVer2, nil
 }
 
@@ -427,6 +430,10 @@ func (p *PhysicalStreamAgg) getPlanCostVer2(taskType property.TaskType, option *
 
 	p.planCostVer2 = sumCostVer2(childCost, aggCost, groupCost)
 	p.planCostInit = true
+	if rows < 5 {
+		// prefer to use StreamAgg if data-size is very small
+		p.planCostVer2 = mulCostVer2(p.planCostVer2, 0.6)
+	}
 	return p.planCostVer2, nil
 }
 
@@ -486,6 +493,10 @@ func (p *PhysicalMergeJoin) getPlanCostVer2(taskType property.TaskType, option *
 
 	p.planCostVer2 = sumCostVer2(leftChildCost, rightChildCost, filterCost, groupCost)
 	p.planCostInit = true
+	if leftRows < 20 && rightRows < 20 {
+		// prefer to use MergeJoin if data-size if very small
+		p.planCostVer2 = mulCostVer2(p.planCostVer2, 0.6)
+	}
 	return p.planCostVer2, nil
 }
 
