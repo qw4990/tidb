@@ -16,7 +16,6 @@ package core
 
 import (
 	"context"
-	"fmt"
 	"math"
 	"strings"
 
@@ -316,7 +315,7 @@ func DoOptimize(ctx context.Context, sctx sessionctx.Context, flag uint64, logic
 	}
 
 	if sctx.GetSessionVars().StmtCtx.DEBUG {
-		fmt.Println(">>>>>>>>> ", sctx.GetSessionVars().StmtCtx.OriginalSQL, joinType(finalPlan))
+		logutil.BgLogger().Warn(">>>>> " + sctx.GetSessionVars().StmtCtx.OriginalSQL + " >>> " + joinType(finalPlan))
 	}
 
 	return finalPlan, cost, nil
