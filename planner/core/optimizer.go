@@ -16,6 +16,7 @@ package core
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"strings"
 
@@ -311,7 +312,24 @@ func DoOptimize(ctx context.Context, sctx sessionctx.Context, flag uint64, logic
 	if sctx.GetSessionVars().StmtCtx.EnableOptimizeTrace {
 		sctx.GetSessionVars().StmtCtx.OptimizeTracer.RecordFinalPlan(finalPlan.buildPlanTrace())
 	}
+
+	if sctx.GetSessionVars().StmtCtx.DEBUG && hasMergeJoin(finalPlan) {
+		fmt.Println(">>>>>>>>> ", sctx.GetSessionVars().StmtCtx.OriginalSQL)
+	}
+
 	return finalPlan, cost, nil
+}
+
+func hasMergeJoin(p PhysicalPlan) bool {
+	if _, ok := p.(*PhysicalMergeJoin); ok {
+		return true
+	}
+	for _, c := range p.Children() {
+		if hasMergeJoin(c) {
+			return true
+		}
+	}
+	return false
 }
 
 // refineCETrace will adjust the content of CETrace.
