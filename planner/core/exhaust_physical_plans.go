@@ -1962,11 +1962,18 @@ func (p *LogicalJoin) exhaustPhysicalPlans(prop *property.PhysicalProperty) ([]P
 		return joins, true, nil
 	}
 
+	if p.ctx.GetSessionVars().StmtCtx.DEBUG {
+		fmt.Println(">>>>>>> !p.isNAAJ ", !p.isNAAJ())
+	}
+
 	if !p.isNAAJ() {
 		// naaj refuse merge join and index join.
 		mergeJoins := p.GetMergeJoin(prop, p.schema, p.Stats(), p.children[0].statsInfo(), p.children[1].statsInfo())
 		if (p.preferJoinType&preferMergeJoin) > 0 && len(mergeJoins) > 0 {
 			return mergeJoins, true, nil
+		}
+		if p.ctx.GetSessionVars().StmtCtx.DEBUG {
+			fmt.Println(">>>> true mjs ", len(mergeJoins))
 		}
 		joins = append(joins, mergeJoins...)
 
@@ -1975,6 +1982,9 @@ func (p *LogicalJoin) exhaustPhysicalPlans(prop *property.PhysicalProperty) ([]P
 			return indexJoins, true, nil
 		}
 		joins = append(joins, indexJoins...)
+		if p.ctx.GetSessionVars().StmtCtx.DEBUG {
+			fmt.Println(">>>> true inljs ", len(indexJoins))
+		}
 	}
 
 	hashJoins, forced := p.getHashJoins(prop)
