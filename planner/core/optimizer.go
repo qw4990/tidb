@@ -17,6 +17,7 @@ package core
 import (
 	"context"
 	"math"
+	"strings"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb/config"
@@ -267,6 +268,10 @@ func checkStableResultMode(sctx sessionctx.Context) bool {
 
 // DoOptimize optimizes a logical plan to a physical plan.
 func DoOptimize(ctx context.Context, sctx sessionctx.Context, flag uint64, logic LogicalPlan) (PhysicalPlan, float64, error) {
+	if strings.Contains(ToString(logic), "customer") {
+		sctx.GetSessionVars().StmtCtx.DEBUG = true
+	}
+
 	// if there is something after flagPrunColumns, do flagPrunColumnsAgain
 	if flag&flagPrunColumns > 0 && flag-flagPrunColumns > flagPrunColumns {
 		flag |= flagPrunColumnsAgain
