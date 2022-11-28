@@ -313,11 +313,25 @@ func DoOptimize(ctx context.Context, sctx sessionctx.Context, flag uint64, logic
 		sctx.GetSessionVars().StmtCtx.OptimizeTracer.RecordFinalPlan(finalPlan.buildPlanTrace())
 	}
 
-	if sctx.GetSessionVars().StmtCtx.DEBUG && hasMergeJoin(finalPlan) {
-		fmt.Println(">>>>>>>>> ", sctx.GetSessionVars().StmtCtx.OriginalSQL)
+	if sctx.GetSessionVars().StmtCtx.DEBUG {
+		fmt.Println(">>>>>>>>> ", sctx.GetSessionVars().StmtCtx.OriginalSQL, joinType(finalPlan))
 	}
 
 	return finalPlan, cost, nil
+}
+
+func joinType(p PhysicalPlan) string {
+	switch p.(type) {
+	case *PhysicalIndexJoin, *PhysicalIndexHashJoin, *PhysicalIndexMergeJoin:
+		return "INLJ"
+	case *PhysicalHashJoin:
+		return "HJ"
+	case *PhysicalMergeJoin:
+		return "MJ"
+	default:
+		return joinType(p.Children()[0])
+	}
+	return "UNKNOWN"
 }
 
 func hasMergeJoin(p PhysicalPlan) bool {
