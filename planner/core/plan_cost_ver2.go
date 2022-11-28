@@ -575,7 +575,7 @@ func (p *PhysicalIndexJoin) getIndexJoinCostVer2(taskType property.TaskType, opt
 	buildRows := getCardinality(build, option.CostFlag)
 	buildRowSize := getAvgRowSize(build.Stats(), build.Schema().Columns)
 	probeRowsOne := getCardinality(probe, option.CostFlag)
-	probeRowsTot := math.Max(1, probeRowsOne*buildRows)
+	probeRowsTot := probeRowsOne * buildRows
 	probeRowSize := getAvgRowSize(probe.Stats(), probe.Schema().Columns)
 	buildFilters, probeFilters := p.LeftConditions, p.RightConditions
 	probeConcurrency := float64(p.ctx.GetSessionVars().IndexLookupJoinConcurrency())
@@ -590,6 +590,9 @@ func (p *PhysicalIndexJoin) getIndexJoinCostVer2(taskType property.TaskType, opt
 	buildTaskCost := newCostVer2(option, cpuFactor,
 		buildRows*10*cpuFactor.Value,
 		func() string { return fmt.Sprintf("cpu(%v*10*%v)", buildRows, cpuFactor) })
+	startCost := newCostVer2(option, cpuFactor,
+		10*1*cpuFactor.Value,
+		func() string { return fmt.Sprintf("cpu(10*1*%v)", cpuFactor) })
 
 	probeFilterCost := filterCostVer2(option, probeRowsTot, probeFilters, cpuFactor)
 	probeChildCost, err := probe.getPlanCostVer2(taskType, option)
@@ -614,7 +617,7 @@ func (p *PhysicalIndexJoin) getIndexJoinCostVer2(taskType property.TaskType, opt
 	batchRatio := 6.0
 	probeCost := divCostVer2(mulCostVer2(probeChildCost, buildRows), batchRatio)
 
-	p.planCostVer2 = sumCostVer2(buildChildCost, buildFilterCost, buildTaskCost, divCostVer2(sumCostVer2(probeCost, probeFilterCost, hashTableCost), probeConcurrency))
+	p.planCostVer2 = sumCostVer2(buildChildCost, buildFilterCost, buildTaskCost, startCost, divCostVer2(sumCostVer2(probeCost, probeFilterCost, hashTableCost), probeConcurrency))
 	p.planCostInit = true
 
 	if p.ctx.GetSessionVars().StmtCtx.DEBUG {
