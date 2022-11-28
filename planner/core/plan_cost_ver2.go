@@ -16,6 +16,8 @@ package core
 
 import (
 	"fmt"
+	"github.com/pingcap/tidb/util/logutil"
+	"go.uber.org/zap"
 	"math"
 	"strconv"
 
@@ -477,6 +479,11 @@ func (p *PhysicalMergeJoin) getPlanCostVer2(taskType property.TaskType, option *
 	rightRows := getCardinality(p.children[1], option.CostFlag)
 	cpuFactor := getTaskCPUFactorVer2(p, taskType)
 
+	if p.ctx.GetSessionVars().StmtCtx.DEBUG {
+		logutil.BgLogger().Warn(">>>>> MJ INFO 1 ", zap.Float64("leftRows", leftRows),
+			zap.Float64("rightRows", rightRows))
+	}
+
 	if leftRows < 20 && rightRows < 20 {
 		leftRows, rightRows = 0, 0 // prefer to use MergeJoin if data-size if very small
 	}
@@ -497,6 +504,15 @@ func (p *PhysicalMergeJoin) getPlanCostVer2(taskType property.TaskType, option *
 
 	p.planCostVer2 = sumCostVer2(leftChildCost, rightChildCost, filterCost, groupCost)
 	p.planCostInit = true
+
+	if p.ctx.GetSessionVars().StmtCtx.DEBUG {
+		logutil.BgLogger().Warn(">>>>> MJ INFO 2 ", zap.Float64("leftRows", leftRows),
+			zap.Float64("rightRows", rightRows),
+			zap.Float64("cost", p.planCostVer2.cost),
+			zap.Float64("filter", filterCost.cost),
+			zap.Float64("group", filterCost.cost))
+	}
+
 	return p.planCostVer2, nil
 }
 
@@ -600,6 +616,15 @@ func (p *PhysicalIndexJoin) getIndexJoinCostVer2(taskType property.TaskType, opt
 
 	p.planCostVer2 = sumCostVer2(buildChildCost, buildFilterCost, buildTaskCost, divCostVer2(sumCostVer2(probeCost, probeFilterCost, hashTableCost), probeConcurrency))
 	p.planCostInit = true
+
+	if p.ctx.GetSessionVars().StmtCtx.DEBUG {
+		logutil.BgLogger().Warn(">>>>> INLJ INFO ", zap.Float64("buildRows", buildRowSize),
+			zap.Float64("probeRows", probeRowsTot),
+			zap.Float64("cost", p.planCostVer2.cost),
+			zap.Float64("probeChildCost", probeChildCost.cost),
+			zap.Float64("probeCost", probeCost.cost))
+	}
+
 	return p.planCostVer2, nil
 }
 
