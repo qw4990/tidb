@@ -269,7 +269,9 @@ func checkStableResultMode(sctx sessionctx.Context) bool {
 
 // DoOptimize optimizes a logical plan to a physical plan.
 func DoOptimize(ctx context.Context, sctx sessionctx.Context, flag uint64, logic LogicalPlan) (PhysicalPlan, float64, error) {
-	if strings.Contains(ToString(logic), "customer") {
+	xxx := ToString(logic)
+	if strings.Contains(xxx, "customer") &&
+		strings.Contains(xxx, "warehouse") {
 		sctx.GetSessionVars().StmtCtx.DEBUG = true
 	}
 
@@ -329,7 +331,9 @@ func joinType(p PhysicalPlan) string {
 	case *PhysicalMergeJoin:
 		return "MJ"
 	default:
-		return joinType(p.Children()[0])
+		if len(p.Children()) == 1 {
+			return joinType(p.Children()[0])
+		}
 	}
 	return "UNKNOWN"
 }
