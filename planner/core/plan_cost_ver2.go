@@ -485,7 +485,7 @@ func (p *PhysicalMergeJoin) getPlanCostVer2(taskType property.TaskType, option *
 	}
 
 	if leftRows < 20 && rightRows < 20 {
-		leftRows, rightRows = 0, 0 // prefer to use MergeJoin if data-size if very small
+		leftRows, rightRows = 0, 0 // prefer to use MergeJoin if data-size is very small
 	}
 
 	filterCost := sumCostVer2(filterCostVer2(option, leftRows, p.LeftConditions, cpuFactor),
@@ -575,7 +575,7 @@ func (p *PhysicalIndexJoin) getIndexJoinCostVer2(taskType property.TaskType, opt
 	buildRows := getCardinality(build, option.CostFlag)
 	buildRowSize := getAvgRowSize(build.Stats(), build.Schema().Columns)
 	probeRowsOne := getCardinality(probe, option.CostFlag)
-	probeRowsTot := probeRowsOne * buildRows
+	probeRowsTot := math.Max(1, probeRowsOne*buildRows)
 	probeRowSize := getAvgRowSize(probe.Stats(), probe.Schema().Columns)
 	buildFilters, probeFilters := p.LeftConditions, p.RightConditions
 	probeConcurrency := float64(p.ctx.GetSessionVars().IndexLookupJoinConcurrency())
@@ -622,7 +622,8 @@ func (p *PhysicalIndexJoin) getIndexJoinCostVer2(taskType property.TaskType, opt
 			zap.Float64("probeRows", probeRowsTot),
 			zap.Float64("cost", p.planCostVer2.cost),
 			zap.Float64("probeChildCost", probeChildCost.cost),
-			zap.Float64("probeCost", probeCost.cost))
+			zap.Float64("probeCost", probeCost.cost),
+			zap.Float64("probeFilterCost", probeFilterCost.cost))
 	}
 
 	return p.planCostVer2, nil
