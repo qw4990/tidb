@@ -1963,7 +1963,7 @@ func (p *LogicalJoin) exhaustPhysicalPlans(prop *property.PhysicalProperty) ([]P
 	}
 
 	if p.ctx.GetSessionVars().StmtCtx.DEBUG {
-		fmt.Println(">>>>>>> !p.isNAAJ ", !p.isNAAJ())
+		//fmt.Println(">>>>>>> !p.isNAAJ ", !p.isNAAJ())
 	}
 
 	if !p.isNAAJ() {
@@ -1973,7 +1973,7 @@ func (p *LogicalJoin) exhaustPhysicalPlans(prop *property.PhysicalProperty) ([]P
 			return mergeJoins, true, nil
 		}
 		if p.ctx.GetSessionVars().StmtCtx.DEBUG {
-			fmt.Println(">>>> true mjs ", len(mergeJoins))
+			//fmt.Println(">>>> true mjs ", len(mergeJoins))
 		}
 		joins = append(joins, mergeJoins...)
 
@@ -1983,7 +1983,7 @@ func (p *LogicalJoin) exhaustPhysicalPlans(prop *property.PhysicalProperty) ([]P
 		}
 		joins = append(joins, indexJoins...)
 		if p.ctx.GetSessionVars().StmtCtx.DEBUG {
-			fmt.Println(">>>> true inljs ", len(indexJoins))
+			//fmt.Println(">>>> true inljs ", len(indexJoins))
 		}
 	}
 
