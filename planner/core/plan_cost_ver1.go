@@ -1268,19 +1268,40 @@ func getOperatorActRows(operator PhysicalPlan) float64 {
 }
 
 var cards = map[string]float64{
-	"IndexRangeScan_15": 4,
-	"TableRowIDScan_16": 4,
-	"IndexLookUp_17":    4,
-	"Projection_14":     4,
+	"IndexRangeScan_15": 9000,
+	"TableRowIDScan_16": 9000,
+	"IndexRangeScan_11": 9000,
+	"TableRowIDScan_12": 9000,
+	"IndexLookUp_17":    9000,
+	"IndexLookUp_13":    9000,
+	"Projection_14":     9000,
+	"Projection_7":      9000,
+	"TableRangeScan_8":  9000,
+	"Selection_9":       9000,
+	"TableReader_10":    9000,
+	"Sort_5":            9000,
 }
+
+//var cards = map[string]float64{
+//	"IndexRangeScan_15": 4,
+//	"TableRowIDScan_16": 4,
+//	"IndexRangeScan_11": 4,
+//	"TableRowIDScan_12": 4,
+//	"IndexLookUp_17":    4,
+//	"IndexLookUp_13":    4,
+//	"Projection_14":     4,
+//	"Projection_7":      4,
+//	"TableRangeScan_8":  3000,
+//	"Selection_9":       4,
+//	"TableReader_10":    4,
+//	"Sort_5":            4,
+//}
 
 func getCardinality(operator PhysicalPlan, costFlag uint64) float64 {
 	if operator.SCtx().GetSessionVars().StmtCtx.DEBUG {
 		if card, ok := cards[operator.ExplainID().String()]; ok {
-			stats := operator.statsInfo()
-			stats = stats.Scale(stats.RowCount / card)
-			*operator.statsInfo() = *stats
-			return stats.RowCount
+			operator.statsInfo().RowCount = card
+			return card
 		}
 	}
 
