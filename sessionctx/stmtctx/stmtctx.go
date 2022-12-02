@@ -239,6 +239,7 @@ type StatementContext struct {
 	IndexNames       []string
 	StmtType         string
 	OriginalSQL      string
+	DEBUG            bool
 	digestMemo       struct {
 		sync.Once
 		normalized string

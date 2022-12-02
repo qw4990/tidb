@@ -1267,7 +1267,23 @@ func getOperatorActRows(operator PhysicalPlan) float64 {
 	return actRows
 }
 
+var cards = map[string]float64{
+	"IndexRangeScan_15": 4,
+	"TableRowIDScan_16": 4,
+	"IndexLookUp_17":    4,
+	"Projection_14":     4,
+}
+
 func getCardinality(operator PhysicalPlan, costFlag uint64) float64 {
+	if operator.SCtx().GetSessionVars().StmtCtx.DEBUG {
+		if card, ok := cards[operator.ExplainID().String()]; ok {
+			stats := operator.statsInfo()
+			stats = stats.Scale(stats.RowCount / card)
+			*operator.statsInfo() = *stats
+			return stats.RowCount
+		}
+	}
+
 	if hasCostFlag(costFlag, CostFlagUseTrueCardinality) {
 		actualProbeCnt := operator.getActualProbeCnt(operator.SCtx().GetSessionVars().StmtCtx.RuntimeStatsColl)
 		return getOperatorActRows(operator) / float64(actualProbeCnt)
