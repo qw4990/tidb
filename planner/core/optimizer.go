@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"os"
 	"strings"
 
 	"github.com/pingcap/errors"
@@ -305,7 +306,7 @@ func DoOptimize(ctx context.Context, sctx sessionctx.Context, flag uint64, logic
 
 	str := ToString(finalPlan)
 	if strings.Contains(str, "customer") &&
-		strings.Contains(finalPlan.SCtx().GetSessionVars().StmtCtx.OriginalSQL, "ELECT c_balance, c_first, c_middle, c_id FROM customer") {
+		strings.Contains(finalPlan.SCtx().GetSessionVars().StmtCtx.OriginalSQL, "SELECT c_balance, c_first, c_middle, c_id FROM customer") {
 		fmt.Println("--->>>>>> ", finalPlan.SCtx().GetSessionVars().StmtCtx.OriginalSQL, str)
 		if strings.Contains(str, "TableReader") {
 			fmt.Println(finalPlan.SCtx().GetSessionVars().PreparedParams)
@@ -324,6 +325,13 @@ func DoOptimize(ctx context.Context, sctx sessionctx.Context, flag uint64, logic
 
 func DEBUGP(prefix string, p PhysicalPlan) {
 	fmt.Println(prefix, p.ExplainID().String(), p.Stats().RowCount)
+
+	if strings.Contains(p.ExplainID().String(), "Selection") {
+		if p.Stats().RowCount > 500 {
+			os.Exit(0)
+		}
+	}
+
 	switch x := p.(type) {
 	case *PhysicalTableReader:
 		DEBUGP(prefix+">>", x.tablePlan)
