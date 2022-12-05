@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"strings"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb/config"
@@ -302,6 +303,16 @@ func DoOptimize(ctx context.Context, sctx sessionctx.Context, flag uint64, logic
 		return nil, 0, err
 	}
 
+	str := ToString(finalPlan)
+	if strings.Contains(str, "customer") &&
+		strings.Contains(finalPlan.SCtx().GetSessionVars().StmtCtx.OriginalSQL, "ELECT c_balance, c_first, c_middle, c_id FROM customer") {
+		fmt.Println("--->>>>>> ", finalPlan.SCtx().GetSessionVars().StmtCtx.OriginalSQL, str)
+		if strings.Contains(str, "TableReader") {
+			fmt.Println(finalPlan.SCtx().GetSessionVars().PreparedParams)
+			DEBUGP("==>> ", finalPlan)
+		}
+	}
+
 	if sctx.GetSessionVars().StmtCtx.EnableOptimizerCETrace {
 		refineCETrace(sctx)
 	}
@@ -309,6 +320,18 @@ func DoOptimize(ctx context.Context, sctx sessionctx.Context, flag uint64, logic
 		sctx.GetSessionVars().StmtCtx.OptimizeTracer.RecordFinalPlan(finalPlan.buildPlanTrace())
 	}
 	return finalPlan, cost, nil
+}
+
+func DEBUGP(prefix string, p PhysicalPlan) {
+	fmt.Println(prefix, p.ExplainID().String(), p.Stats().RowCount)
+	switch x := p.(type) {
+	case *PhysicalTableReader:
+		DEBUGP(prefix+">>", x.tablePlan)
+	default:
+		for _, c := range p.Children() {
+			DEBUGP(prefix+">>", c)
+		}
+	}
 }
 
 // refineCETrace will adjust the content of CETrace.
