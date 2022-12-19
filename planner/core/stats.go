@@ -564,6 +564,25 @@ func (is *LogicalIndexScan) DeriveStats(_ []*property.StatsInfo, selfSchema *exp
 	return is.stats, nil
 }
 
+// generateIndexMergeJSONMVIndexPath generates paths for (json_member_of / json_overlaps / json_contains) + multi-valued index cases.
+/*
+	1. select * from t where 1 member of (a)
+		IndexMerge(AND)
+			IndexRangeScan(a, [1,1])
+			TableRowIdScan(t)
+	2. select * from t where json_conatins(a, 1, 2, 3)
+		IndexMerge(AND)
+			IndexRangeScan(a, [1,1])
+			IndexRangeScan(a, [2,2])
+			IndexRangeScan(a, [3,3])
+			TableRowIdScan(t)
+	3. select * from t where json_overlap(a, 1, 2, 3)
+		IndexMerge(OR)
+			IndexRangeScan(a, [1,1])
+			IndexRangeScan(a, [2,2])
+			IndexRangeScan(a, [3,3])
+			TableRowIdScan(t)
+*/
 func (ds *DataSource) generateIndexMergeJSONMVIndexPath(regularPathCount int, filters []expression.Expression) *util.AccessPath {
 	for i, cond := range filters {
 		sf, ok := cond.(*expression.ScalarFunction)
