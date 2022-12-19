@@ -478,6 +478,8 @@ func (ds *DataSource) generateAndPruneIndexMergePath(indexMergeConds []expressio
 		ds.possibleAccessPaths = append(ds.possibleAccessPaths, indexMergeAndPath)
 	}
 
+	fmt.Println("------->>>>>>> ", indexMergeConds, needPrune)
+
 	// 3. If needed, append a warning if no IndexMerge is generated.
 
 	// If without hints, it means that `enableIndexMerge` is true
@@ -560,6 +562,22 @@ func (is *LogicalIndexScan) DeriveStats(_ []*property.StatsInfo, selfSchema *exp
 		}
 	}
 	return is.stats, nil
+}
+
+func (ds *DataSource) generateIndexMergeJSONMVIndexPath(regularPathCount int, filters []expression.Expression) *util.AccessPath {
+	for i, cond := range filters {
+		sf, ok := cond.(*expression.ScalarFunction)
+		if !ok {
+			continue
+		}
+		switch sf.FuncName.L {
+		case ast.JSONMemberOf:
+		case ast.JSONOverlaps:
+		case ast.JSONContains:
+		default:
+			continue
+		}
+	}
 }
 
 // getIndexMergeOrPath generates all possible IndexMergeOrPaths.
