@@ -478,7 +478,8 @@ func (ds *DataSource) generateAndPruneIndexMergePath(indexMergeConds []expressio
 		ds.possibleAccessPaths = append(ds.possibleAccessPaths, indexMergeAndPath)
 	}
 
-	fmt.Println("------->>>>>>> ", indexMergeConds, needPrune)
+	// 2.5
+	ds.generateIndexMergeJSONMVIndexPath(regularPathCount, indexMergeConds)
 
 	// 3. If needed, append a warning if no IndexMerge is generated.
 
@@ -584,6 +585,8 @@ func (is *LogicalIndexScan) DeriveStats(_ []*property.StatsInfo, selfSchema *exp
 			TableRowIdScan(t)
 */
 func (ds *DataSource) generateIndexMergeJSONMVIndexPath(normalPathCnt int, filters []expression.Expression) *util.AccessPath {
+	fmt.Println(">>>>>>>>>>>>>>>>> ", filters)
+
 	for _, cond := range filters {
 		sf, ok := cond.(*expression.ScalarFunction)
 		if !ok {
@@ -635,6 +638,9 @@ func (ds *DataSource) generateIndexMergeJSONMVIndexPath(normalPathCnt int, filte
 				continue
 			}
 			mvIndex = originalPath
+		}
+		if mvIndex == nil {
+			continue
 		}
 
 		var partialPaths []*util.AccessPath
