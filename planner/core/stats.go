@@ -619,7 +619,26 @@ func (ds *DataSource) generateIndexMergeJSONMVIndexPath(normalPathCnt int, filte
 			}
 			mvIndex = originalPath
 		}
+
+		var partialPaths []*util.AccessPath
+		for _, val := range vals {
+			eq, err := expression.NewFunction(ds.ctx, ast.EQ, types.NewFieldType(mysql.TypeTiny), col, val)
+			if err != nil {
+				return nil
+			}
+
+			p := mvIndex.Clone()
+			if err := ds.fillIndexPath(p, []expression.Expression{eq}); err != nil {
+				return nil
+			}
+			partialPaths = append(partialPaths, p)
+		}
+
+		if useAnd {
+
+		}
 	}
+	return nil
 }
 
 // getIndexMergeOrPath generates all possible IndexMergeOrPaths.
