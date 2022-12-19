@@ -606,7 +606,24 @@ func (ds *DataSource) generateIndexMergeJSONMVIndexPath(normalPathCnt int, filte
 		case ast.JSONOverlaps:
 			continue // TODO
 		case ast.JSONContains:
-			continue // TODO
+			c, ok := sf.GetArgs()[0].(*expression.Column)
+			if !ok {
+				continue
+			}
+			allConsts := true
+			for i := 1; i < len(sf.GetArgs()); i++ {
+				if val, ok := sf.GetArgs()[i].(*expression.Constant); ok {
+					vals = append(vals, val)
+				} else {
+					allConsts = false
+					break
+				}
+			}
+			if !allConsts {
+				continue
+			}
+			col = c
+			useAnd = true
 		default:
 			continue
 		}
@@ -632,6 +649,8 @@ func (ds *DataSource) generateIndexMergeJSONMVIndexPath(normalPathCnt int, filte
 				return nil
 			}
 			partialPaths = append(partialPaths, p)
+
+			fmt.Println(">>>> ", p.Index, p.Ranges)
 		}
 
 		if useAnd {
