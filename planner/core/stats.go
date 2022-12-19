@@ -570,7 +570,7 @@ func (is *LogicalIndexScan) DeriveStats(_ []*property.StatsInfo, selfSchema *exp
 		IndexMerge(AND)
 			IndexRangeScan(a, [1,1])
 			TableRowIdScan(t)
-	2. select * from t where json_conatins(a, 1, 2, 3)
+	2. select * from t where json_contains(a, 1, 2, 3)
 		IndexMerge(AND)
 			IndexRangeScan(a, [1,1])
 			IndexRangeScan(a, [2,2])
@@ -583,18 +583,41 @@ func (is *LogicalIndexScan) DeriveStats(_ []*property.StatsInfo, selfSchema *exp
 			IndexRangeScan(a, [3,3])
 			TableRowIdScan(t)
 */
-func (ds *DataSource) generateIndexMergeJSONMVIndexPath(regularPathCount int, filters []expression.Expression) *util.AccessPath {
-	for i, cond := range filters {
+func (ds *DataSource) generateIndexMergeJSONMVIndexPath(normalPathCnt int, filters []expression.Expression) *util.AccessPath {
+	for _, cond := range filters {
 		sf, ok := cond.(*expression.ScalarFunction)
 		if !ok {
 			continue
 		}
+
+		var vals []*expression.Constant
+		var col *expression.Column
+		var useAnd bool
 		switch sf.FuncName.L {
 		case ast.JSONMemberOf:
+			val, ok1 := sf.GetArgs()[0].(*expression.Constant)
+			c, ok2 := sf.GetArgs()[1].(*expression.Column)
+			if !ok1 || !ok2 {
+				continue
+			}
+			useAnd = true
+			vals = append(vals, val)
+			col = c
 		case ast.JSONOverlaps:
+			continue // TODO
 		case ast.JSONContains:
+			continue // TODO
 		default:
 			continue
+		}
+
+		var mvIndex *util.AccessPath
+		for i := 0; i < normalPathCnt; i++ {
+			originalPath := ds.possibleAccessPaths[i]
+			if !ds.isSpecifiedInIndexMergeHints(originalPath.Index.Name.L) {
+				continue
+			}
+			mvIndex = originalPath
 		}
 	}
 }
