@@ -177,6 +177,9 @@ type StatementContext struct {
 	SkipASCIICheck                bool
 	SkipUTF8MB4Check              bool
 	MultiSchemaInfo               *model.MultiSchemaInfo
+
+	DEBUG bool
+
 	// If the select statement was like 'select * from t as of timestamp ...' or in a stale read transaction
 	// or is affected by the tidb_read_staleness session variable, then the statement will be makred as isStaleness
 	// in stmtCtx
