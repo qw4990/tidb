@@ -16,6 +16,7 @@ package core
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/pingcap/tidb/expression"
 	"github.com/pingcap/tidb/parser/ast"
@@ -77,6 +78,9 @@ func collectGenerateColumn(lp LogicalPlan, exprToColumn ExprColumnMap) {
 func tryToSubstituteExpr(expr *expression.Expression, sctx sessionctx.Context, candidateExpr expression.Expression, tp types.EvalType, schema *expression.Schema, col *expression.Column) {
 	if (*expr).Equal(sctx, candidateExpr) && candidateExpr.GetType().EvalType() == tp &&
 		schema.ColumnIndex(col) != -1 {
+
+		fmt.Println(">>>>>>>> substitute ", expr, col)
+
 		*expr = col
 	}
 }
