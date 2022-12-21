@@ -17,9 +17,6 @@ package core
 import (
 	"context"
 	"fmt"
-	"math"
-	"strings"
-
 	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb/config"
 	"github.com/pingcap/tidb/expression"
@@ -44,6 +41,7 @@ import (
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
 	"golang.org/x/exp/slices"
+	"math"
 )
 
 // OptimizeAstNode optimizes the query to a physical plan directly.
@@ -270,12 +268,6 @@ func checkStableResultMode(sctx sessionctx.Context) bool {
 
 // DoOptimize optimizes a logical plan to a physical plan.
 func DoOptimize(ctx context.Context, sctx sessionctx.Context, flag uint64, logic LogicalPlan) (PhysicalPlan, float64, error) {
-	if strings.Contains(ToString(logic), "t_mvidx") {
-		sctx.GetSessionVars().StmtCtx.DEBUG = true
-	} else {
-		sctx.GetSessionVars().StmtCtx.DEBUG = false
-	}
-
 	// if there is something after flagPrunColumns, do flagPrunColumnsAgain
 	if flag&flagPrunColumns > 0 && flag-flagPrunColumns > flagPrunColumns {
 		flag |= flagPrunColumnsAgain

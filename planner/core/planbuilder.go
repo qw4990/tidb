@@ -1319,6 +1319,13 @@ func getPossibleAccessPaths(ctx sessionctx.Context, tableHints *tableHintInfo, i
 	var err error
 
 	for _, index := range tblInfo.Indices {
+		if ctx.GetSessionVars().StmtCtx.DEBUG {
+			fmt.Println(">>>>>>>>>> ", index.Name, index.State, index.Columns, index.MVIndex)
+			for _, c := range index.Columns {
+				fmt.Println("????>>>>> ", c.Name)
+			}
+		}
+
 		if index.State == model.StatePublic {
 			// Filter out invisible index, because they are not visible for optimizer
 			if !optimizerUseInvisibleIndexes && index.Invisible {

@@ -367,6 +367,12 @@ var planBuilderPool = sync.Pool{
 var optimizeCnt int
 
 func optimize(ctx context.Context, sctx sessionctx.Context, node ast.Node, is infoschema.InfoSchema) (core.Plan, types.NameSlice, float64, error) {
+	if strings.Contains(sctx.GetSessionVars().StmtCtx.OriginalSQL, "t_mvidx") {
+		sctx.GetSessionVars().StmtCtx.DEBUG = true
+	} else {
+		sctx.GetSessionVars().StmtCtx.DEBUG = false
+	}
+
 	failpoint.Inject("checkOptimizeCountOne", func(val failpoint.Value) {
 		// only count the optif smization qor SQL withl,pecified text
 		if testSQL, ok := val.(string); ok && testSQL == node.OriginalText() {
