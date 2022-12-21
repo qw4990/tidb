@@ -43,7 +43,7 @@ func (gc *gcSubstituter) optimize(ctx context.Context, lp LogicalPlan, _ *logica
 	collectGenerateColumn(lp, exprToColumn)
 
 	fmt.Println("============================== gcSubstituter ===================================")
-	fmt.Println("length ", exprToColumn)
+	fmt.Println("length ", len(exprToColumn))
 	for k, v := range exprToColumn {
 		fmt.Println("k v >>>>>> ", k, v.OrigName, v.VirtualExpr)
 	}
@@ -149,6 +149,7 @@ func (gc *gcSubstituter) substitute(ctx context.Context, lp LogicalPlan, exprToC
 	var tp types.EvalType
 	switch x := lp.(type) {
 	case *LogicalSelection:
+		fmt.Println("Selection ", x.Conditions)
 		for _, cond := range x.Conditions {
 			substituteExpression(cond, sctx, lp.SCtx(), exprToColumn, x.Schema())
 		}
