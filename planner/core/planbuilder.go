@@ -1307,7 +1307,7 @@ func getPossibleAccessPaths(ctx sessionctx.Context, tableHints *tableHintInfo, i
 		fmt.Println("============================== schema info =========================================")
 		fmt.Println(tblInfo.Name)
 		for _, c := range tblInfo.Columns {
-			fmt.Println("col ", c.Name, c.FieldType, c.IsGenerated(), c.GeneratedExprString)
+			fmt.Println("col ", c.Name, c.IsGenerated(), c.GeneratedExprString)
 		}
 		for _, idx := range tblInfo.Indices {
 			fmt.Println("idx ", idx.Name, idx.MVIndex)
