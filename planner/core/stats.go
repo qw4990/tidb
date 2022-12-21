@@ -471,6 +471,12 @@ func (ds *DataSource) DeriveStats(_ []*property.StatsInfo, _ *expression.Schema,
 
 func (ds *DataSource) generateAndPruneIndexMergePath(indexMergeConds []expression.Expression, needPrune bool) error {
 	regularPathCount := len(ds.possibleAccessPaths)
+	// 0. MVIndex
+	if ds.ctx.GetSessionVars().StmtCtx.DEBUG {
+		ds.possibleAccessPaths = append(ds.possibleAccessPaths, ds.generateIndexMergeJSONMVIndexPath(regularPathCount, indexMergeConds))
+		return nil
+	}
+
 	// 1. Generate possible IndexMerge paths for `OR`.
 	err := ds.generateIndexMergeOrPaths(indexMergeConds)
 	if err != nil {
@@ -564,6 +570,107 @@ func (is *LogicalIndexScan) DeriveStats(_ []*property.StatsInfo, selfSchema *exp
 		}
 	}
 	return is.stats, nil
+}
+
+// generateIndexMergeJSONMVIndexPath generates paths for (json_member_of / json_overlaps / json_contains) + multi-valued index cases.
+/*
+	1. select * from t where 1 member of (a)
+		IndexMerge(AND)
+			IndexRangeScan(a, [1,1])
+			TableRowIdScan(t)
+	2. select * from t where json_contains(a, 1, 2, 3)
+		IndexMerge(AND)
+			IndexRangeScan(a, [1,1])
+			IndexRangeScan(a, [2,2])
+			IndexRangeScan(a, [3,3])
+			TableRowIdScan(t)
+	3. select * from t where json_overlap(a, 1, 2, 3)
+		IndexMerge(OR)
+			IndexRangeScan(a, [1,1])
+			IndexRangeScan(a, [2,2])
+			IndexRangeScan(a, [3,3])
+			TableRowIdScan(t)
+*/
+func (ds *DataSource) generateIndexMergeJSONMVIndexPath(normalPathCnt int, filters []expression.Expression) *util.AccessPath {
+	fmt.Println(">>>>>>>>>>>>>>>>> ", filters)
+
+	for _, cond := range filters {
+		sf, ok := cond.(*expression.ScalarFunction)
+		if !ok {
+			continue
+		}
+
+		var vals []*expression.Constant
+		var col *expression.Column
+		var useAnd bool
+		switch sf.FuncName.L {
+		case ast.JSONMemberOf:
+			val, ok1 := sf.GetArgs()[0].(*expression.Constant)
+			c, ok2 := sf.GetArgs()[1].(*expression.Column)
+			if !ok1 || !ok2 {
+				continue
+			}
+			useAnd = true
+			vals = append(vals, val)
+			col = c
+		case ast.JSONOverlaps:
+			continue // TODO
+		case ast.JSONContains:
+			c, ok := sf.GetArgs()[0].(*expression.Column)
+			if !ok {
+				continue
+			}
+			allConsts := true
+			for i := 1; i < len(sf.GetArgs()); i++ {
+				if val, ok := sf.GetArgs()[i].(*expression.Constant); ok {
+					vals = append(vals, val)
+				} else {
+					allConsts = false
+					break
+				}
+			}
+			if !allConsts {
+				continue
+			}
+			col = c
+			useAnd = true
+		default:
+			continue
+		}
+
+		var mvIndex *util.AccessPath
+		for i := 0; i < normalPathCnt; i++ {
+			originalPath := ds.possibleAccessPaths[i]
+			if !ds.isSpecifiedInIndexMergeHints(originalPath.Index.Name.L) {
+				continue
+			}
+			mvIndex = originalPath
+		}
+		if mvIndex == nil {
+			continue
+		}
+
+		var partialPaths []*util.AccessPath
+		for _, val := range vals {
+			eq, err := expression.NewFunction(ds.ctx, ast.EQ, types.NewFieldType(mysql.TypeTiny), col, val)
+			if err != nil {
+				return nil
+			}
+
+			p := mvIndex.Clone()
+			if err := ds.fillIndexPath(p, []expression.Expression{eq}); err != nil {
+				return nil
+			}
+			partialPaths = append(partialPaths, p)
+
+			fmt.Println(">>>> ", p.Index, p.Ranges)
+		}
+
+		if useAnd {
+
+		}
+	}
+	return nil
 }
 
 // getIndexMergeOrPath generates all possible IndexMergeOrPaths.
