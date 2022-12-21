@@ -473,7 +473,10 @@ func (ds *DataSource) generateAndPruneIndexMergePath(indexMergeConds []expressio
 	regularPathCount := len(ds.possibleAccessPaths)
 	// 0. MVIndex
 	if ds.ctx.GetSessionVars().StmtCtx.DEBUG {
-		ds.possibleAccessPaths = append(ds.possibleAccessPaths, ds.generateIndexMergeJSONMVIndexPath(regularPathCount, indexMergeConds))
+		xxx := ds.generateIndexMergeJSONMVIndexPath(regularPathCount, indexMergeConds)
+		if xxx != nil {
+			ds.possibleAccessPaths = append(ds.possibleAccessPaths, xxx)
+		}
 		return nil
 	}
 
