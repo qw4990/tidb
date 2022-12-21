@@ -595,7 +595,10 @@ func (is *LogicalIndexScan) DeriveStats(_ []*property.StatsInfo, selfSchema *exp
 			TableRowIdScan(t)
 */
 func (ds *DataSource) generateIndexMergeJSONMVIndexPath(normalPathCnt int, filters []expression.Expression) *util.AccessPath {
-	fmt.Println(">>>>>>>>>>>>>>>>> ", filters)
+	fmt.Println("=================================== generateIndexMergeJSONMVIndexPath ================================")
+	defer fmt.Println("=================================== generateIndexMergeJSONMVIndexPath ================================")
+
+	fmt.Println("filters ", filters)
 
 	for _, cond := range filters {
 		sf, ok := cond.(*expression.ScalarFunction)
