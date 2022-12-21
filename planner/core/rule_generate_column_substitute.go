@@ -41,6 +41,14 @@ type ExprColumnMap map[expression.Expression]*expression.Column
 func (gc *gcSubstituter) optimize(ctx context.Context, lp LogicalPlan, _ *logicalOptimizeOp) (LogicalPlan, error) {
 	exprToColumn := make(ExprColumnMap)
 	collectGenerateColumn(lp, exprToColumn)
+
+	fmt.Println("============================== gcSubstituter ===================================")
+	fmt.Println("length ", exprToColumn)
+	for k, v := range exprToColumn {
+		fmt.Println("k v >>>>>> ", k, v.OrigName, v.VirtualExpr)
+	}
+	defer fmt.Println("============================== gcSubstituter ===================================")
+
 	if len(exprToColumn) == 0 {
 		return lp, nil
 	}
