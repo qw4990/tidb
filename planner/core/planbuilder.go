@@ -1303,6 +1303,21 @@ func getPossibleAccessPaths(ctx sessionctx.Context, tableHints *tableHintInfo, i
 	fillContentForTablePath(tablePath, tblInfo)
 	publicPaths = append(publicPaths, tablePath)
 
+	if ctx.GetSessionVars().StmtCtx.DEBUG {
+		fmt.Println("============================== schema info =========================================")
+		fmt.Println(tblInfo.Name)
+		for _, c := range tblInfo.Columns {
+			fmt.Println("col ", c.Name, c.FieldType, c.IsGenerated(), c.GeneratedExprString)
+		}
+		for _, idx := range tblInfo.Indices {
+			fmt.Println("idx ", idx.Name, idx.MVIndex)
+			for _, c := range idx.Columns {
+				fmt.Println("idx col ", c.Name)
+			}
+		}
+		fmt.Println("============================== schema info =========================================")
+	}
+
 	if tblInfo.TiFlashReplica == nil {
 		ctx.GetSessionVars().RaiseWarningWhenMPPEnforced("MPP mode may be blocked because there aren't tiflash replicas of table `" + tblInfo.Name.O + "`.")
 	} else if !tblInfo.TiFlashReplica.Available {
@@ -1319,13 +1334,6 @@ func getPossibleAccessPaths(ctx sessionctx.Context, tableHints *tableHintInfo, i
 	var err error
 
 	for _, index := range tblInfo.Indices {
-		if ctx.GetSessionVars().StmtCtx.DEBUG {
-			fmt.Println(">>>>>>>>>> ", index.Name, index.State, index.Columns, index.MVIndex)
-			for _, c := range index.Columns {
-				fmt.Println("????>>>>> ", c.Name)
-			}
-		}
-
 		if index.State == model.StatePublic {
 			// Filter out invisible index, because they are not visible for optimizer
 			if !optimizerUseInvisibleIndexes && index.Invisible {
