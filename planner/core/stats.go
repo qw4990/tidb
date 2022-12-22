@@ -602,8 +602,9 @@ func (ds *DataSource) generateIndexMergeJSONMVIndexPath(filters []expression.Exp
 
 	fmt.Println("filters ", filters)
 
+	tbl := ds.table.Meta()
 	var specifiedMVIndex *model.IndexInfo
-	for _, index := range ds.table.Meta().Indices {
+	for _, index := range tbl.Indices {
 		if index.State == model.StatePublic && index.MVIndex {
 			specifiedMVIndex = index
 			break
@@ -615,7 +616,8 @@ func (ds *DataSource) generateIndexMergeJSONMVIndexPath(filters []expression.Exp
 
 	fmt.Println("mv-index name ", specifiedMVIndex.Name.L)
 	for _, c := range specifiedMVIndex.Columns {
-		fmt.Println("mv-index column ", c.Name.L)
+		col := tbl.Cols()[c.Offset]
+		fmt.Println("mv-index column ", c.Name.L, col.IsGenerated(), col.GeneratedExprString)
 	}
 
 	for _, cond := range filters {
