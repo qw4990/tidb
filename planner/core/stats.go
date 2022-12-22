@@ -625,7 +625,7 @@ func (ds *DataSource) generateIndexMergeJSONMVIndexPath(filters []expression.Exp
 			break
 		}
 	}
-	fmt.Println("mv-index column ", idxVirCol.Name.L, virColInfo.IsGenerated(), virColInfo.GeneratedExprString, virColExpr)
+	fmt.Println("mv-index column ", idxVirCol.Name.L, virColInfo.IsGenerated(), virColInfo.GeneratedExprString, virColExpr, virColExpr.GetType().GetType())
 
 	// cast(`$.x` as array) --> cast(`$.x`, json BINARY)
 	cast := virColExpr.(*expression.ScalarFunction)
