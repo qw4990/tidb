@@ -1349,6 +1349,10 @@ func getPossibleAccessPaths(ctx sessionctx.Context, tableHints *tableHintInfo, i
 			if !optimizerUseInvisibleIndexes && index.Invisible {
 				continue
 			}
+			if index.MVIndex {
+				// MVIndex is special, handle it by using IndexMerge
+				continue
+			}
 			if tblInfo.IsCommonHandle && index.Primary {
 				continue
 			}

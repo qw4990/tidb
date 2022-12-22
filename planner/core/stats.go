@@ -598,6 +598,22 @@ func (ds *DataSource) generateIndexMergeJSONMVIndexPath(normalPathCnt int, filte
 	fmt.Println("=================================== generateIndexMergeJSONMVIndexPath ================================")
 	defer fmt.Println("=================================== generateIndexMergeJSONMVIndexPath ================================")
 
+	if !ds.indexMergeHintsHasSpecifiedIdx() {
+		return nil
+	}
+
+	var specifiedMVIndex *model.IndexInfo
+	for _, index := range ds.table.Meta().Indices {
+		if index.State == model.StatePublic && index.MVIndex &&
+			ds.isSpecifiedInIndexMergeHints(index.Name.L) {
+			specifiedMVIndex = index
+			break
+		}
+	}
+	if specifiedMVIndex == nil {
+		return nil
+	}
+
 	fmt.Println("filters ", filters)
 
 	for _, cond := range filters {
@@ -606,75 +622,32 @@ func (ds *DataSource) generateIndexMergeJSONMVIndexPath(normalPathCnt int, filte
 			continue
 		}
 
-		var vals []*expression.Constant
-		var col *expression.Column
-		var useAnd bool
 		switch sf.FuncName.L {
 		case ast.JSONMemberOf:
-			val, ok1 := sf.GetArgs()[0].(*expression.Constant)
-			c, ok2 := sf.GetArgs()[1].(*expression.Column)
-			if !ok1 || !ok2 {
-				continue
-			}
-			useAnd = true
-			vals = append(vals, val)
-			col = c
+			continue
 		case ast.JSONOverlaps:
 			continue // TODO
 		case ast.JSONContains:
-			c, ok := sf.GetArgs()[0].(*expression.Column)
-			if !ok {
-				continue
-			}
-			allConsts := true
-			for i := 1; i < len(sf.GetArgs()); i++ {
-				if val, ok := sf.GetArgs()[i].(*expression.Constant); ok {
-					vals = append(vals, val)
-				} else {
-					allConsts = false
-					break
-				}
-			}
-			if !allConsts {
-				continue
-			}
-			col = c
-			useAnd = true
+			continue
 		default:
 			continue
 		}
 
-		var mvIndex *util.AccessPath
-		for i := 0; i < normalPathCnt; i++ {
-			originalPath := ds.possibleAccessPaths[i]
-			if !ds.isSpecifiedInIndexMergeHints(originalPath.Index.Name.L) {
-				continue
-			}
-			mvIndex = originalPath
-		}
-		if mvIndex == nil {
-			continue
-		}
-
-		var partialPaths []*util.AccessPath
-		for _, val := range vals {
-			eq, err := expression.NewFunction(ds.ctx, ast.EQ, types.NewFieldType(mysql.TypeTiny), col, val)
-			if err != nil {
-				return nil
-			}
-
-			p := mvIndex.Clone()
-			if err := ds.fillIndexPath(p, []expression.Expression{eq}); err != nil {
-				return nil
-			}
-			partialPaths = append(partialPaths, p)
-
-			fmt.Println(">>>> ", p.Index, p.Ranges)
-		}
-
-		if useAnd {
-
-		}
+		//var partialPaths []*util.AccessPath
+		//for _, val := range vals {
+		//	eq, err := expression.NewFunction(ds.ctx, ast.EQ, types.NewFieldType(mysql.TypeTiny), col, val)
+		//	if err != nil {
+		//		return nil
+		//	}
+		//
+		//	p := mvIndex.Clone()
+		//	if err := ds.fillIndexPath(p, []expression.Expression{eq}); err != nil {
+		//		return nil
+		//	}
+		//	partialPaths = append(partialPaths, p)
+		//
+		//	fmt.Println(">>>> ", p.Index, p.Ranges)
+		//}
 	}
 	return nil
 }
