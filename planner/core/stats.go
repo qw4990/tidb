@@ -618,14 +618,17 @@ func (ds *DataSource) generateIndexMergeJSONMVIndexPath(filters []expression.Exp
 	fmt.Println("mv-index name ", specifiedMVIndex.Name.L)
 	idxVirCol := specifiedMVIndex.Columns[0]
 	virColInfo := tbl.Cols()[idxVirCol.Offset]
+	var virCol *expression.Column
 	var virColExpr expression.Expression
 	for _, ce := range ds.TblCols {
 		if ce.ID == virColInfo.ID {
+			virCol = ce
 			virColExpr = ce.VirtualExpr
 			break
 		}
 	}
-	fmt.Println("mv-index column ", idxVirCol.Name.L, virColInfo.IsGenerated(), virColInfo.GeneratedExprString, virColExpr, virColExpr.GetType().GetType())
+	fmt.Println("mv-index column ", idxVirCol.Name.L, virColInfo.IsGenerated(), virColInfo.GeneratedExprString,
+		virColExpr, virColExpr.GetType().String(), virColExpr.GetType().ArrayType().String())
 
 	// cast(`$.x` as array) --> cast(`$.x`, json BINARY)
 	cast := virColExpr.(*expression.ScalarFunction)
@@ -640,8 +643,25 @@ func (ds *DataSource) generateIndexMergeJSONMVIndexPath(filters []expression.Exp
 
 		switch sf.FuncName.L {
 		case ast.JSONMemberOf:
+			// json_memberof(cast(1, json BINARY), json_extract(test.t_mvidx.a, $.zip))
 			operand := sf.GetArgs()[1]
 			fmt.Println("member of operand ", operand, operand.Equal(ds.ctx, targetOperand))
+			v := sf.GetArgs()[0].(*expression.ScalarFunction).GetArgs()[0]
+
+			if v.GetType().EvalType() == types.ETInt && virColExpr.GetType().ArrayType().EvalType() == types.ETInt {
+				eq, err := expression.NewFunction(ds.ctx, ast.EQ, types.NewFieldType(mysql.TypeTiny), virCol, v)
+				if err != nil {
+					panic(err)
+				}
+				conds := []expression.Expression{eq}
+				buildCols := []*expression.Column{virCol}
+				fmt.Println("build range ", conds, buildCols)
+				r, err := ranger.DetachCondAndBuildRangeForIndex(ds.ctx, conds, buildCols, []int{-1}, -1)
+				if err != nil {
+					panic(err)
+				}
+				fmt.Println("range ", r.Ranges, r.AccessConds, r.RemainedConds)
+			}
 			continue
 		case ast.JSONOverlaps:
 			continue // TODO
