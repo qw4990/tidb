@@ -473,7 +473,7 @@ func (ds *DataSource) generateAndPruneIndexMergePath(indexMergeConds []expressio
 	regularPathCount := len(ds.possibleAccessPaths)
 	// 0. MVIndex
 	if ds.ctx.GetSessionVars().StmtCtx.DEBUG {
-		xxx := ds.generateIndexMergeJSONMVIndexPath(regularPathCount, indexMergeConds)
+		xxx := ds.generateIndexMergeJSONMVIndexPath(indexMergeConds)
 		if xxx != nil {
 			ds.possibleAccessPaths = append(ds.possibleAccessPaths, xxx)
 		}
@@ -594,9 +594,11 @@ func (is *LogicalIndexScan) DeriveStats(_ []*property.StatsInfo, selfSchema *exp
 			IndexRangeScan(a, [3,3])
 			TableRowIdScan(t)
 */
-func (ds *DataSource) generateIndexMergeJSONMVIndexPath(normalPathCnt int, filters []expression.Expression) *util.AccessPath {
+func (ds *DataSource) generateIndexMergeJSONMVIndexPath(filters []expression.Expression) *util.AccessPath {
 	fmt.Println("=================================== generateIndexMergeJSONMVIndexPath ================================")
 	defer fmt.Println("=================================== generateIndexMergeJSONMVIndexPath ================================")
+
+	fmt.Println("filters ", filters)
 
 	if !ds.indexMergeHintsHasSpecifiedIdx() {
 		return nil
@@ -614,7 +616,10 @@ func (ds *DataSource) generateIndexMergeJSONMVIndexPath(normalPathCnt int, filte
 		return nil
 	}
 
-	fmt.Println("filters ", filters)
+	fmt.Println("mv-index name ", specifiedMVIndex.Name.L)
+	for _, c := range specifiedMVIndex.Columns {
+		fmt.Println("mv-index column ", c.Name.L)
+	}
 
 	for _, cond := range filters {
 		sf, ok := cond.(*expression.ScalarFunction)
