@@ -601,6 +601,7 @@ func (ds *DataSource) generateIndexMergeJSONMVIndexPath(filters []expression.Exp
 	defer fmt.Println("=================================== generateIndexMergeJSONMVIndexPath ================================")
 
 	fmt.Println("filters ", filters)
+	fmt.Println("ds schema ", ds.schema.Columns)
 
 	tbl := ds.table.Meta()
 	var specifiedMVIndex *model.IndexInfo
@@ -615,10 +616,16 @@ func (ds *DataSource) generateIndexMergeJSONMVIndexPath(filters []expression.Exp
 	}
 
 	fmt.Println("mv-index name ", specifiedMVIndex.Name.L)
-	for _, c := range specifiedMVIndex.Columns {
-		col := tbl.Cols()[c.Offset]
-		fmt.Println("mv-index column ", c.Name.L, col.IsGenerated(), col.GeneratedExprString)
+	idxCol := specifiedMVIndex.Columns[0]
+	colInfo := tbl.Cols()[idxCol.Offset]
+	var colExpr *expression.Column
+	for _, ce := range ds.TblCols {
+		if ce.ID == colInfo.ID {
+			colExpr = ce
+			break
+		}
 	}
+	fmt.Println("mv-index column ", idxCol.Name.L, colInfo.IsGenerated(), colInfo.GeneratedExprString, colExpr.VirtualExpr)
 
 	for _, cond := range filters {
 		sf, ok := cond.(*expression.ScalarFunction)
