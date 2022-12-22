@@ -618,14 +618,19 @@ func (ds *DataSource) generateIndexMergeJSONMVIndexPath(filters []expression.Exp
 	fmt.Println("mv-index name ", specifiedMVIndex.Name.L)
 	idxVirCol := specifiedMVIndex.Columns[0]
 	virColInfo := tbl.Cols()[idxVirCol.Offset]
-	var virColExpr *expression.Column
+	var virColExpr expression.Expression
 	for _, ce := range ds.TblCols {
 		if ce.ID == virColInfo.ID {
-			virColExpr = ce
+			virColExpr = ce.VirtualExpr
 			break
 		}
 	}
-	fmt.Println("mv-index column ", idxVirCol.Name.L, virColInfo.IsGenerated(), virColInfo.GeneratedExprString, virColExpr.VirtualExpr)
+	fmt.Println("mv-index column ", idxVirCol.Name.L, virColInfo.IsGenerated(), virColInfo.GeneratedExprString, virColExpr)
+
+	// cast(`a` as array) --> cast(a, json BINARY)
+	cast := virColExpr.(*expression.ScalarFunction)
+	originalCol := cast.GetArgs()[0]
+	fmt.Println("original column ", originalCol)
 
 	for _, cond := range filters {
 		sf, ok := cond.(*expression.ScalarFunction)
