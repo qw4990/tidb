@@ -627,10 +627,10 @@ func (ds *DataSource) generateIndexMergeJSONMVIndexPath(filters []expression.Exp
 	}
 	fmt.Println("mv-index column ", idxVirCol.Name.L, virColInfo.IsGenerated(), virColInfo.GeneratedExprString, virColExpr)
 
-	// cast(`a` as array) --> cast(a, json BINARY)
+	// cast(`$.x` as array) --> cast(`$.x`, json BINARY)
 	cast := virColExpr.(*expression.ScalarFunction)
-	originalCol := cast.GetArgs()[0]
-	fmt.Println("original column ", originalCol)
+	targetOperand := cast.GetArgs()[0]
+	fmt.Println("target operand ", targetOperand, targetOperand.HashCode(ds.ctx.GetSessionVars().StmtCtx))
 
 	for _, cond := range filters {
 		sf, ok := cond.(*expression.ScalarFunction)
@@ -640,6 +640,8 @@ func (ds *DataSource) generateIndexMergeJSONMVIndexPath(filters []expression.Exp
 
 		switch sf.FuncName.L {
 		case ast.JSONMemberOf:
+			operand := sf.GetArgs()[1]
+			fmt.Println("member of operand ", operand, operand.HashCode(ds.ctx.GetSessionVars().StmtCtx))
 			continue
 		case ast.JSONOverlaps:
 			continue // TODO
