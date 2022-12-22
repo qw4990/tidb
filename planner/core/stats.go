@@ -466,19 +466,20 @@ func (ds *DataSource) DeriveStats(_ []*property.StatsInfo, _ *expression.Schema,
 		stmtCtx.AppendWarning(errors.Errorf(msg))
 		logutil.BgLogger().Debug(msg)
 	}
-	return ds.stats, nil
-}
 
-func (ds *DataSource) generateAndPruneIndexMergePath(indexMergeConds []expression.Expression, needPrune bool) error {
-	regularPathCount := len(ds.possibleAccessPaths)
-	// 0. MVIndex
+	// USE MV-INDEX
 	if ds.ctx.GetSessionVars().StmtCtx.DEBUG {
 		xxx := ds.generateIndexMergeJSONMVIndexPath(indexMergeConds)
 		if xxx != nil {
 			ds.possibleAccessPaths = append(ds.possibleAccessPaths, xxx)
 		}
-		return nil
 	}
+
+	return ds.stats, nil
+}
+
+func (ds *DataSource) generateAndPruneIndexMergePath(indexMergeConds []expression.Expression, needPrune bool) error {
+	regularPathCount := len(ds.possibleAccessPaths)
 
 	// 1. Generate possible IndexMerge paths for `OR`.
 	err := ds.generateIndexMergeOrPaths(indexMergeConds)
@@ -599,10 +600,6 @@ func (ds *DataSource) generateIndexMergeJSONMVIndexPath(filters []expression.Exp
 	defer fmt.Println("=================================== generateIndexMergeJSONMVIndexPath ================================")
 
 	fmt.Println("filters ", filters)
-
-	if !ds.indexMergeHintsHasSpecifiedIdx() {
-		return nil
-	}
 
 	var specifiedMVIndex *model.IndexInfo
 	for _, index := range ds.table.Meta().Indices {

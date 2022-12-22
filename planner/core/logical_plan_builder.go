@@ -4579,7 +4579,7 @@ func (b *PlanBuilder) buildDataSource(ctx context.Context, tn *ast.TableName, as
 						}
 					}
 					if !hasIdxName {
-						invalidIdxNames = append(invalidIdxNames, idxName.String())
+						//invalidIdxNames = append(invalidIdxNames, idxName.String())
 					}
 				}
 				if len(invalidIdxNames) == 0 {
