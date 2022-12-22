@@ -630,7 +630,7 @@ func (ds *DataSource) generateIndexMergeJSONMVIndexPath(filters []expression.Exp
 	// cast(`$.x` as array) --> cast(`$.x`, json BINARY)
 	cast := virColExpr.(*expression.ScalarFunction)
 	targetOperand := cast.GetArgs()[0]
-	fmt.Println("target operand ", targetOperand, targetOperand.HashCode(ds.ctx.GetSessionVars().StmtCtx))
+	fmt.Println("target operand ", targetOperand)
 
 	for _, cond := range filters {
 		sf, ok := cond.(*expression.ScalarFunction)
@@ -641,7 +641,7 @@ func (ds *DataSource) generateIndexMergeJSONMVIndexPath(filters []expression.Exp
 		switch sf.FuncName.L {
 		case ast.JSONMemberOf:
 			operand := sf.GetArgs()[1]
-			fmt.Println("member of operand ", operand, operand.HashCode(ds.ctx.GetSessionVars().StmtCtx))
+			fmt.Println("member of operand ", operand, operand.Equal(ds.ctx, targetOperand))
 			continue
 		case ast.JSONOverlaps:
 			continue // TODO
