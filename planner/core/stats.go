@@ -471,7 +471,8 @@ func (ds *DataSource) DeriveStats(_ []*property.StatsInfo, _ *expression.Schema,
 	if ds.ctx.GetSessionVars().StmtCtx.DEBUG {
 		xxx := ds.generateIndexMergeJSONMVIndexPath(indexMergeConds)
 		if xxx != nil {
-			ds.possibleAccessPaths = append(ds.possibleAccessPaths, xxx)
+			ds.possibleAccessPaths = ds.possibleAccessPaths[:1]
+			ds.possibleAccessPaths[0] = xxx
 		}
 	}
 
@@ -603,8 +604,7 @@ func (ds *DataSource) generateIndexMergeJSONMVIndexPath(filters []expression.Exp
 
 	var specifiedMVIndex *model.IndexInfo
 	for _, index := range ds.table.Meta().Indices {
-		if index.State == model.StatePublic && index.MVIndex &&
-			ds.isSpecifiedInIndexMergeHints(index.Name.L) {
+		if index.State == model.StatePublic && index.MVIndex {
 			specifiedMVIndex = index
 			break
 		}
