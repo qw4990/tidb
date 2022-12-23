@@ -618,11 +618,13 @@ func (ds *DataSource) generateIndexMergeJSONMVIndexPath(filters []expression.Exp
 	fmt.Println("mv-index name ", specifiedMVIndex.Name.L)
 	idxVirCol := specifiedMVIndex.Columns[0]
 	virColInfo := tbl.Cols()[idxVirCol.Offset]
-	var virCol *expression.Column
+	var virCol, genCol *expression.Column
 	var virColExpr expression.Expression
 	for _, ce := range ds.TblCols {
 		if ce.ID == virColInfo.ID {
 			virCol = ce
+			genCol = virCol.Clone().(*expression.Column)
+			genCol.GetType().SetArray(false)
 			virColExpr = ce.VirtualExpr
 			break
 		}
@@ -653,7 +655,7 @@ func (ds *DataSource) generateIndexMergeJSONMVIndexPath(filters []expression.Exp
 					panic(err)
 				}
 				conds := []expression.Expression{eq}
-				buildCols := []*expression.Column{virCol}
+				buildCols := []*expression.Column{genCol}
 				fmt.Println("build range ", conds, buildCols)
 				r, err := ranger.DetachCondAndBuildRangeForIndex(ds.ctx, conds, buildCols, []int{-1}, -1)
 				if err != nil {
