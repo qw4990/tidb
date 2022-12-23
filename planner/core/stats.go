@@ -636,7 +636,7 @@ func (ds *DataSource) generateIndexMergeJSONMVIndexPath(filters []expression.Exp
 	targetOperand := cast.GetArgs()[0]
 	fmt.Println("target operand ", targetOperand)
 
-	for _, cond := range filters {
+	for i, cond := range filters {
 		sf, ok := cond.(*expression.ScalarFunction)
 		if !ok {
 			continue
@@ -663,6 +663,9 @@ func (ds *DataSource) generateIndexMergeJSONMVIndexPath(filters []expression.Exp
 					panic(err)
 				}
 				fmt.Println("filled path ", path.Ranges, path.AccessConds, path.IndexFilters, path.TableFilters)
+
+				indexMergePath := ds.buildIndexMergeOrPath(filters, []*util.AccessPath{path}, i)
+				return indexMergePath
 			}
 			continue
 		case ast.JSONOverlaps:
