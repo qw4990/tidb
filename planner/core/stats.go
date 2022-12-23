@@ -654,14 +654,15 @@ func (ds *DataSource) generateIndexMergeJSONMVIndexPath(filters []expression.Exp
 				if err != nil {
 					panic(err)
 				}
-				conds := []expression.Expression{eq}
-				buildCols := []*expression.Column{genCol}
-				fmt.Println("build range ", conds, buildCols)
-				r, err := ranger.DetachCondAndBuildRangeForIndex(ds.ctx, conds, buildCols, []int{-1}, -1)
+				path := &util.AccessPath{Index: specifiedMVIndex}
+				path.Ranges = ranger.FullRange()
+				path.IdxCols, path.IdxColLens = []*expression.Column{genCol}, []int{types.UnspecifiedLength}
+				path.FullIdxCols, path.FullIdxColLens = []*expression.Column{genCol}, []int{types.UnspecifiedLength}
+				err = ds.detachCondAndBuildRangeForPath(path, []expression.Expression{eq})
 				if err != nil {
 					panic(err)
 				}
-				fmt.Println("range ", r.Ranges, r.AccessConds, r.RemainedConds)
+				fmt.Println("filled path ", path.Ranges, path.AccessConds, path.IndexFilters, path.TableFilters)
 			}
 			continue
 		case ast.JSONOverlaps:
