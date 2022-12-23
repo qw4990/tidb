@@ -675,22 +675,6 @@ func (ds *DataSource) generateIndexMergeJSONMVIndexPath(filters []expression.Exp
 		default:
 			continue
 		}
-
-		//var partialPaths []*util.AccessPath
-		//for _, val := range vals {
-		//	eq, err := expression.NewFunction(ds.ctx, ast.EQ, types.NewFieldType(mysql.TypeTiny), col, val)
-		//	if err != nil {
-		//		return nil
-		//	}
-		//
-		//	p := mvIndex.Clone()
-		//	if err := ds.fillIndexPath(p, []expression.Expression{eq}); err != nil {
-		//		return nil
-		//	}
-		//	partialPaths = append(partialPaths, p)
-		//
-		//	fmt.Println(">>>> ", p.Index, p.Ranges)
-		//}
 	}
 	return nil
 }
