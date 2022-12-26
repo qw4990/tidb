@@ -1420,7 +1420,7 @@ func (ds *DataSource) addSelection4PlanCache(task *rootTask, stats *property.Sta
 func (ds *DataSource) convertToIndexScan(prop *property.PhysicalProperty,
 	candidate *candidatePath, _ *physicalOptimizeOp) (task task, err error) {
 	if !candidate.path.IsSingleScan {
-		// If it's parent requires single read task, return max cost.
+		// If it's parent requires single read task, return max cost .
 		if prop.TaskTp == property.CopSingleReadTaskType {
 			return invalidTask, nil
 		}
