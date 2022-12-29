@@ -113,6 +113,22 @@ func TestNonPreparedPlanCacheWithExplain(t *testing.T) {
 	tk.MustQuery("select @@last_plan_from_cache").Check(testkit.Rows("1"))
 }
 
+func TestIgnorePlanCacheBinding(t *testing.T) {
+	store := testkit.CreateMockStore(t)
+	tk := testkit.NewTestKit(t, store)
+	tk.MustExec(`use test`)
+	tk.MustExec(`create table t (a int, key(a))`)
+
+	tk.MustExec(`prepare st from 'select a from t where a<?'`)
+	tk.MustExec(`set @a='1'`)
+	tk.MustQuery(`execute st using @a`).Check(testkit.Rows())
+	tk.MustQuery(`show warnings`).Check(testkit.Rows(`Warning 1105 skip plan-cache: '1' may be converted to INT`))
+
+	tk.MustExec(`create binding for select a from t where a<1 using select /*+ ignore_plan_cache() */ a from t where a<1`)
+	tk.MustQuery(`execute st using @a`).Check(testkit.Rows())
+	tk.MustQuery(`show warnings`).Check(testkit.Rows())
+}
+
 func TestNonPreparedPlanCacheFallback(t *testing.T) {
 	store := testkit.CreateMockStore(t)
 	tk := testkit.NewTestKit(t, store)
