@@ -491,6 +491,37 @@ func (ds *DataSource) generateAndPruneIndexMergePath(indexMergeConds []expressio
 	return nil
 }
 
+/*
+	(col1=? and col2=?)
+	iterate all MVIndexes
+	collect filters: f(MVIndex, allFilters) --> indexFilters
+	construct the partial path: f(MVIndex, indexFilters) --> path
+	construct index merge path: f(partial path) --> path
+
+	(col1=? and col2=?) or (col1=? and col2=?)
+*/
+
+func _buildIndexMerge4MVIndex(filters []expression.Expression) {
+	for idx := 0; idx < 10; idx++ {
+		var MVIndex *model.IndexInfo
+		accessFilters, remainingFilters := _collectFilters4MVIndex(filters, MVIndex)
+		partialPaths, _, _ := _buildPartialPaths4MVIndexOnCNF(accessFilters, MVIndex)
+		idxMerge := _buildIndexMergePath4MVIndex(partialPaths, remainingFilters)
+	}
+}
+
+func _buildPartialPaths4MVIndexOnCNF(CNF []expression.Expression, MVIndex *model.IndexInfo) (partialPaths []*util.AccessPath, ok bool, err error) {
+	return nil, false, nil
+}
+
+func _collectFilters4MVIndex(filters []expression.Expression, MVIndex *model.IndexInfo) (accessFilters, remainingFilters []expression.Expression) {
+	return nil, nil
+}
+
+func _buildIndexMergePath4MVIndex(partialPaths []*util.AccessPath, remainingFilters []expression.Expression) *util.AccessPath {
+	return nil
+}
+
 // generateIndexMergeJSONMVIndexPath generates paths for (json_member_of / json_overlaps / json_contains) on multi-valued index.
 /*
 	1. select * from t where 1 member of (a)
