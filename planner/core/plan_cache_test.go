@@ -371,34 +371,6 @@ func TestIssue40224(t *testing.T) {
 			{"└─IndexRangeScan_5"}, // range scan not full scan
 		})
 }
-<<<<<<< HEAD
-=======
-
-func TestIssue40225(t *testing.T) {
-	store := testkit.CreateMockStore(t)
-	tk := testkit.NewTestKit(t, store)
-	tk.MustExec("use test")
-	tk.MustExec("create table t (a int, key(a))")
-	tk.MustExec("prepare st from 'select * from t where a<?'")
-	tk.MustExec("set @a='1'")
-	tk.MustExec("execute st using @a")
-	tk.MustQuery("show warnings").Sort().Check(testkit.Rows("Warning 1105 skip plan-cache: '1' may be converted to INT")) // plan-cache limitation
-	tk.MustExec("create binding for select * from t where a<1 using select /*+ ignore_plan_cache() */ * from t where a<1")
-	tk.MustExec("execute st using @a")
-	tk.MustQuery("show warnings").Sort().Check(testkit.Rows("Warning 1105 skip plan-cache: ignore plan cache by binding"))
-	// no warning about plan-cache limitations('1' -> INT) since plan-cache is totally disabled.
-
-	tk.MustExec("prepare st from 'select * from t where a>?'")
-	tk.MustExec("set @a=1")
-	tk.MustExec("execute st using @a")
-	tk.MustExec("execute st using @a")
-	tk.MustQuery("select @@last_plan_from_cache").Check(testkit.Rows("1"))
-	tk.MustExec("create binding for select * from t where a>1 using select /*+ ignore_plan_cache() */ * from t where a>1")
-	tk.MustExec("execute st using @a")
-	tk.MustQuery("select @@last_plan_from_cache").Check(testkit.Rows("0"))
-	tk.MustExec("execute st using @a")
-	tk.MustQuery("select @@last_plan_from_binding").Check(testkit.Rows("1"))
-}
 
 func TestIssue40679(t *testing.T) {
 	store := testkit.CreateMockStore(t)
@@ -488,4 +460,3 @@ func TestPlanCacheWithLimit(t *testing.T) {
 	tk.MustExec("execute stmt using @a")
 	tk.MustQuery("show warnings").Check(testkit.Rows("Warning 1105 skip plan-cache: limit count more than 10000"))
 }
->>>>>>> 567b329fa1f (planner: label plans as over-optimized for plan cache after refining cmp-function arguments (#41136))
