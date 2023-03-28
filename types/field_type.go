@@ -177,6 +177,7 @@ func SetTypeFlag(flag *uint, flagItem uint, on bool) {
 }
 
 // DefaultParamTypeForValue returns the default FieldType for the parameterized value.
+// This function should only used for execute statements when deducting types of input parameters.
 func DefaultParamTypeForValue(value interface{}, tp *FieldType) {
 	switch value.(type) {
 	case nil:

@@ -1001,9 +1001,7 @@ func DatumToConstant(d types.Datum, tp byte, flag uint) *Constant {
 func ParamMarkerExpression(ctx sessionctx.Context, v *driver.ParamMarkerExpr, needParam bool) (*Constant, error) {
 	useCache := ctx.GetSessionVars().StmtCtx.UseCache
 	isPointExec := ctx.GetSessionVars().StmtCtx.PointExec
-	tp := types.NewFieldType(mysql.TypeUnspecified)
-	types.DefaultParamTypeForValue(v.GetValue(), tp)
-	value := &Constant{Value: v.Datum, RetType: tp}
+	value := &Constant{Value: v.Datum, RetType: v.GetType()}
 	if useCache || isPointExec || needParam {
 		value.ParamMarker = &ParamMarker{
 			order: v.Order,

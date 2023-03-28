@@ -130,10 +130,7 @@ func (c *Constant) GetType() *types.FieldType {
 	if c.ParamMarker != nil {
 		// GetType() may be called in multi-threaded context, e.g, in building inner executors of IndexJoin,
 		// so it should avoid data race. We achieve this by returning different FieldType pointer for each call.
-		tp := types.NewFieldType(mysql.TypeUnspecified)
-		dt := c.ParamMarker.GetUserVar()
-		types.DefaultParamTypeForValue(dt.GetValue(), tp)
-		return tp
+		return c.RetType.Clone()
 	}
 	return c.RetType
 }

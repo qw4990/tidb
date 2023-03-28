@@ -24,7 +24,6 @@ import (
 	"github.com/pingcap/tidb/parser/ast"
 	"github.com/pingcap/tidb/parser/format"
 	"github.com/pingcap/tidb/sessionctx"
-	"github.com/pingcap/tidb/types"
 	driver "github.com/pingcap/tidb/types/parser_driver"
 )
 
@@ -57,6 +56,7 @@ func (pr *paramReplacer) Enter(in ast.Node) (out ast.Node, skipChildren bool) {
 		pr.params = append(pr.params, n)
 		param := ast.NewParamMarkerExpr(len(pr.params) - 1)      // offset is used as order in non-prepared plan cache.
 		param.(*driver.ParamMarkerExpr).Datum = *n.Datum.Clone() // init the ParamMakerExpr's Datum
+		param.(*driver.ParamMarkerExpr).Type = *n.Type.Clone()   // init the ParamMakerExpr's Type
 		return param, true
 	}
 	return in, false
@@ -135,11 +135,9 @@ func RestoreASTWithParams(ctx context.Context, _ sessionctx.Context, stmt ast.St
 func Params2Expressions(params []*driver.ValueExpr) []expression.Expression {
 	exprs := make([]expression.Expression, 0, len(params))
 	for _, p := range params {
-		tp := new(types.FieldType)
-		types.DefaultParamTypeForValue(p.Datum.GetValue(), tp)
 		exprs = append(exprs, &expression.Constant{
 			Value:   p.Datum,
-			RetType: tp,
+			RetType: p.GetType(),
 		})
 	}
 	return exprs
