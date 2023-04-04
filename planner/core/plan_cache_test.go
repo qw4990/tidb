@@ -1967,3 +1967,50 @@ func BenchmarkNonPreparedPlanCacheDML(b *testing.B) {
 		tk.MustExec("delete from t where a = 2")
 	}
 }
+
+func BenchmarkNonPreparedPlanCacheDML2(b *testing.B) {
+	store := testkit.CreateMockStore(b)
+	tk := testkit.NewTestKit(b, store)
+	tk.MustExec("use test")
+
+	// `INSERT INTO orders (o_id, o_d_id, o_w_id, o_c_id, o_entry_d, o_ol_cnt, o_all_local) VALUES (?, ?, ?, ?, ?, ?, ?)`
+	tk.MustExec(`create table orders (
+    		o_id int(11) NOT NULL,
+    		o_d_id int(11) NOT NULL,
+    		o_w_id int(11) NOT NULL,
+			o_c_id int(11) NOT NULL,
+			o_entry_d datetime NOT NULL,
+			o_ol_cnt int(11) DEFAULT NULL,
+			o_all_local varchar(11) NOT NULL)`)
+	tk.MustExec("set tidb_enable_non_prepared_plan_cache=0")
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		tk.MustExec("insert into orders (o_id, o_d_id, o_w_id, o_c_id, o_entry_d, o_ol_cnt, o_all_local) VALUES (1, 1, 1, 1, '2018-01-01 00:00:00', 1, '1')")
+		tk.MustExec("delete from orders")
+	}
+}
+
+func BenchmarkNonPreparedPlanCacheDML3(b *testing.B) {
+	store := testkit.CreateMockStore(b)
+	tk := testkit.NewTestKit(b, store)
+	tk.MustExec("use test")
+
+	// `INSERT INTO history (h_c_d_id, h_c_w_id, h_c_id, h_d_id, h_w_id, h_date, h_amount, h_data)  VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+	tk.MustExec(`create table history (
+    		h_c_d_id int(11) NOT NULL,
+    		h_c_w_id int(11) NOT NULL,
+    		h_c_id int(11) NOT NULL,
+    		h_d_id int(11) NOT NULL,
+    		h_w_id int(11) NOT NULL,
+			h_date datetime NOT NULL,
+			h_amount decimal(6,2) NOT NULL,
+			h_data varchar(24) NOT NULL)`)
+	tk.MustExec("set tidb_enable_non_prepared_plan_cache=1")
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		tk.MustExec("insert into history (h_c_d_id, h_c_w_id, h_c_id, h_d_id, h_w_id, h_date, h_amount, h_data) VALUES (1, 1, 1, 1, 1, '2018-01-01 00:00:00', 1, '1')")
+		tk.MustExec("delete from history")
+	}
+}
