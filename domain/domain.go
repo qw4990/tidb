@@ -2125,6 +2125,7 @@ func (do *Domain) UpdateTableStatsLoop(ctx, initStatsCtx sessionctx.Context) err
 		return nil
 	}
 	do.SetStatsUpdating(true)
+	do.xxx()
 	do.wg.Run(func() { do.updateStatsWorker(ctx, owner) }, "updateStatsWorker")
 	do.wg.Run(func() { do.autoAnalyzeWorker(owner) }, "autoAnalyzeWorker")
 	do.wg.Run(func() { do.gcAnalyzeHistory(owner) }, "gcAnalyzeHistory")
@@ -2264,6 +2265,25 @@ func (do *Domain) updateStatsWorkerExitPreprocessing(statsHandle *handle.Handle,
 		logutil.BgLogger().Warn("updateStatsWorker exit preprocessing timeout, force exiting")
 		return
 	}
+}
+
+func (do *Domain) xxx() {
+	r, err := do.SysSessionPool().Get()
+	if err != nil {
+		fmt.Println(">>>>>>>> ", err)
+		return
+	}
+	defer do.SysSessionPool().Put(r)
+
+	sctx := r.(sessionctx.Context)
+	exec := sctx.(sqlexec.RestrictedSQLExecutor)
+	ctx := kv.WithInternalSourceType(context.Background(), kv.InternalTxnOthers)
+
+	_, _, err = exec.ExecRestrictedSQL(ctx, nil, `
+SELECT CONCAT(table_schema, '.', table_name) AS tab,
+SUM(data_length + index_length)
+FROM information_schema.tables GROUP by tab`)
+	fmt.Println(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> ", err)
 }
 
 func (do *Domain) updateStatsWorker(ctx sessionctx.Context, owner owner.Manager) {
