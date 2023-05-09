@@ -2268,22 +2268,32 @@ func (do *Domain) updateStatsWorkerExitPreprocessing(statsHandle *handle.Handle,
 }
 
 func (do *Domain) xxx() {
-	r, err := do.SysSessionPool().Get()
-	if err != nil {
-		fmt.Println(">>>>>>>> ", err)
-		return
-	}
-	defer do.SysSessionPool().Put(r)
+	go func() {
+		for i := 0; i < 100; i++ {
+			r, err := do.SysSessionPool().Get()
+			if err != nil {
+				fmt.Println(">>>>>>>> ", err)
+				return
+			}
+			defer do.SysSessionPool().Put(r)
 
-	sctx := r.(sessionctx.Context)
-	exec := sctx.(sqlexec.RestrictedSQLExecutor)
-	ctx := kv.WithInternalSourceType(context.Background(), kv.InternalTxnOthers)
+			sctx := r.(sessionctx.Context)
+			exec := sctx.(sqlexec.RestrictedSQLExecutor)
+			ctx := kv.WithInternalSourceType(context.Background(), kv.InternalTxnOthers)
 
-	_, _, err = exec.ExecRestrictedSQL(ctx, nil, `
+			rows, _, err := exec.ExecRestrictedSQL(ctx, nil, `
 SELECT CONCAT(table_schema, '.', table_name) AS tab,
 SUM(data_length + index_length)
-FROM information_schema.tables GROUP by tab`)
-	fmt.Println(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> ", err)
+FROM information_schema.tables WHERE table_schema='test' GROUP by tab`)
+			fmt.Println(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> ", err)
+			for _, r := range rows {
+				name := r.GetString(0)
+				val := r.GetInt64(1)
+				fmt.Println(">>> ", name, val)
+			}
+			time.Sleep(time.Second * 5)
+		}
+	}()
 }
 
 func (do *Domain) updateStatsWorker(ctx sessionctx.Context, owner owner.Manager) {
