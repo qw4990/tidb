@@ -16,6 +16,7 @@ package statistics
 
 import (
 	"fmt"
+	"github.com/pingcap/tidb/sessionctx/variable"
 	"math"
 	"strings"
 	"sync"
@@ -643,8 +644,46 @@ func (coll *HistColl) GetRowCountByColumnRanges(sctx sessionctx.Context, colID i
 	return result, errors.Trace(err)
 }
 
+// indexEstimationUpperbound returns an upper-bound for this index ranges estimation, see #44376 for more details.
+// The upper-bound is from the formula: `Est(idx(a, b, c)) <= Est(idx(a, b)) <= Est(idx(a)) <= Est(col(a))`.
+// Currently, for simplification, we only estimate the upper-bound for the first column of the index.
+// TODO: consider pseudo-stats.
+func (coll *HistColl) indexEstimationUpperbound(sctx sessionctx.Context, idxID int64, indexRanges []*ranger.Range) (result float64, err error) {
+	leadingColID := coll.Idx2ColumnIDs[idxID][0]
+	leadingColRanges := make([]*ranger.Range, 0, len(indexRanges))
+	for _, ran := range indexRanges {
+		prefixLen := 1
+		var collators []collate.Collator
+		if ran.Collators != nil {
+			collators = ran.Collators[:prefixLen]
+		}
+		leadingColRanges = append(leadingColRanges, &ranger.Range{
+			LowVal:      ran.LowVal[:prefixLen],
+			HighVal:     ran.HighVal[:prefixLen],
+			Collators:   collators,
+			LowExclude:  ran.LowExclude,
+			HighExclude: ran.HighExclude,
+		})
+	}
+	return coll.GetRowCountByColumnRanges(sctx, leadingColID, leadingColRanges)
+}
+
 // GetRowCountByIndexRanges estimates the row count by a slice of Range.
 func (coll *HistColl) GetRowCountByIndexRanges(sctx sessionctx.Context, idxID int64, indexRanges []*ranger.Range) (result float64, err error) {
+	fixValue, ok := sctx.GetSessionVars().GetOptimizerFixControlValue(variable.TiDBOptFixControl44376)
+	if ok && variable.TiDBOptOn(fixValue) {
+		defer func() {
+			if err != nil {
+				return
+			}
+			var upperBound float64
+			if upperBound, err = coll.indexEstimationUpperbound(sctx, idxID, indexRanges); err != nil {
+				return
+			}
+			result = math.Min(result, upperBound)
+		}()
+	}
+
 	var name string
 	if sctx.GetSessionVars().StmtCtx.EnableOptimizerDebugTrace {
 		debugtrace.EnterContextCommon(sctx)

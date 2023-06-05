@@ -1499,6 +1499,8 @@ var (
 	TiDBOptFixControl44262 uint64 = 44262
 	// TiDBOptFixControl44389 controls whether to consider non-point ranges of some CNF item when building ranges.
 	TiDBOptFixControl44389 uint64 = 44389
+	// TiDBOptFixControl44376 controls whether to add the estimation of prefix columns as an upper-bound for the result of index estimation.
+	TiDBOptFixControl44376 uint64 = 44376
 )
 
 // GetOptimizerFixControlValue returns the specified value of the optimizer fix control.
