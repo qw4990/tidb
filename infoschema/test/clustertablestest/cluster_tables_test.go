@@ -919,6 +919,12 @@ func TestQuickBinding(t *testing.T) {
 		{`select /*+ stream_agg(), use_index(t1, primary) */ count(*) from t1 where a<?`, "stream_agg(@`sel_1`), use_index(@`sel_1` `test`.`t1` )", nil},
 		{`select /*+ stream_agg(), use_index(t1, primary) */ count(*), b from t1 where a<? group by b`, "stream_agg(@`sel_1`), use_index(@`sel_1` `test`.`t1` )", nil},
 		{`select a+b+? from (select /*+ stream_agg() */ count(*) as a from t1) tt1, (select /*+ hash_agg() */ count(*) as b from t1) tt2`, "stream_agg(@`sel_2`), use_index(@`sel_2` `test`.`t1` `k_a`), hash_agg(@`sel_3`), use_index(@`sel_3` `test`.`t1` `k_a`)", nil},
+		// agg_to_cop
+		// TODO: support agg_to_cop
+		//{`select /*+ hash_agg(), use_index(t1, primary), agg_to_cop() */ count(*) from t1 where a<?`, "hash_agg(@`sel_1`), use_index(@`sel_1` `test`.`t1` )", nil},
+		//{`select /*+ hash_agg(), use_index(t1, primary), agg_to_cop() */ count(*), b from t1 where a<? group by b`, "hash_agg(@`sel_1`), use_index(@`sel_1` `test`.`t1` )", nil},
+		//{`select /*+ stream_agg(), use_index(t1, primary), agg_to_cop() */ count(*) from t1 where a<?`, "stream_agg(@`sel_1`), use_index(@`sel_1` `test`.`t1` )", nil},
+		//{`select /*+ stream_agg(), use_index(t1, primary), agg_to_cop() */ count(*), b from t1 where a<? group by b`, "stream_agg(@`sel_1`), use_index(@`sel_1` `test`.`t1` )", nil},
 
 		// 2-way hash joins
 		{`select /*+ hash_join(t1, t2), use_index(t1), use_index(t2) */ t1.* from t1, t2 where t1.a=t2.a and t1.a<?`, "hash_join(@`sel_1` `test`.`t1`), use_index(@`sel_1` `test`.`t1` ), use_index(@`sel_1` `test`.`t2` )", nil},
@@ -931,6 +937,15 @@ func TestQuickBinding(t *testing.T) {
 		// 2-way merge joins
 		{`select /*+ merge_join(t1, t2), use_index(t1), use_index(t2) */ t1.* from t1, t2 where t1.a=t2.a and t1.a<?`, "merge_join(@`sel_1` `test`.`t1`), use_index(@`sel_1` `test`.`t1` ), use_index(@`sel_1` `test`.`t2` )", nil},
 		{`select /*+ merge_join(t1, t2), use_index(t1, k_a), use_index(t2, k_a) */ t1.* from t1, t2 where t1.a=t2.a and t1.a<?`, "merge_join(@`sel_1` `test`.`t1`), use_index(@`sel_1` `test`.`t1` `k_a`), use_index(@`sel_1` `test`.`t2` `k_a`)", nil},
+
+		// limit_to_cop
+		// TODO: not support
+		//{`select /*+ limit_to_cop(), use_index(t1, k_a) */ * from t1 where a < 1 limit 100`, "", nil},
+		//{`select /*+ limit_to_cop(), use_index(t1, k_a) */ * from t1 where b < 1 limit 100`, "", nil},
+		//{`select /*+ limit_to_cop(), use_index(t1, k_a) */ * from t1 where a < 1 order by a limit 100`, "", nil},
+		//{`select /*+ limit_to_cop(), use_index(t1, k_a) */ * from t1 where a < 1 order by b limit 100`, "", nil},
+
+		// TODO: index merge
 	}
 
 	removeHint := func(sql string) string {
