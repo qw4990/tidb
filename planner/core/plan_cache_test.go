@@ -105,6 +105,25 @@ func Test6299(t *testing.T) {
 	tk.MustQuery(genQuery(1000)).Check(testkit.Rows())
 	tk.MustQuery(genQuery(1000)).Check(testkit.Rows())
 	tk.MustQuery(`select @@last_plan_from_cache`).Check(testkit.Rows("1"))
+
+	cnt := 0
+	genReplace := func(batchSize int) string {
+		q := `replace into t (a, b, c, d, e, f) values `
+		for i := 0; i < batchSize; i++ {
+			if i > 0 {
+				q += ","
+			}
+			q += fmt.Sprintf(`('0000000%v', '000%v', '000001', '00', '0', 0)`, 140+cnt, 420+cnt)
+			cnt++
+		}
+		return q
+	}
+	tk.MustExec(genReplace(100))
+	tk.MustExec(genReplace(100))
+	tk.MustQuery(`select @@last_plan_from_cache`).Check(testkit.Rows("1"))
+	tk.MustExec(genReplace(1000))
+	tk.MustExec(genReplace(1000))
+	tk.MustQuery(`select @@last_plan_from_cache`).Check(testkit.Rows("1"))
 }
 
 func TestIssue44830(t *testing.T) {
