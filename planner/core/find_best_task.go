@@ -1217,19 +1217,28 @@ func (*DataSource) isSafePointGetPlan4PlanCache(path *util.AccessPath) bool {
 	// these assumptions may be broken after parameters change.
 
 	// safe scenario 1: each column corresponds to a single EQ, `a=1 and b=2 and c=3` --> `[1, 2, 3]`
+	hit1 := true
 	if len(path.Ranges) > 0 && path.Ranges[0].Width() == len(path.AccessConds) {
 		for _, accessCond := range path.AccessConds {
 			f, ok := accessCond.(*expression.ScalarFunction)
-			if !ok {
-				return false
-			}
-			if f.FuncName.L != ast.EQ {
-				return false
+			if !ok || f.FuncName.L != ast.EQ {
+				hit1 = false
+				break
 			}
 		}
+	}
+	if hit1 {
 		return true
 	}
-	return false
+
+	// safe scenario 2: this Batch or PointGet is simply from a IN predicate, `... and (primary keys) in ((...), ...)`
+	hit2 := false
+	if len(path.Ranges) > 0 && len(path.AccessConds) == 1 {
+		if f, ok := path.AccessConds[0].(*expression.ScalarFunction); ok && f.FuncName.L == ast.In {
+			hit2 = true
+		}
+	}
+	return hit2
 }
 
 func (ds *DataSource) convertToIndexMergeScan(prop *property.PhysicalProperty, candidate *candidatePath, _ *physicalOptimizeOp) (task task, err error) {
