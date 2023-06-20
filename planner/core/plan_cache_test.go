@@ -87,6 +87,7 @@ func Test6299(t *testing.T) {
 )`)
 	tk.MustExec(`set @@tidb_opt_fix_control = "44830:ON,44823:0"`)
 	tk.MustExec(`set @@tidb_enable_non_prepared_plan_cache=1`)
+	tk.MustExec(`set @@tidb_plan_cache_max_plan_size=0`)
 
 	genQuery := func(batchSize int) string {
 		q := `select * from t where 1=1 and (a, b, c, d, e) in (`
