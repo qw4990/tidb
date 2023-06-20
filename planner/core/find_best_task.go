@@ -1235,7 +1235,10 @@ func (*DataSource) isSafePointGetPlan4PlanCache(path *util.AccessPath) bool {
 	hit2 := false
 	if len(path.Ranges) > 0 && len(path.AccessConds) == 1 {
 		if f, ok := path.AccessConds[0].(*expression.ScalarFunction); ok && f.FuncName.L == ast.In {
-			hit2 = true
+			// no duplicated values in this in-list for safety.
+			if len(path.Ranges) == len(f.GetArgs()) {
+				hit2 = true
+			}
 		}
 	}
 	return hit2
