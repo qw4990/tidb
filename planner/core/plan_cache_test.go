@@ -72,6 +72,40 @@ func TestIssue43311(t *testing.T) {
 	tk.MustQuery(`execute st using @a, @b`).Check(testkit.Rows()) // empty
 }
 
+func Test6299(t *testing.T) {
+	store := testkit.CreateMockStore(t)
+	tk := testkit.NewTestKit(t, store)
+	tk.MustExec(`use test`)
+	tk.MustExec(`CREATE TABLE t (
+  a varchar(10) NOT NULL,
+  b varchar(6) NOT NULL,
+  c varchar(6) NOT NULL,
+  d varchar(2) NOT NULL,
+  e varchar(1) NOT NULL,
+  f decimal(15,2) DEFAULT NULL,
+  PRIMARY KEY (a, b, c, d, e) /*T![clustered_index] CLUSTERED */
+)`)
+	tk.MustExec(`set @@tidb_opt_fix_control = "44830:ON,44823:0"`)
+	tk.MustExec(`set @@tidb_enable_non_prepared_plan_cache=1`)
+
+	genQuery := func(batchSize int) string {
+		q := `select * from t where 1=1 and (a, b, c, d, e) in (`
+		for i := 0; i < batchSize; i++ {
+			if i > 0 {
+				q += ","
+			}
+			q += fmt.Sprintf(`('0000000%v', '000%v', '000001', '00', '0')`, 140+i, 420+i)
+		}
+		return q + ")"
+	}
+	tk.MustQuery(genQuery(100)).Check(testkit.Rows())
+	tk.MustQuery(genQuery(100)).Check(testkit.Rows())
+	tk.MustQuery(`select @@last_plan_from_cache`).Check(testkit.Rows("1"))
+	tk.MustQuery(genQuery(1000)).Check(testkit.Rows())
+	tk.MustQuery(genQuery(1000)).Check(testkit.Rows())
+	tk.MustQuery(`select @@last_plan_from_cache`).Check(testkit.Rows("1"))
+}
+
 func TestIssue44830(t *testing.T) {
 	store := testkit.CreateMockStore(t)
 	tk := testkit.NewTestKit(t, store)
