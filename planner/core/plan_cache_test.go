@@ -78,7 +78,7 @@ func Test6299(t *testing.T) {
 	tk.MustExec(`use test`)
 	tk.MustExec(`CREATE TABLE t (
   a varchar(10) NOT NULL,
-  b varchar(6) NOT NULL,
+  b varchar(10) NOT NULL,
   c varchar(6) NOT NULL,
   d varchar(2) NOT NULL,
   e varchar(1) NOT NULL,
@@ -87,6 +87,7 @@ func Test6299(t *testing.T) {
 )`)
 	tk.MustExec(`set @@tidb_opt_fix_control = "44830:ON,44823:0"`)
 	tk.MustExec(`set @@tidb_enable_non_prepared_plan_cache=1`)
+	tk.MustExec(`set @@tidb_enable_non_prepared_plan_cache_for_dml=1`)
 	tk.MustExec(`set @@tidb_plan_cache_max_plan_size=0`)
 
 	genQuery := func(batchSize int) string {
@@ -95,7 +96,7 @@ func Test6299(t *testing.T) {
 			if i > 0 {
 				q += ","
 			}
-			q += fmt.Sprintf(`('0000000%v', '000%v', '000001', '00', '0')`, 140+i, 420+i)
+			q += fmt.Sprintf(`('000%v', '0%v', '000001', '00', '0')`, 140+i, 420+i)
 		}
 		return q + ")"
 	}
@@ -113,7 +114,7 @@ func Test6299(t *testing.T) {
 			if i > 0 {
 				q += ","
 			}
-			q += fmt.Sprintf(`('0000000%v', '000%v', '000001', '00', '0', 0)`, 140+cnt, 420+cnt)
+			q += fmt.Sprintf(`('000%v', '0%v', '000001', '00', '0', 0)`, 140+cnt, 420+cnt)
 			cnt++
 		}
 		return q
