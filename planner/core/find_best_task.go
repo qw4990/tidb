@@ -1217,8 +1217,9 @@ func (*DataSource) isSafePointGetPlan4PlanCache(path *util.AccessPath) bool {
 	// these assumptions may be broken after parameters change.
 
 	// safe scenario 1: each column corresponds to a single EQ, `a=1 and b=2 and c=3` --> `[1, 2, 3]`
-	hit1 := true
+	hit1 := false
 	if len(path.Ranges) > 0 && path.Ranges[0].Width() == len(path.AccessConds) {
+		hit1 = true
 		for _, accessCond := range path.AccessConds {
 			f, ok := accessCond.(*expression.ScalarFunction)
 			if !ok || f.FuncName.L != ast.EQ {
@@ -1236,7 +1237,7 @@ func (*DataSource) isSafePointGetPlan4PlanCache(path *util.AccessPath) bool {
 	if len(path.Ranges) > 0 && len(path.AccessConds) == 1 {
 		if f, ok := path.AccessConds[0].(*expression.ScalarFunction); ok && f.FuncName.L == ast.In {
 			// no duplicated values in this in-list for safety.
-			if len(path.Ranges) == len(f.GetArgs()) {
+			if len(path.Ranges) == len(f.GetArgs())-1 {
 				hit2 = true
 			}
 		}
