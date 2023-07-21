@@ -18,7 +18,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/pingcap/tidb/util/logutil"
 	"io"
 	"math"
 	"strconv"
@@ -642,10 +641,10 @@ func (sc *StatementContext) SetSkipPlanCache(reason error) {
 		return // avoid unnecessary warnings
 	}
 
-	logutil.BgLogger().Info("[DEBUG] SetSkipPlanCache",
-		zap.String("sql", sc.OriginalSQL),
-		//zap.String("args", sctx.GetSessionVars().PlanCacheParams.String()),
-		zap.String("warning", reason.Error()))
+	//logutil.BgLogger().Info("[DEBUG] SetSkipPlanCache",
+	//	zap.String("sql", sc.OriginalSQL),
+	//	//zap.String("args", sctx.GetSessionVars().PlanCacheParams.String()),
+	//	zap.String("warning", reason.Error()))
 
 	sc.UseCache = false
 	switch sc.CacheType {

@@ -38,8 +38,12 @@ import (
 	"github.com/pingcap/tidb/util/chunk"
 	"github.com/pingcap/tidb/util/collate"
 	"github.com/pingcap/tidb/util/kvcache"
+	"github.com/pingcap/tidb/util/logutil"
 	utilpc "github.com/pingcap/tidb/util/plancache"
 	"github.com/pingcap/tidb/util/ranger"
+	"go.uber.org/zap"
+	"strings"
+	"sync/atomic"
 )
 
 var (
@@ -315,16 +319,22 @@ func generateNewPlan(ctx context.Context, sctx sessionctx.Context, isNonPrepared
 		}
 	}
 
-	//if !stmtCtx.UseCache {
-	//	warningStr := ""
-	//	for _, w := range stmtCtx.GetWarnings() {
-	//		warningStr += w.Err.Error() + "; "
-	//	}
-	//	logutil.BgLogger().Info("[DEBUG] SetSkipPlanCache",
-	//		zap.String("sql", stmtCtx.OriginalSQL),
-	//		zap.String("args", sctx.GetSessionVars().PlanCacheParams.String()),
-	//		zap.String("warning", warningStr))
-	//}
+	flag := ""
+	defer func() {
+		if strings.Contains(stmtCtx.OriginalSQL, "test") {
+			warningStr := ""
+			for _, w := range stmtCtx.GetWarnings() {
+				warningStr += w.Err.Error() + "; "
+			}
+			logutil.BgLogger().Info("[DEBUG] SetSkipPlanCache",
+				zap.String("sql", stmtCtx.OriginalSQL),
+				zap.String("args", sctx.GetSessionVars().PlanCacheParams.String()),
+				zap.String("warning", warningStr),
+				zap.String("flag", flag),
+				zap.Uint64("evict", atomic.LoadUint64(&planCacheEvictCounter)),
+				zap.Uint64("cache-size", sctx.GetSessionVars().SessionPlanCacheSize))
+		}
+	}()
 
 	// put this plan into the plan cache.
 	if stmtCtx.UseCache {
@@ -333,6 +343,7 @@ func generateNewPlan(ctx context.Context, sctx sessionctx.Context, isNonPrepared
 			delete(sessVars.IsolationReadEngines, kv.TiFlash)
 			if cacheKey, err = NewPlanCacheKey(sessVars, stmt.StmtText, stmt.StmtDB,
 				stmtAst.SchemaVersion, latestSchemaVersion, bindSQL, expression.ExprPushDownBlackListReloadTimeStamp.Load()); err != nil {
+				flag = "???"
 				return nil, nil, err
 			}
 			sessVars.IsolationReadEngines[kv.TiFlash] = struct{}{}
@@ -342,6 +353,7 @@ func generateNewPlan(ctx context.Context, sctx sessionctx.Context, isNonPrepared
 		stmtCtx.SetPlan(p)
 		stmtCtx.SetPlanDigest(stmt.NormalizedPlan, stmt.PlanDigest)
 		sctx.GetSessionPlanCache().Put(cacheKey, cached, matchOpts)
+		flag = "put"
 	}
 	sessVars.FoundInPlanCache = false
 	return p, names, err

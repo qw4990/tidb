@@ -15,6 +15,7 @@ package core
 
 import (
 	"container/list"
+	"sync/atomic"
 
 	"github.com/pingcap/errors"
 	core_metrics "github.com/pingcap/tidb/planner/core/metrics"
@@ -211,8 +212,12 @@ func (l *LRUPlanCache) Close() {
 	l.DeleteAll()
 }
 
+var planCacheEvictCounter uint64
+
 // removeOldest removes the oldest element from the cache.
 func (l *LRUPlanCache) removeOldest() {
+	atomic.AddUint64(&planCacheEvictCounter, 1)
+
 	lru := l.lruList.Back()
 	if lru == nil {
 		return
