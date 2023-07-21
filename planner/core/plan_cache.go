@@ -38,10 +38,8 @@ import (
 	"github.com/pingcap/tidb/util/chunk"
 	"github.com/pingcap/tidb/util/collate"
 	"github.com/pingcap/tidb/util/kvcache"
-	"github.com/pingcap/tidb/util/logutil"
 	utilpc "github.com/pingcap/tidb/util/plancache"
 	"github.com/pingcap/tidb/util/ranger"
-	"go.uber.org/zap"
 )
 
 var (
@@ -317,16 +315,16 @@ func generateNewPlan(ctx context.Context, sctx sessionctx.Context, isNonPrepared
 		}
 	}
 
-	if !stmtCtx.UseCache {
-		warningStr := ""
-		for _, w := range stmtCtx.GetWarnings() {
-			warningStr += w.Err.Error() + "; "
-		}
-		logutil.BgLogger().Info("[DEBUG] SetSkipPlanCache",
-			zap.String("sql", stmtCtx.OriginalSQL),
-			zap.String("args", sctx.GetSessionVars().PlanCacheParams.String()),
-			zap.String("warning", warningStr))
-	}
+	//if !stmtCtx.UseCache {
+	//	warningStr := ""
+	//	for _, w := range stmtCtx.GetWarnings() {
+	//		warningStr += w.Err.Error() + "; "
+	//	}
+	//	logutil.BgLogger().Info("[DEBUG] SetSkipPlanCache",
+	//		zap.String("sql", stmtCtx.OriginalSQL),
+	//		zap.String("args", sctx.GetSessionVars().PlanCacheParams.String()),
+	//		zap.String("warning", warningStr))
+	//}
 
 	// put this plan into the plan cache.
 	if stmtCtx.UseCache {
