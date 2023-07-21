@@ -333,7 +333,13 @@ func generateNewPlan(ctx context.Context, sctx sessionctx.Context, isNonPrepared
 				zap.String("warning", warningStr),
 				zap.String("flag", flag),
 				zap.Uint64("evict", atomic.LoadUint64(&planCacheEvictCounter)),
-				zap.Uint64("cache-size", sctx.GetSessionVars().SessionPlanCacheSize))
+				zap.Uint64("cache-size", sctx.GetSessionVars().SessionPlanCacheSize),
+				zap.Uint64("pf0", pickFail0.Load()),
+				zap.Uint64("pf1", pickFail1.Load()),
+				zap.Uint64("pf2", pickFail2.Load()),
+				zap.Uint64("pf3", pickFail3.Load()),
+				zap.Uint64("pf4", pickFail4.Load()),
+				zap.Uint64("pf5", pickFail5.Load()))
 		}
 	}()
 

@@ -255,6 +255,15 @@ func (l *LRUPlanCache) memoryControl() {
 	}
 }
 
+var (
+	pickFail0 atomic.Uint64
+	pickFail1 atomic.Uint64
+	pickFail2 atomic.Uint64
+	pickFail3 atomic.Uint64
+	pickFail4 atomic.Uint64
+	pickFail5 atomic.Uint64
+)
+
 // PickPlanFromBucket pick one plan from bucket
 func (l *LRUPlanCache) pickFromBucket(bucket map[*list.Element]struct{}, matchOpts *utilpc.PlanCacheMatchOpts) (*list.Element, bool) {
 	for k := range bucket {
@@ -262,31 +271,37 @@ func (l *LRUPlanCache) pickFromBucket(bucket map[*list.Element]struct{}, matchOp
 		// check param types' compatibility
 		ok1 := checkTypesCompatibility4PC(plan.matchOpts.ParamTypes, matchOpts.ParamTypes)
 		if !ok1 {
+			pickFail0.Add(1)
 			continue
 		}
 
 		// check limit offset and key if equal and check switch if enabled
 		ok2 := checkUint64SliceIfEqual(plan.matchOpts.LimitOffsetAndCount, matchOpts.LimitOffsetAndCount)
 		if !ok2 {
+			pickFail1.Add(1)
 			continue
 		}
 		if len(plan.matchOpts.LimitOffsetAndCount) > 0 && !l.sctx.GetSessionVars().EnablePlanCacheForParamLimit {
 			// offset and key slice matched, but it is a plan with param limit and the switch is disabled
+			pickFail2.Add(1)
 			continue
 		}
 		// check subquery switch state
 		if plan.matchOpts.HasSubQuery && !l.sctx.GetSessionVars().EnablePlanCacheForSubquery {
+			pickFail3.Add(1)
 			continue
 		}
 		// table stats has changed
 		// this check can be disabled by turning off system variable tidb_plan_cache_invalidation_on_fresh_stats
 		if l.sctx.GetSessionVars().PlanCacheInvalidationOnFreshStats &&
 			plan.matchOpts.StatsVersionHash != matchOpts.StatsVersionHash {
+			pickFail4.Add(1)
 			continue
 		}
 
 		// below are some SQL variables that can affect the plan
 		if plan.matchOpts.ForeignKeyChecks != matchOpts.ForeignKeyChecks {
+			pickFail5.Add(1)
 			continue
 		}
 		return k, true
