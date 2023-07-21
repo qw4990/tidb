@@ -640,6 +640,7 @@ func (sc *StatementContext) SetSkipPlanCache(reason error) {
 	if !sc.UseCache {
 		return // avoid unnecessary warnings
 	}
+
 	sc.UseCache = false
 	switch sc.CacheType {
 	case DefaultNoCache:

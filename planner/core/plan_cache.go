@@ -16,6 +16,9 @@ package core
 
 import (
 	"context"
+	"github.com/pingcap/tidb/util/logutil"
+	"go.uber.org/zap"
+	"strings"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb/bindinfo"
@@ -314,6 +317,17 @@ func generateNewPlan(ctx context.Context, sctx sessionctx.Context, isNonPrepared
 		if cacheable, reason := isPlanCacheable(sctx, p, len(matchOpts.ParamTypes), len(matchOpts.LimitOffsetAndCount), matchOpts.HasSubQuery); !cacheable {
 			stmtCtx.SetSkipPlanCache(errors.Errorf(reason))
 		}
+	}
+
+	if !stmtCtx.UseCache && strings.Contains(stmtCtx.OriginalSQL, "sbtest") {
+		warningStr := ""
+		for _, w := range stmtCtx.GetWarnings() {
+			warningStr += w.Err.Error() + "; "
+		}
+		logutil.BgLogger().Info("[DEBUG] SetSkipPlanCache",
+			zap.String("sql", stmtCtx.OriginalSQL),
+			zap.String("args", sctx.GetSessionVars().PlanCacheParams.String()),
+			zap.String("warning", warningStr))
 	}
 
 	// put this plan into the plan cache.
