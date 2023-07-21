@@ -321,7 +321,8 @@ func generateNewPlan(ctx context.Context, sctx sessionctx.Context, isNonPrepared
 
 	flag := ""
 	defer func() {
-		if strings.Contains(stmtCtx.OriginalSQL, "test") && strings.Contains(stmtCtx.OriginalSQL, "limit") {
+		xx := strings.ToLower(stmtCtx.OriginalSQL)
+		if strings.Contains(xx, "test") && strings.Contains(xx, "limit") {
 			warningStr := ""
 			for _, w := range stmtCtx.GetWarnings() {
 				warningStr += w.Err.Error() + "; "
