@@ -42,7 +42,6 @@ import (
 	utilpc "github.com/pingcap/tidb/util/plancache"
 	"github.com/pingcap/tidb/util/ranger"
 	"go.uber.org/zap"
-	"strings"
 	"sync/atomic"
 )
 
@@ -301,6 +300,29 @@ func generateNewPlan(ctx context.Context, sctx sessionctx.Context, isNonPrepared
 	stmtCtx := sessVars.StmtCtx
 
 	core_metrics.GetPlanCacheMissCounter(isNonPrepared).Inc()
+
+	flag := ""
+	defer func() {
+		//xx := strings.ToLower(stmtCtx.OriginalSQL)
+		warningStr := ""
+		for _, w := range stmtCtx.GetWarnings() {
+			warningStr += w.Err.Error() + "; "
+		}
+		logutil.BgLogger().Info("[DEBUG] SetSkipPlanCache",
+			zap.String("sql", stmtCtx.OriginalSQL),
+			zap.String("args", sctx.GetSessionVars().PlanCacheParams.String()),
+			zap.String("warning", warningStr),
+			zap.String("flag", flag),
+			zap.Uint64("evict", atomic.LoadUint64(&planCacheEvictCounter)),
+			zap.Uint64("cache-size", sctx.GetSessionVars().SessionPlanCacheSize),
+			zap.Uint64("pf0", pickFail0.Load()),
+			zap.Uint64("pf1", pickFail1.Load()),
+			zap.Uint64("pf2", pickFail2.Load()),
+			zap.Uint64("pf3", pickFail3.Load()),
+			zap.Uint64("pf4", pickFail4.Load()),
+			zap.Uint64("pf5", pickFail5.Load()))
+	}()
+
 	sctx.GetSessionVars().StmtCtx.InPreparedPlanBuilding = true
 	p, names, err := OptimizeAstNode(ctx, sctx, stmtAst.Stmt, is)
 	sctx.GetSessionVars().StmtCtx.InPreparedPlanBuilding = false
@@ -318,30 +340,6 @@ func generateNewPlan(ctx context.Context, sctx sessionctx.Context, isNonPrepared
 			stmtCtx.SetSkipPlanCache(errors.Errorf(reason))
 		}
 	}
-
-	flag := ""
-	defer func() {
-		xx := strings.ToLower(stmtCtx.OriginalSQL)
-		if strings.Contains(xx, "test") {
-			warningStr := ""
-			for _, w := range stmtCtx.GetWarnings() {
-				warningStr += w.Err.Error() + "; "
-			}
-			logutil.BgLogger().Info("[DEBUG] SetSkipPlanCache",
-				zap.String("sql", stmtCtx.OriginalSQL),
-				zap.String("args", sctx.GetSessionVars().PlanCacheParams.String()),
-				zap.String("warning", warningStr),
-				zap.String("flag", flag),
-				zap.Uint64("evict", atomic.LoadUint64(&planCacheEvictCounter)),
-				zap.Uint64("cache-size", sctx.GetSessionVars().SessionPlanCacheSize),
-				zap.Uint64("pf0", pickFail0.Load()),
-				zap.Uint64("pf1", pickFail1.Load()),
-				zap.Uint64("pf2", pickFail2.Load()),
-				zap.Uint64("pf3", pickFail3.Load()),
-				zap.Uint64("pf4", pickFail4.Load()),
-				zap.Uint64("pf5", pickFail5.Load()))
-		}
-	}()
 
 	// put this plan into the plan cache.
 	if stmtCtx.UseCache {
