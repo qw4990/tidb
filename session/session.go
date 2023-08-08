@@ -27,6 +27,7 @@ import (
 	stderrs "errors"
 	"flag"
 	"fmt"
+	"github.com/pingcap/tidb/parser/format"
 	"math"
 	"math/rand"
 	"runtime/pprof"
@@ -1743,6 +1744,17 @@ func (s *session) Parse(ctx context.Context, sql string) ([]ast.StmtNode, error)
 	for _, warn := range warns {
 		s.sessionVars.StmtCtx.AppendWarning(util.SyntaxWarn(warn))
 	}
+
+	if strings.Contains(sql, "Q13") {
+		var sb strings.Builder
+		//restoreFlags := format.RestoreStringSingleQuotes | format.RestoreKeyWordLowercase | format.RestoreNameBackQuotes |
+		//	format.RestoreSpacesAroundBinaryOperation
+		restoreCtx := format.NewRestoreCtx(format.DefaultRestoreFlags, &sb)
+		sb.Reset()
+		stmts[0].Restore(restoreCtx)
+		fmt.Println("-->>> ", stmts, sb.String())
+	}
+
 	return stmts, nil
 }
 
