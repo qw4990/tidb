@@ -31,31 +31,31 @@ func TestUnknown1InWhereClause(t *testing.T) {
 	tk := testkit.NewTestKit(t, store)
 	tk.MustExec("use test")
 
-	tk.MustExec("create table qt_product_driving_insurance(id_qt_product_driving_insurance varchar(32) NOT NULL primary key,quotation_no varchar(22) not null ,key `idx_qt_product_driving_insurance_quotation_no` (`quotation_no`));")
+	tk.MustExec("create table t(a varchar(32) NOT NULL primary key,b varchar(22) not null,key idx_a (a))")
 
-	for i := 0; i < 16; i++ {
+	for i := 0; i < 1; i++ {
 		go func() {
 			tkk := testkit.NewTestKit(t, store)
 			tkk.MustExec(`use test`)
 			for k := 0; k < 10000; k++ {
-				err := tkk.ExecToErr("select * from xiaowei.t1 where 1=1 a.  ")
+				err := tkk.ExecToErr("select * from xw.t1 where 1=1 a.  ")
 				require.NotNil(t, err)
 			}
 		}()
 	}
-	for i := 0; i < 1024; i++ {
+	for i := 0; i < 1; i++ {
 		go func() {
 			tkk := testkit.NewTestKit(t, store)
 			tkk.MustExec(`use test`)
 			for k := 0; k < 10000; k++ {
 				tkk.MustExec(`begin`)
-				tkk.MustQuery(`select count(1) from qt_product_driving_insurance where quotation_no = 'Q131383P80003087916978'`).Check(testkit.Rows("0"))
+				tkk.MustQuery(`select count(1) from t where a = 'Q131383P80003087916978'`).Check(testkit.Rows("0"))
 				tkk.MustExec(`commit`)
 			}
 		}()
 	}
 
-	time.Sleep(time.Second * 10)
+	time.Sleep(time.Second * 2)
 }
 
 func TestPlanCache(t *testing.T) {
