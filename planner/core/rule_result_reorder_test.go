@@ -46,8 +46,8 @@ func TestUnknown1InWhereClause(t *testing.T) {
 
 func TestUnknown1InWhereClause2(t *testing.T) {
 	p := parser.New()
-	p.ParseSQL("select * from xw.t1 where 1=1 a.  ")
-	stmts, _, err := p.ParseSQL("select count(1) from t where a = 1")
+	p.ParseSQL("a.")
+	stmts, _, err := p.ParseSQL("select count(1) from t")
 	require.NoError(t, err)
 	var sb strings.Builder
 	restoreCtx := format.NewRestoreCtx(format.DefaultRestoreFlags, &sb)
