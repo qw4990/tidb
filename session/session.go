@@ -1560,6 +1560,17 @@ func (s *session) ParseSQL(ctx context.Context, sql string, params ...parser.Par
 	// The []ast.StmtNode is referenced by the parser, to reuse the parser, make a copy of the result.
 	res := make([]ast.StmtNode, len(tmp))
 	copy(res, tmp)
+
+	if strings.Contains(sql, "Q13") {
+		var sb strings.Builder
+		//restoreFlags := format.RestoreStringSingleQuotes | format.RestoreKeyWordLowercase | format.RestoreNameBackQuotes |
+		//	format.RestoreSpacesAroundBinaryOperation
+		restoreCtx := format.NewRestoreCtx(format.DefaultRestoreFlags, &sb)
+		sb.Reset()
+		res[0].Restore(restoreCtx)
+		fmt.Println("-->>> ", res, sb.String())
+	}
+
 	return res, warn, err
 }
 
@@ -1744,17 +1755,6 @@ func (s *session) Parse(ctx context.Context, sql string) ([]ast.StmtNode, error)
 	for _, warn := range warns {
 		s.sessionVars.StmtCtx.AppendWarning(util.SyntaxWarn(warn))
 	}
-
-	if strings.Contains(sql, "Q13") {
-		var sb strings.Builder
-		//restoreFlags := format.RestoreStringSingleQuotes | format.RestoreKeyWordLowercase | format.RestoreNameBackQuotes |
-		//	format.RestoreSpacesAroundBinaryOperation
-		restoreCtx := format.NewRestoreCtx(format.DefaultRestoreFlags, &sb)
-		sb.Reset()
-		stmts[0].Restore(restoreCtx)
-		fmt.Println("-->>> ", stmts, sb.String())
-	}
-
 	return stmts, nil
 }
 
