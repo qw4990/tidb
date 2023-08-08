@@ -17,6 +17,7 @@ package core_test
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	plannercore "github.com/pingcap/tidb/planner/core"
 	"github.com/pingcap/tidb/sessionctx/variable"
@@ -24,6 +25,38 @@ import (
 	"github.com/pingcap/tidb/testkit/testdata"
 	"github.com/stretchr/testify/require"
 )
+
+func TestUnknown1InWhereClause(t *testing.T) {
+	store := testkit.CreateMockStore(t)
+	tk := testkit.NewTestKit(t, store)
+	tk.MustExec("use test")
+
+	tk.MustExec("create table qt_product_driving_insurance(id_qt_product_driving_insurance varchar(32) NOT NULL primary key,quotation_no varchar(22) not null ,key `idx_qt_product_driving_insurance_quotation_no` (`quotation_no`));")
+
+	for i := 0; i < 16; i++ {
+		go func() {
+			tkk := testkit.NewTestKit(t, store)
+			tkk.MustExec(`use test`)
+			for k := 0; k < 10000; k++ {
+				err := tkk.ExecToErr("select * from xiaowei.t1 where 1=1 a.  ")
+				require.NotNil(t, err)
+			}
+		}()
+	}
+	for i := 0; i < 1024; i++ {
+		go func() {
+			tkk := testkit.NewTestKit(t, store)
+			tkk.MustExec(`use test`)
+			for k := 0; k < 10000; k++ {
+				tkk.MustExec(`begin`)
+				tkk.MustQuery(`select count(1) from qt_product_driving_insurance where quotation_no = 'Q131383P80003087916978'`).Check(testkit.Rows("0"))
+				tkk.MustExec(`commit`)
+			}
+		}()
+	}
+
+	time.Sleep(time.Second * 10)
+}
 
 func TestPlanCache(t *testing.T) {
 	store := testkit.CreateMockStore(t)
