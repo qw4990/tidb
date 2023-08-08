@@ -1725,7 +1725,7 @@ func (s *session) Parse(ctx context.Context, sql string) ([]ast.StmtNode, error)
 			if s.sessionVars.EnableRedactLog {
 				logutil.Logger(ctx).Debug("parse SQL failed", zap.Error(err), zap.String("SQL", sql))
 			} else {
-				logutil.Logger(ctx).Warn("parse SQL failed", zap.Error(err), zap.String("SQL", sql))
+				//logutil.Logger(ctx).Warn("parse SQL failed", zap.Error(err), zap.String("SQL", sql))
 			}
 			s.sessionVars.StmtCtx.AppendError(err)
 		}

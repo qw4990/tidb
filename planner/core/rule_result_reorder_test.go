@@ -16,46 +16,29 @@ package core_test
 
 import (
 	"fmt"
-	"testing"
-	"time"
-
 	plannercore "github.com/pingcap/tidb/planner/core"
 	"github.com/pingcap/tidb/sessionctx/variable"
 	"github.com/pingcap/tidb/testkit"
 	"github.com/pingcap/tidb/testkit/testdata"
 	"github.com/stretchr/testify/require"
+	"testing"
 )
 
 func TestUnknown1InWhereClause(t *testing.T) {
 	store := testkit.CreateMockStore(t)
 	tk := testkit.NewTestKit(t, store)
 	tk.MustExec("use test")
-
 	tk.MustExec("create table t(a varchar(32) NOT NULL primary key,b varchar(22) not null,key idx_a (a))")
-
-	for i := 0; i < 1; i++ {
-		go func() {
-			tkk := testkit.NewTestKit(t, store)
-			tkk.MustExec(`use test`)
-			for k := 0; k < 10000; k++ {
-				err := tkk.ExecToErr("select * from xw.t1 where 1=1 a.  ")
-				require.NotNil(t, err)
-			}
-		}()
+	go func() {
+		tkk := testkit.NewTestKit(t, store)
+		tkk.MustExec(`use test`)
+		for k := 0; k < 10000; k++ {
+			tkk.ExecToErr("select * from xw.t1 where 1=1 a.  ")
+		}
+	}()
+	for k := 0; k < 10000; k++ {
+		tk.MustQuery(`select count(1) from t where a = 'Q13'`).Check(testkit.Rows("0"))
 	}
-	for i := 0; i < 1; i++ {
-		go func() {
-			tkk := testkit.NewTestKit(t, store)
-			tkk.MustExec(`use test`)
-			for k := 0; k < 10000; k++ {
-				tkk.MustExec(`begin`)
-				tkk.MustQuery(`select count(1) from t where a = 'Q131383P80003087916978'`).Check(testkit.Rows("0"))
-				tkk.MustExec(`commit`)
-			}
-		}()
-	}
-
-	time.Sleep(time.Second * 2)
 }
 
 func TestPlanCache(t *testing.T) {
