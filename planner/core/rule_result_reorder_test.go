@@ -16,11 +16,14 @@ package core_test
 
 import (
 	"fmt"
+	"github.com/pingcap/tidb/parser"
+	"github.com/pingcap/tidb/parser/format"
 	plannercore "github.com/pingcap/tidb/planner/core"
 	"github.com/pingcap/tidb/sessionctx/variable"
 	"github.com/pingcap/tidb/testkit"
 	"github.com/pingcap/tidb/testkit/testdata"
 	"github.com/stretchr/testify/require"
+	"strings"
 	"testing"
 )
 
@@ -39,6 +42,18 @@ func TestUnknown1InWhereClause(t *testing.T) {
 	for k := 0; k < 10000; k++ {
 		tk.MustQuery(`select count(1) from t where a = 'Q13'`).Check(testkit.Rows("0"))
 	}
+}
+
+func TestUnknown1InWhereClause2(t *testing.T) {
+	p := parser.New()
+	p.ParseSQL("select * from xw.t1 where 1=1 a.  ")
+	stmts, _, err := p.ParseSQL("select count(1) from t where a = 'Q13'")
+	require.NoError(t, err)
+	var sb strings.Builder
+	restoreCtx := format.NewRestoreCtx(format.DefaultRestoreFlags, &sb)
+	sb.Reset()
+	stmts[0].Restore(restoreCtx)
+	fmt.Println("-->>> ", sb.String())
 }
 
 func TestPlanCache(t *testing.T) {
