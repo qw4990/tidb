@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/pingcap/tidb/expression"
 	"github.com/pingcap/tidb/kv"
@@ -139,6 +140,19 @@ func (ds *DataSource) PredicatePushDown(predicates []expression.Expression, opt 
 	predicates = ds.AddPrefix4ShardIndexes(ds.SCtx(), predicates)
 	ds.allConds = predicates
 	ds.pushedDownConds, predicates = expression.PushDownExprs(ds.SCtx().GetSessionVars().StmtCtx, predicates, ds.SCtx().GetClient(), kv.UnSpecified)
+
+	hack := strings.Contains(ds.SCtx().GetSessionVars().StmtCtx.OriginalSQL, "use_index_merge")
+	if hack {
+		// pretend that `json_memberof` can be pushed down.
+		hacked := make([]expression.Expression, 0, len(predicates))
+		for _, p := range predicates {
+			if !strings.Contains(p.String(), "json_memberof") {
+				hacked = append(hacked, p)
+			}
+		}
+		predicates = hacked
+	}
+
 	appendDataSourcePredicatePushDownTraceStep(ds, opt)
 	return predicates, ds
 }
