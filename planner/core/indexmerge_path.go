@@ -759,9 +759,9 @@ func (ds *DataSource) buildPartialPaths4MVIndex(accessFilters []expression.Expre
 
 // isSafeTypeConversion4MVIndexRange checks whether it is safe to convert valType to mvIndexType when building ranges for MVIndexes.
 func isSafeTypeConversion4MVIndexRange(valType, mvIndexType *types.FieldType) (safe bool) {
-	vET := valType.EvalType()
-	idxET := mvIndexType.EvalType()
-	if vET == types.ETString && idxET != types.ETString {
+	// for safety, forbid type conversion when building ranges for MVIndexes.
+	// TODO: loose this restriction.
+	if valType.EvalType() != mvIndexType.EvalType() {
 		// for example, converting '1' to 1 to access INT MVIndex may cause some wrong result.
 		return false
 	}
