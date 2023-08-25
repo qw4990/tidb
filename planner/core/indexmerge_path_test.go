@@ -301,6 +301,20 @@ func TestMVIndexFullScan(t *testing.T) {
 	tk.MustGetErrMsg(`select /*+ use_index(t, kj) */ count(*) from t`, "[planner:1815]Internal : Can't find a proper physical plan for this query")
 }
 
+func TestMVIndexLimitSink(t *testing.T) {
+	store := testkit.CreateMockStore(t)
+	tk := testkit.NewTestKit(t, store)
+	tk.MustExec("use test")
+	tk.MustExec(`CREATE TABLE t2 (a int(11) DEFAULT NULL,
+	b int(11) DEFAULT NULL, c int(11) DEFAULT NULL, KEY a (a), KEY b (b))`)
+	// The limit should be sunk into the IndexMerge
+	tk.MustQuery(`explain select /*+ use_index_merge(t2, a, b) */ * from t2 where a=1 and b=1 limit 1`).Check(testkit.Rows(
+		`IndexMerge_14 0.01 root  type: intersection, limit embedded(offset:0, count:1)`,
+		`├─IndexRangeScan_11(Build) 10.00 cop[tikv] table:t2, index:a(a) range:[1,1], keep order:false, stats:pseudo`,
+		`├─IndexRangeScan_12(Build) 10.00 cop[tikv] table:t2, index:b(b) range:[1,1], keep order:false, stats:pseudo`,
+		`└─TableRowIDScan_13(Probe) 0.01 cop[tikv] table:t2 keep order:false, stats:pseudo`))
+}
+
 func TestMVIndexEmptyArray(t *testing.T) {
 	store := testkit.CreateMockStore(t)
 	tk := testkit.NewTestKit(t, store)
