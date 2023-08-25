@@ -872,6 +872,8 @@ func (p *PhysicalLimit) attach2Task(tasks ...task) task {
 		mpp = attachPlan2Task(pushedDownLimit, mpp).(*mppTask)
 		pushedDownLimit.SetSchema(pushedDownLimit.children[0].Schema())
 		t = mpp.convertToRootTask(p.SCtx())
+	} else if root, ok := t.(*rootTask); ok {
+		sunk = p.sinkIntoIndexMerge(root)
 	}
 	if sunk {
 		return t
