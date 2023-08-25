@@ -301,7 +301,7 @@ func TestMVIndexFullScan(t *testing.T) {
 	tk.MustGetErrMsg(`select /*+ use_index(t, kj) */ count(*) from t`, "[planner:1815]Internal : Can't find a proper physical plan for this query")
 }
 
-func TestMVIndexLimitSink(t *testing.T) {
+func TestIndexMergeLimitSink(t *testing.T) {
 	store := testkit.CreateMockStore(t)
 	tk := testkit.NewTestKit(t, store)
 	tk.MustExec("use test")
@@ -313,6 +313,19 @@ func TestMVIndexLimitSink(t *testing.T) {
 		`├─IndexRangeScan_11(Build) 10.00 cop[tikv] table:t2, index:a(a) range:[1,1], keep order:false, stats:pseudo`,
 		`├─IndexRangeScan_12(Build) 10.00 cop[tikv] table:t2, index:b(b) range:[1,1], keep order:false, stats:pseudo`,
 		`└─TableRowIDScan_13(Probe) 0.01 cop[tikv] table:t2 keep order:false, stats:pseudo`))
+}
+
+func TestMVIndexLimitSink(t *testing.T) {
+	store := testkit.CreateMockStore(t)
+	tk := testkit.NewTestKit(t, store)
+	tk.MustExec("use test")
+	tk.MustExec(`CREATE TABLE t (j1 JSON, j2 JSON, a1 int, INDEX idx1((CAST(j1 AS SIGNED ARRAY))), INDEX idx2((CAST(j2 AS SIGNED ARRAY))))`)
+	// The limit should be sunk into the IndexMerge
+	tk.MustQuery(`EXPLAIN SELECT /*+ use_index_merge(t, idx1) */ * FROM t WHERE (1 member of (j1)) LIMIT 20`).Check(testkit.Rows(
+		`IndexMerge_13 10.00 root  type: union, limit embedded(offset:0, count:20)`,
+		`├─Limit_12(Build) 10.00 cop[tikv]  offset:0, count:20`,
+		"│ └─IndexRangeScan_10 10.00 cop[tikv] table:t, index:idx1(cast(`j1` as signed array)) range:[1,1], keep order:false, stats:pseudo",
+		"└─TableRowIDScan_11(Probe) 10.00 cop[tikv] table:t keep order:false, stats:pseudo"))
 }
 
 func TestMVIndexEmptyArray(t *testing.T) {
