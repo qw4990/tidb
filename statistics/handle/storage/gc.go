@@ -35,6 +35,15 @@ import (
 	"go.uber.org/zap"
 )
 
+// StatsGCImpl is used to GC unnecessary table stats.
+type StatsGCImpl struct {
+	pool util.SessionPool
+}
+
+func NewStatsGCImpl(pool util.SessionPool) *StatsGCImpl {
+	return &StatsGCImpl{pool}
+}
+
 // DeleteTableStatsFromKV deletes table statistics from kv.
 // A statsID refers to statistic of a table or a partition.
 func DeleteTableStatsFromKV(sctx sessionctx.Context, statsIDs []int64) (err error) {
@@ -75,8 +84,12 @@ func DeleteTableStatsFromKV(sctx sessionctx.Context, statsIDs []int64) (err erro
 	return nil
 }
 
-// ClearOutdatedHistoryStats clear outdated historical stats
-func ClearOutdatedHistoryStats(sctx sessionctx.Context) error {
+// ClearOutdatedHistoryStats clear outdated historical stats.
+func (gc *StatsGCImpl) ClearOutdatedHistoryStats() error {
+	return util.CallWithSCtx(gc.pool, clearOutdatedHistoryStats)
+}
+
+func clearOutdatedHistoryStats(sctx sessionctx.Context) error {
 	sql := "select count(*) from mysql.stats_meta_history use index (idx_create_time) where create_time <= NOW() - INTERVAL %? SECOND"
 	rs, err := util.Exec(sctx, sql, variable.HistoricalStatsDuration.Load().Seconds())
 	if err != nil {
@@ -105,8 +118,14 @@ func ClearOutdatedHistoryStats(sctx sessionctx.Context) error {
 	return nil
 }
 
-// GCHistoryStatsFromKV delete history stats from kv.
-func GCHistoryStatsFromKV(sctx sessionctx.Context, physicalID int64) (err error) {
+func (gc *StatsGCImpl) GCHistoryStatsFromKV(physicalID int64) error {
+	return util.CallWithSCtx(gc.pool, func(sctx sessionctx.Context) error {
+		return gcHistoryStatsFromKV(sctx, physicalID)
+	})
+}
+
+// gcHistoryStatsFromKV delete history stats from kv.
+func gcHistoryStatsFromKV(sctx sessionctx.Context, physicalID int64) (err error) {
 	sql := "delete from mysql.stats_history where table_id = %?"
 	_, err = util.Exec(sctx, sql, physicalID)
 	if err != nil {
@@ -153,10 +172,12 @@ func DeleteHistStatsFromKV(sctx sessionctx.Context, physicalID int64, histID int
 }
 
 // RemoveDeletedExtendedStats removes deleted extended stats.
-func RemoveDeletedExtendedStats(sctx sessionctx.Context, version uint64) (err error) {
-	const sql = "delete from mysql.stats_extended where status = %? and version < %?"
-	_, err = util.Exec(sctx, sql, statistics.ExtendedStatsDeleted, version)
-	return
+func (gc *StatsGCImpl) RemoveDeletedExtendedStats(version uint64) (err error) {
+	return util.CallWithSCtx(gc.pool, func(sctx sessionctx.Context) error {
+		const sql = "delete from mysql.stats_extended where status = %? and version < %?"
+		_, err = util.Exec(sctx, sql, statistics.ExtendedStatsDeleted, version)
+		return err
+	})
 }
 
 // GCTableStats GC this table's stats.

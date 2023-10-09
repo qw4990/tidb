@@ -57,6 +57,8 @@ type Handle struct {
 	gpool *gp.Pool
 	pool  sessionPool
 
+	util.StatsGC
+
 	// initStatsCtx is the ctx only used for initStats
 	initStatsCtx sessionctx.Context
 
@@ -135,8 +137,11 @@ type sessionPool interface {
 func NewHandle(_, initStatsCtx sessionctx.Context, lease time.Duration, pool sessionPool, tracker sessionctx.SysProcTracker, autoAnalyzeProcIDGetter func() uint64) (*Handle, error) {
 	cfg := config.GetGlobalConfig()
 
+	gcStats := storage.NewStatsGCImpl(pool)
+
 	handle := &Handle{
 		gpool:                   gp.New(math.MaxInt16, time.Minute),
+		StatsGC:                 gcStats,
 		ddlEventCh:              make(chan *ddlUtil.Event, 1000),
 		listHead:                NewSessionStatsCollector(),
 		idxUsageListHead:        usage.NewSessionIndexUsageCollector(nil),

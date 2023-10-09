@@ -16,15 +16,92 @@ package util
 
 import (
 	"context"
+	"strconv"
 
+	"github.com/ngaut/pools"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb/kv"
 	"github.com/pingcap/tidb/parser/ast"
 	"github.com/pingcap/tidb/parser/terror"
 	"github.com/pingcap/tidb/sessionctx"
+	"github.com/pingcap/tidb/sessionctx/variable"
 	"github.com/pingcap/tidb/util/chunk"
 	"github.com/pingcap/tidb/util/sqlexec"
 )
+
+// SessionPool is used to recycle sessionctx.
+type SessionPool interface {
+	Get() (pools.Resource, error)
+	Put(pools.Resource)
+}
+
+// UpdateSCtxVarsForStats updates all necessary variables that may affect the behavior of statistics.
+func UpdateSCtxVarsForStats(sctx sessionctx.Context) error {
+	// analyzer version
+	verInString, err := sctx.GetSessionVars().GlobalVarsAccessor.GetGlobalSysVar(variable.TiDBAnalyzeVersion)
+	if err != nil {
+		return err
+	}
+	ver, err := strconv.ParseInt(verInString, 10, 64)
+	if err != nil {
+		return err
+	}
+	sctx.GetSessionVars().AnalyzeVersion = int(ver)
+
+	// enable historical stats
+	val, err := sctx.GetSessionVars().GlobalVarsAccessor.GetGlobalSysVar(variable.TiDBEnableHistoricalStats)
+	if err != nil {
+		return err
+	}
+	sctx.GetSessionVars().EnableHistoricalStats = variable.TiDBOptOn(val)
+
+	// partition mode
+	pruneMode, err := sctx.GetSessionVars().GlobalVarsAccessor.GetGlobalSysVar(variable.TiDBPartitionPruneMode)
+	if err != nil {
+		return err
+	}
+	sctx.GetSessionVars().PartitionPruneMode.Store(pruneMode)
+
+	// enable analyze snapshot
+	analyzeSnapshot, err := sctx.GetSessionVars().GlobalVarsAccessor.GetGlobalSysVar(variable.TiDBEnableAnalyzeSnapshot)
+	if err != nil {
+		return err
+	}
+	sctx.GetSessionVars().EnableAnalyzeSnapshot = variable.TiDBOptOn(analyzeSnapshot)
+
+	// enable skip column types
+	val, err = sctx.GetSessionVars().GlobalVarsAccessor.GetGlobalSysVar(variable.TiDBAnalyzeSkipColumnTypes)
+	if err != nil {
+		return err
+	}
+	sctx.GetSessionVars().AnalyzeSkipColumnTypes = variable.ParseAnalyzeSkipColumnTypes(val)
+
+	// skip missing partition stats
+	val, err = sctx.GetSessionVars().GlobalVarsAccessor.GetGlobalSysVar(variable.TiDBSkipMissingPartitionStats)
+	if err != nil {
+		return err
+	}
+	sctx.GetSessionVars().SkipMissingPartitionStats = variable.TiDBOptOn(val)
+	return nil
+}
+
+// CallWithSCtx ...
+func CallWithSCtx(pool SessionPool, f func(sctx sessionctx.Context) error) (err error) {
+	se, err := pool.Get()
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err == nil { // only recycle when no error
+			pool.Put(se)
+		}
+	}()
+	sctx := se.(sessionctx.Context)
+	if err := UpdateSCtxVarsForStats(sctx); err != nil { // update stats variables automatically
+		return err
+	}
+	return f(sctx)
+}
 
 // StatsCtx is used to mark the request is from stats module.
 func StatsCtx(ctx context.Context) context.Context {

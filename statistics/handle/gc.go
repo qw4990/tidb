@@ -64,7 +64,7 @@ func (h *Handle) GCStats(is infoschema.InfoSchema, ddlLease time.Duration) (err 
 		}
 		_, existed := is.TableByID(row.GetInt64(0))
 		if !existed {
-			if err := h.gcHistoryStatsFromKV(row.GetInt64(0)); err != nil {
+			if err := h.GCHistoryStatsFromKV(row.GetInt64(0)); err != nil {
 				return errors.Trace(err)
 			}
 		}
@@ -76,7 +76,7 @@ func (h *Handle) GCStats(is infoschema.InfoSchema, ddlLease time.Duration) (err 
 			zap.Error(err))
 	}
 
-	return h.removeDeletedExtendedStats(gcVer)
+	return h.RemoveDeletedExtendedStats(gcVer)
 }
 
 // GetLastGCTimestamp loads the last gc time from mysql.tidb.
@@ -100,36 +100,10 @@ func (h *Handle) gcTableStats(is infoschema.InfoSchema, physicalID int64) error 
 	})
 }
 
-// ClearOutdatedHistoryStats clear outdated historical stats
-func (h *Handle) ClearOutdatedHistoryStats() error {
-	return h.callWithSCtx(func(sctx sessionctx.Context) error {
-		return storage.ClearOutdatedHistoryStats(sctx)
-	})
-}
-
-func (h *Handle) gcHistoryStatsFromKV(physicalID int64) error {
-	return h.callWithSCtx(func(sctx sessionctx.Context) error {
-		return storage.GCHistoryStatsFromKV(sctx, physicalID)
-	}, flagWrapTxn)
-}
-
-// deleteHistStatsFromKV deletes all records about a column or an index and updates version.
-func (h *Handle) deleteHistStatsFromKV(physicalID int64, histID int64, isIndex int) (err error) {
-	return h.callWithSCtx(func(sctx sessionctx.Context) error {
-		return storage.DeleteHistStatsFromKV(sctx, physicalID, histID, isIndex)
-	}, flagWrapTxn)
-}
-
 // DeleteTableStatsFromKV deletes table statistics from kv.
 // A statsID refers to statistic of a table or a partition.
 func (h *Handle) DeleteTableStatsFromKV(statsIDs []int64) (err error) {
 	return h.callWithSCtx(func(sctx sessionctx.Context) error {
 		return storage.DeleteTableStatsFromKV(sctx, statsIDs)
-	}, flagWrapTxn)
-}
-
-func (h *Handle) removeDeletedExtendedStats(version uint64) (err error) {
-	return h.callWithSCtx(func(sctx sessionctx.Context) error {
-		return storage.RemoveDeletedExtendedStats(sctx, version)
 	}, flagWrapTxn)
 }
