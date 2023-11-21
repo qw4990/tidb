@@ -1166,6 +1166,7 @@ import (
 	GetFormatSelector                      "{DATE|DATETIME|TIME|TIMESTAMP}"
 	GlobalScope                            "The scope of variable"
 	StatementScope                         "The scope of statement"
+	BindingType                            "The type of binding"
 	GroupByClause                          "GROUP BY clause"
 	HavingClause                           "HAVING clause"
 	AsOfClause                             "AS OF clause"
@@ -11786,6 +11787,19 @@ ShowLikeOrWhereOpt:
 		$$ = $2
 	}
 
+BindingType:
+	{
+		$$ = false
+	}
+|	"GLOBAL"
+	{
+		$$ = true
+	}
+|	"SESSION"
+	{
+		$$ = false
+	}
+
 GlobalScope:
 	{
 		$$ = false
@@ -13803,7 +13817,7 @@ BindableStmt:
  *      CREATE GLOBAL BINDING FOR select Col1,Col2 from table USING select Col1,Col2 from table use index(Col1)
  *******************************************************************/
 CreateBindingStmt:
-	"CREATE" GlobalScope "BINDING" "FOR" BindableStmt "USING" BindableStmt
+	"CREATE" BindingType "BINDING" "FOR" BindableStmt "USING" BindableStmt
 	{
 		startOffset := parser.startOffset(&yyS[yypt-2])
 		endOffset := parser.startOffset(&yyS[yypt-1])
