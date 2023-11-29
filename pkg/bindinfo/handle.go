@@ -926,6 +926,7 @@ func (h *BindHandle) callWithSCtx(f func(sctx sessionctx.Context) error) (err er
 	sctx := h.sctx.Context
 
 	// TODO: check whether this sctx is already in a txn
+	// always wrap with a transaction to make it safer.
 	if _, _, err := ExecRows(sctx, "BEGIN PESSIMISTIC"); err != nil {
 		return err
 	}
