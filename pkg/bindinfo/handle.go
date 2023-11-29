@@ -724,8 +724,8 @@ func (h *BindHandle) newBindRecord(row chunk.Row) (string, *BindRecord, error) {
 	sqlDigest := parser.DigestNormalized(bindRecord.OriginalSQL)
 
 	err := h.callWithSCtx(func(sctx sessionctx.Context) error {
-		h.sctx.GetSessionVars().CurrentDB = bindRecord.Db
-		return bindRecord.prepareHints(h.sctx.Context)
+		sctx.GetSessionVars().CurrentDB = bindRecord.Db
+		return bindRecord.prepareHints(sctx)
 	})
 	return sqlDigest.String(), bindRecord, err
 }
