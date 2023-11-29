@@ -722,10 +722,11 @@ func (h *BindHandle) newBindRecord(row chunk.Row) (string, *BindRecord, error) {
 		Bindings:    []Binding{hint},
 	}
 	sqlDigest := parser.DigestNormalized(bindRecord.OriginalSQL)
-	h.sctx.Lock()
-	defer h.sctx.Unlock()
-	h.sctx.GetSessionVars().CurrentDB = bindRecord.Db
-	err := bindRecord.prepareHints(h.sctx.Context)
+
+	err := h.callWithSCtx(func(sctx sessionctx.Context) error {
+		h.sctx.GetSessionVars().CurrentDB = bindRecord.Db
+		return bindRecord.prepareHints(h.sctx.Context)
+	})
 	return sqlDigest.String(), bindRecord, err
 }
 
