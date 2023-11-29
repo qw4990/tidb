@@ -17,6 +17,7 @@ package bindinfo
 import (
 	"context"
 	"fmt"
+	"github.com/pingcap/errors"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -918,9 +919,49 @@ func (h *BindHandle) ReloadGlobalBindings() error {
 	return h.Update(true)
 }
 
-func (h *BindHandle) callWithSCtx(f func(sctx sessionctx.Context) error) error {
+func (h *BindHandle) callWithSCtx(f func(sctx sessionctx.Context) error) (err error) {
 	// TODO: use a sctx pool to eliminate the Lock.
 	h.sctx.Lock()
 	defer h.sctx.Unlock()
-	return f(h.sctx.Context)
+	sctx := h.sctx.Context
+
+	// TODO: check whether this sctx is already in a txn
+	if _, _, err := ExecRows(sctx, "BEGIN PESSIMISTIC"); err != nil {
+		return err
+	}
+	defer func() {
+		err = finishTransaction(sctx, err)
+	}()
+	err = f(h.sctx.Context)
+	return
+
+}
+
+// finishTransaction will execute `commit` when error is nil, otherwise `rollback`.
+func finishTransaction(sctx sessionctx.Context, err error) error {
+	if err == nil {
+		_, _, err = ExecRows(sctx, "COMMIT")
+	} else {
+		_, _, err1 := ExecRows(sctx, "rollback")
+		terror.Log(errors.Trace(err1))
+	}
+	return errors.Trace(err)
+}
+
+// Exec is a helper function to execute sql and return RecordSet.
+func Exec(sctx sessionctx.Context, sql string, args ...interface{}) (sqlexec.RecordSet, error) {
+	sqlExec, ok := sctx.(sqlexec.SQLExecutor)
+	if !ok {
+		return nil, errors.Errorf("invalid sql executor")
+	}
+	return sqlExec.ExecuteInternal(kv.WithInternalSourceType(context.Background(), kv.InternalTxnBindInfo), sql, args...)
+}
+
+// ExecRows is a helper function to execute sql and return rows and fields.
+func ExecRows(sctx sessionctx.Context, sql string, args ...interface{}) (rows []chunk.Row, fields []*ast.ResultField, err error) {
+	sqlExec, ok := sctx.(sqlexec.RestrictedSQLExecutor)
+	if !ok {
+		return nil, nil, errors.Errorf("invalid sql executor")
+	}
+	return sqlExec.ExecRestrictedSQL(kv.WithInternalSourceType(context.Background(), kv.InternalTxnBindInfo), nil, sql, args...)
 }
