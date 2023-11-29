@@ -16,6 +16,7 @@ package bindinfo
 
 import (
 	"context"
+	"github.com/pingcap/tidb/pkg/sessionctx"
 	"strconv"
 	"strings"
 
@@ -177,9 +178,13 @@ func (h *BindHandle) CaptureBaselines() {
 		if bindSQL == "" {
 			continue
 		}
-		h.sctx.Lock()
-		charset, collation := h.sctx.GetSessionVars().GetCharsetInfo()
-		h.sctx.Unlock()
+
+		var charset, collation string
+		_ = h.callWithSCtx(func(sctx sessionctx.Context) error {
+			charset, collation = h.sctx.GetSessionVars().GetCharsetInfo()
+			return nil
+		})
+
 		binding := Binding{
 			BindSQL:   bindSQL,
 			Status:    Enabled,
