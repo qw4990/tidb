@@ -917,3 +917,10 @@ func (h *BindHandle) ReloadGlobalBindings() error {
 	h.bindInfo.Unlock()
 	return h.Update(true)
 }
+
+func (h *BindHandle) callWithSCtx(f func(sctx sessionctx.Context) error) error {
+	// TODO: use a sctx pool to eliminate the Lock.
+	h.sctx.Lock()
+	defer h.sctx.Unlock()
+	return f(h.sctx.Context)
+}
