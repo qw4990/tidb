@@ -1,6 +1,8 @@
 package bindinfo
 
 import (
+	"errors"
+	"fmt"
 	"github.com/pingcap/tidb/pkg/sessionctx"
 	"github.com/pingcap/tidb/pkg/util/chunk"
 	"strings"
@@ -17,7 +19,7 @@ type PlanBaseline struct {
 	Digest     string // identifier of this plan baseline.
 	SQLDigest  string // identifier of the SQL statement.
 	PlanDigest string // identifier of the execution plan.
-	HintSet    string // a set of hints corresponding to the SQL to generate the execution plan.
+	PlanHint   string // a set of hints corresponding to the SQL to generate the execution plan.
 	Status     string // the status of this plan baseline: accepted, preferred, unverified, disabled.
 	//TODO: SchemaVer
 
@@ -122,8 +124,48 @@ func (h *planBaselineHandle) AddUnVerifiedBaseline(sqlDigest, planDigest, outlin
 }
 
 func (h *planBaselineHandle) CreateBaselineByPlanDigest(planDigest string) error {
-	// TODO
-	return nil
+	return callWithSCtx(h.sPool, false, func(sctx sessionctx.Context) error {
+		rows, _, err := execRows(sctx,
+			fmt.Sprintf(`select plan_hint, digest, digest_text, query_sample_text, plan
+            from information_schema.cluster_statements_summary_history where plan_digest='%v'`, planDigest))
+		if err != nil {
+			return err
+		}
+		if len(rows) == 0 {
+			return errors.New("not found")
+		}
+
+		b := &PlanBaseline{
+			Digest:       planDigest, // always equal to planDigest ?
+			SQLDigest:    rows[0].GetString(1),
+			PlanDigest:   planDigest,
+			PlanHint:     rows[0].GetString(0),
+			Status:       StateAccepted,
+			Creator:      "user",
+			Source:       "plan-digest",
+			Created:      time.Now(),
+			Modified:     time.Now(),
+			LastActive:   time.Time{},
+			LastVerified: time.Now(),
+			NormSQLText:  rows[0].GetString(2),
+			SQLText:      rows[0].GetString(3),
+			PlanText:     rows[0].GetString(4),
+			Comment:      "",
+			Extras:       "",
+		}
+
+		insertStmt := fmt.Sprintf(`insert into mysql.plan_baseline values
+        ('%v','%v','%v','%v','%v','%v','%v','%v','%v','%v','%v','%v','%v','%v','%v','%v') on duplicate key update`,
+			b.Digest, b.SQLDigest, b.PlanDigest, b.PlanHint, b.Status, b.Creator, b.Source, b.Created,
+			b.Modified, b.LastActive, b.LastVerified, b.NormSQLText, b.SQLText, b.PlanText, b.Comment, b.Extras)
+		_, _, err = execRows(sctx, insertStmt)
+		if err != nil {
+			return err
+		}
+
+		h.cache.Put([]*PlanBaseline{b})
+		return nil
+	})
 }
 
 func (h *planBaselineHandle) UpdateBaselineStatus(digest, sqlDigest, planDigest, status string) error {
