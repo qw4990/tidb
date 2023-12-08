@@ -1,12 +1,16 @@
 package bindinfo
 
 import (
+	"context"
 	"errors"
 	"fmt"
-	"github.com/pingcap/tidb/pkg/sessionctx"
-	"github.com/pingcap/tidb/pkg/util/chunk"
+	"github.com/pingcap/tidb/pkg/parser"
 	"strings"
 	"time"
+
+	"github.com/pingcap/tidb/pkg/sessionctx"
+	"github.com/pingcap/tidb/pkg/util/chunk"
+	"github.com/pingcap/tidb/pkg/util/hint"
 )
 
 const StateAccepted = "accepted"
@@ -20,6 +24,7 @@ type PlanBaseline struct {
 	SQLDigest  string // identifier of the SQL statement.
 	PlanDigest string // identifier of the execution plan.
 	PlanHint   string // a set of hints corresponding to the SQL to generate the execution plan.
+	Hint       *hint.HintsSet
 	Status     string // the status of this plan baseline: accepted, preferred, unverified, disabled.
 	//TODO: SchemaVer
 
@@ -126,7 +131,7 @@ func (h *planBaselineHandle) AddUnVerifiedBaseline(sqlDigest, planDigest, outlin
 func (h *planBaselineHandle) CreateBaselineByPlanDigest(planDigest string) error {
 	return callWithSCtx(h.sPool, false, func(sctx sessionctx.Context) error {
 		rows, _, err := execRows(sctx,
-			fmt.Sprintf(`select plan_hint, digest, digest_text, query_sample_text, plan
+			fmt.Sprintf(`select plan_hint, digest, digest_text, query_sample_text, plan, charset, collation, schema_name
             from information_schema.cluster_statements_summary_history where plan_digest='%v'`, planDigest))
 		if err != nil {
 			return err
@@ -134,12 +139,26 @@ func (h *planBaselineHandle) CreateBaselineByPlanDigest(planDigest string) error
 		if len(rows) == 0 {
 			return errors.New("not found")
 		}
+		planHint, sqlDigest, normSQLText, sqlText := rows[0].GetString(0), rows[0].GetString(1), rows[0].GetString(2), rows[0].GetString(3)
+		planText, charset, collation, dbName := rows[0].GetString(4), rows[0].GetString(5), rows[0].GetString(6), rows[0].GetString(7)
+
+		p := parser.New()
+		stmt, err := p.ParseOneStmt(sqlText, charset, collation)
+		if err != nil {
+			return err
+		}
+		sqlWithHint := GenerateBindSQL(context.Background(), stmt, planHint, false, dbName)
+		hintSet, _, _, err := hint.ParseHintsSet(p, sqlWithHint, charset, collation, dbName)
+		if err != nil {
+			return err
+		}
 
 		b := &PlanBaseline{
 			Digest:       planDigest, // always equal to planDigest ?
-			SQLDigest:    rows[0].GetString(1),
+			SQLDigest:    sqlDigest,
 			PlanDigest:   planDigest,
-			PlanHint:     rows[0].GetString(0),
+			PlanHint:     planHint,
+			Hint:         hintSet,
 			Status:       StateAccepted,
 			Creator:      "user",
 			Source:       "plan-digest",
@@ -147,9 +166,9 @@ func (h *planBaselineHandle) CreateBaselineByPlanDigest(planDigest string) error
 			Modified:     time.Now(),
 			LastActive:   time.Time{},
 			LastVerified: time.Now(),
-			NormSQLText:  rows[0].GetString(2),
-			SQLText:      rows[0].GetString(3),
-			PlanText:     rows[0].GetString(4),
+			NormSQLText:  normSQLText,
+			SQLText:      sqlText,
+			PlanText:     planText,
 			Comment:      "",
 			Extras:       "",
 		}
