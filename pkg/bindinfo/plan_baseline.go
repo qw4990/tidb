@@ -59,6 +59,9 @@ type PlanBaselineHandle interface {
 	// DropBaseline drops the specified plan baseline.
 	DropBaseline(digest, sqlDigest, planDigest, status string) error
 
+	// UpdateCache updates the cache of plan baselines.
+	UpdateCache() error
+
 	// Purge automatically purges useless plan baselines, whose LastActive < NOW()-tidb_plan_baseline_retention_days.
 	Purge() error
 }
@@ -130,6 +133,10 @@ func (h *planBaselineHandle) UpdateBaselineStatus(digest, sqlDigest, planDigest,
 
 func (h *planBaselineHandle) DropBaseline(digest, sqlDigest, planDigest, status string) error {
 	// TODO
+	return nil
+}
+
+func (h *planBaselineHandle) UpdateCache() error {
 	return nil
 }
 
