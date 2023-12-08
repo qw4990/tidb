@@ -37,48 +37,61 @@ func (h *evolutionHandle) EvolveAll() error {
 	return nil
 }
 
-func (h *evolutionHandle) EvolveOne(sqlDigest string) error {
-	return callWithSCtx(h.sPool, false, func(sctx sessionctx.Context) error {
+func (h *evolutionHandle) EvolveOne(sqlDigest string) (results []*EvolutionResult, err error) {
+	err = callWithSCtx(h.sPool, false, func(sctx sessionctx.Context) error {
 		baselines, err := h.baselineHandle.GetBaseline("", sqlDigest, "", "")
 		if err != nil {
 			return nil
 		}
 
-		results := make([]*EvolutionResult, 0, len(baselines))
-		for _, baseline := range baselines {
-			hintedStmt := hintedStmtFromBaseline(baseline)
-			rows, _, err := execRows(sctx, "explain format='verbose' "+hintedStmt) // TODO: what if it contains decorrelated sub-query?
-			if err != nil {
-				return err
-			}
-			estCost := rows[0].GetString(3)
-
-			execBegin := time.Now()
-			_, _, err = execRows(sctx, "explain analyze "+hintedStmt) // TODO: resource control
-			if err != nil {
-				return err
-			}
-			execTime := time.Since(execBegin)
-
-			results = append(results, &EvolutionResult{
-				BaselineDigest: baseline.Digest,
-				EstPlanCost:    estCost,
-				ExecTime:       execTime,
-				EvolutionTime:  time.Now(),
-				SQLText:        baseline.SQLText,
-				PlanText:       "", // TODO
-			})
+		results, err = evolveBaselines(sctx, baselines)
+		if err != nil {
+			return err
 		}
 
-		for _, r := range results {
-			if _, _, err := execRows(sctx, "insert into mysql.plan_evolution values (?,?,?,?,?,?)",
-				r.BaselineDigest, r.EstPlanCost, r.ExecTime, r.EvolutionTime, r.SQLText, r.PlanText); err != nil {
-				return err
-			}
-		}
+		return writeEvolutionResults(sctx, results)
 
-		return nil
+		// TODO: automatically accept verified baselines?
 	})
+	return
+}
+
+func evolveBaselines(sctx sessionctx.Context, baselines []*PlanBaseline) (results []*EvolutionResult, err error) {
+	for _, baseline := range baselines {
+		hintedStmt := hintedStmtFromBaseline(baseline)
+		rows, _, err := execRows(sctx, "explain format='verbose' "+hintedStmt) // TODO: what if it contains decorrelated sub-query?
+		if err != nil {
+			return nil, err
+		}
+		estCost := rows[0].GetString(3)
+
+		execBegin := time.Now()
+		_, _, err = execRows(sctx, "explain analyze "+hintedStmt) // TODO: resource control
+		if err != nil {
+			return nil, err
+		}
+		execTime := time.Since(execBegin)
+
+		results = append(results, &EvolutionResult{
+			BaselineDigest: baseline.Digest,
+			EstPlanCost:    estCost,
+			ExecTime:       execTime,
+			EvolutionTime:  time.Now(),
+			SQLText:        baseline.SQLText,
+			PlanText:       "", // TODO
+		})
+	}
+	return
+}
+
+func writeEvolutionResults(sctx sessionctx.Context, results []*EvolutionResult) error {
+	for _, r := range results {
+		if _, _, err := execRows(sctx, "insert into mysql.plan_evolution values (?,?,?,?,?,?)",
+			r.BaselineDigest, r.EstPlanCost, r.ExecTime, r.EvolutionTime, r.SQLText, r.PlanText); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func hintedStmtFromBaseline(baseline *PlanBaseline) string {
