@@ -1,6 +1,9 @@
 package bindinfo
 
 import (
+	"github.com/pingcap/tidb/pkg/sessionctx"
+	"github.com/pingcap/tidb/pkg/util/chunk"
+	"strings"
 	"time"
 )
 
@@ -58,4 +61,67 @@ type PlanBaselineHandle interface {
 
 	// Purge automatically purges useless plan baselines, whose LastActive < NOW()-tidb_plan_baseline_retention_days.
 	Purge() error
+}
+
+type planBaselineHandle struct {
+	sPool SessionPool
+}
+
+func NewPlanBaselineHandle(sPool SessionPool) PlanBaselineHandle {
+	return &planBaselineHandle{sPool: sPool}
+}
+
+func (h *planBaselineHandle) GetBaseline(digest, sqlDigest, planDigest, status string) (baselines []*PlanBaseline, err error) {
+	err = callWithSCtx(h.sPool, false, func(sctx sessionctx.Context) error {
+		var predicates []string
+		if digest != "" {
+			predicates = append(predicates, "digest = "+digest)
+		}
+		if sqlDigest != "" {
+			predicates = append(predicates, "sql_digest = "+sqlDigest)
+		}
+		if planDigest != "" {
+			predicates = append(predicates, "plan_digest = "+planDigest)
+		}
+		if status != "" {
+			predicates = append(predicates, "status = "+status)
+		}
+		rows, _, err := execRows(sctx, "select * from mysql.plan_baselines where "+strings.Join(predicates, " and "))
+		if err != nil {
+			return err
+		}
+		baselines = rows2Baselines(rows)
+		return nil
+	})
+	return
+}
+
+func (h *planBaselineHandle) AddUnVerifiedBaseline(sqlDigest, planDigest, outline string) error {
+	// TODO
+	return nil
+}
+
+func (h *planBaselineHandle) CreateBaselineByPlanDigest(planDigest string) error {
+	// TODO
+	return nil
+}
+
+func (h *planBaselineHandle) UpdateBaselineStatus(digest, sqlDigest, planDigest, status string) error {
+	// TODO
+	return nil
+}
+
+func (h *planBaselineHandle) DropBaseline(digest, sqlDigest, planDigest, status string) error {
+	// TODO
+	return nil
+}
+
+func (h *planBaselineHandle) Purge() error {
+	// TODO
+	return nil
+}
+
+func rows2Baselines(rows []chunk.Row) []*PlanBaseline {
+	// TODO
+	return nil
 }

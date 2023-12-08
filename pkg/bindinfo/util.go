@@ -16,6 +16,7 @@ package bindinfo
 
 import (
 	"context"
+	"github.com/pingcap/tidb/pkg/parser/terror"
 
 	"github.com/ngaut/pools"
 	"github.com/pingcap/errors"
@@ -49,4 +50,34 @@ func execRows(sctx sessionctx.Context, sql string, args ...interface{}) (rows []
 type SessionPool interface {
 	Get() (pools.Resource, error)
 	Put(pools.Resource)
+}
+
+func callWithSCtx(p SessionPool, wrapTxn bool, f func(sctx sessionctx.Context) error) (err error) {
+	resource, err := p.Get()
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err == nil { // only recycle when no error
+			p.Put(resource)
+		}
+	}()
+
+	sctx := resource.(sessionctx.Context)
+	if wrapTxn {
+		if _, err = exec(sctx, "BEGIN PESSIMISTIC"); err != nil {
+			return
+		}
+		defer func() {
+			if err == nil {
+				_, err = exec(sctx, "COMMIT")
+			} else {
+				_, err1 := exec(sctx, "ROLLBACK")
+				terror.Log(errors.Trace(err1))
+			}
+		}()
+	}
+
+	err = f(sctx)
+	return
 }
