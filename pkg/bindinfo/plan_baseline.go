@@ -63,7 +63,14 @@ type PlanBaselineHandle interface {
 	Purge() error
 }
 
+type baselineCache interface {
+	Get(sqlDigest string) []*PlanBaseline
+	Put(baseline []*PlanBaseline)
+}
+
 type planBaselineHandle struct {
+	cache baselineCache
+
 	sPool SessionPool
 }
 
@@ -72,6 +79,16 @@ func NewPlanBaselineHandle(sPool SessionPool) PlanBaselineHandle {
 }
 
 func (h *planBaselineHandle) GetBaseline(digest, sqlDigest, planDigest, status string) (baselines []*PlanBaseline, err error) {
+	vals := h.cache.Get(sqlDigest)
+	if vals != nil {
+		return vals, nil
+	}
+	defer func() {
+		if err != nil {
+			h.cache.Put(baselines)
+		}
+	}()
+
 	err = callWithSCtx(h.sPool, false, func(sctx sessionctx.Context) error {
 		var predicates []string
 		if digest != "" {
