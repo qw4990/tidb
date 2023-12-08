@@ -202,6 +202,7 @@ func rows2Baselines(rows []chunk.Row) []*PlanBaseline {
 }
 
 func planHintText2HintSet(sqlText, charset, collation, dbName, planHint string) (*hint.HintsSet, error) {
+	// TODO: change a simpler implementation
 	p := parser.New()
 	stmt, err := p.ParseOneStmt(sqlText, charset, collation)
 	if err != nil {
