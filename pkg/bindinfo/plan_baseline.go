@@ -13,7 +13,7 @@ type PlanBaseline struct {
 	SQLDigest  string // identifier of the SQL statement.
 	PlanDigest string // identifier of the execution plan.
 	Outline    string // a set of hints corresponding to the SQL to generate the execution plan.
-	State      string // the state of this plan baseline: accepted, preferred, unverified, disabled.
+	Status     string // the status of this plan baseline: accepted, preferred, unverified, disabled.
 
 	// meta information
 	Creator      string    // the user who created this plan baseline.
@@ -34,13 +34,16 @@ type PlanBaseline struct {
 type PlanBaselineHandle interface {
 	// GetBaseline returns the plan baseline of the specified conditions.
 	// All returned baselines are read-only.
-	GetBaseline(sqlDigest, state string) ([]*PlanBaseline, error)
+	GetBaseline(digest, sqlDigest, planDigest, status string) ([]*PlanBaseline, error)
 
 	// CreateBaselineByPlanDigest creates a plan baseline from the specified plan digest.
 	// CREATE PLAN BASELINE FROM HISTORY PLAN DIGEST {PlanDigest}
 	CreateBaselineByPlanDigest(planDigest string) error
 	// CreateBaseline()
 	// CreateBaselineByBinding()
+
+	// UpdateBaselineStatus updates the status of the specified plan baseline.
+	UpdateBaselineStatus(digest, sqlDigest, planDigest, status string) error
 
 	// Purge automatically purges useless plan baselines, whose LastActive < NOW()-tidb_plan_baseline_retention_days.
 	Purge() error
