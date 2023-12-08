@@ -34,7 +34,13 @@ type PlanBaseline struct {
 type PlanBaselineHandle interface {
 	// GetBaseline returns the plan baseline of the specified conditions.
 	// All returned baselines are read-only.
-	GetBaseline(sqlDigest, normalizedSQL, state string) ([]*PlanBaseline, error)
+	GetBaseline(sqlDigest, state string) ([]*PlanBaseline, error)
+
+	// CreateBaselineByPlanDigest creates a plan baseline from the specified plan digest.
+	// CREATE PLAN BASELINE FROM HISTORY PLAN DIGEST {PlanDigest}
+	CreateBaselineByPlanDigest(planDigest string) error
+	// CreateBaseline()
+	// CreateBaselineByBinding()
 
 	// Purge automatically purges useless plan baselines, whose LastActive < NOW()-tidb_plan_baseline_retention_days.
 	Purge() error
