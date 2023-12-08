@@ -17,7 +17,7 @@ type PlanBaseline struct {
 	Digest     string // identifier of this plan baseline.
 	SQLDigest  string // identifier of the SQL statement.
 	PlanDigest string // identifier of the execution plan.
-	Outline    string // a set of hints corresponding to the SQL to generate the execution plan.
+	HintSet    string // a set of hints corresponding to the SQL to generate the execution plan.
 	Status     string // the status of this plan baseline: accepted, preferred, unverified, disabled.
 	//TODO: SchemaVer
 
@@ -43,7 +43,7 @@ type PlanBaselineHandle interface {
 	GetBaseline(digest, sqlDigest, planDigest, status string) ([]*PlanBaseline, error)
 
 	// AddUnVerifiedBaseline adds an unverified plan baseline.
-	AddUnVerifiedBaseline(sqlDigest, planDigest, Outline string) error
+	AddUnVerifiedBaseline(sqlDigest, planDigest, hintSet string) error
 
 	// TODO: how to know whether a baseline is stale or invalid due to something like schema changes?
 
