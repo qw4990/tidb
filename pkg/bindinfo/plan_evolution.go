@@ -23,7 +23,7 @@ type EvolutionHandle interface {
 	EvolveAll() error
 
 	// EvolveOne evolves the specified plan baseline.
-	EvolveOne(sqlDigest string) error
+	EvolveOne(sqlDigest string, autoAccept bool) error
 }
 
 type evolutionHandle struct {
@@ -37,7 +37,7 @@ func (h *evolutionHandle) EvolveAll() error {
 	return nil
 }
 
-func (h *evolutionHandle) EvolveOne(sqlDigest string) (results []*EvolutionResult, err error) {
+func (h *evolutionHandle) EvolveOne(sqlDigest string, autoAccept bool) (results []*EvolutionResult, err error) {
 	err = callWithSCtx(h.sPool, false, func(sctx sessionctx.Context) error {
 		baselines, err := h.baselineHandle.GetBaseline("", sqlDigest, "", "")
 		if err != nil {
@@ -49,9 +49,35 @@ func (h *evolutionHandle) EvolveOne(sqlDigest string) (results []*EvolutionResul
 			return err
 		}
 
-		return writeEvolutionResults(sctx, results)
+		err = writeEvolutionResults(sctx, results)
+		if err != nil {
+			return err
+		}
 
-		// TODO: automatically accept verified baselines?
+		if autoAccept {
+			var bestAcceptedExecTime time.Duration
+			for i := range baselines {
+				if baselines[i].Status != StateAccepted {
+					continue
+				}
+				if results[i].ExecTime < bestAcceptedExecTime {
+					bestAcceptedExecTime = results[i].ExecTime
+				}
+			}
+
+			for i := range baselines {
+				if baselines[i].Status != StateUnverified {
+					continue
+				}
+				if results[i].ExecTime < bestAcceptedExecTime {
+					if err = h.baselineHandle.UpdateBaselineStatus(baselines[i].Digest, baselines[i].SQLDigest, baselines[i].PlanDigest, StateAccepted); err != nil {
+						return err
+					}
+				}
+			}
+		}
+
+		return nil
 	})
 	return
 }
