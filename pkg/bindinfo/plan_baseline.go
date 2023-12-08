@@ -42,17 +42,32 @@ type PlanBaselineHandle interface {
 	// AddUnVerifiedBaseline adds an unverified plan baseline.
 	AddUnVerifiedBaseline(sqlDigest, planDigest, Outline string) error
 
+	// TODO: how to know whether a baseline is stale or invalid due to something like schema changes?
+
 	// CreateBaselineByPlanDigest creates a plan baseline from the specified plan digest.
 	// CREATE PLAN BASELINE FROM HISTORY PLAN DIGEST {PlanDigest}
 	CreateBaselineByPlanDigest(planDigest string) error
-	// CreateBaseline()
-	// CreateBaselineByBinding()
+
+	// TODO: more ways to create a baseline.
 
 	// UpdateBaselineStatus updates the status of the specified plan baseline.
 	UpdateBaselineStatus(digest, sqlDigest, planDigest, status string) error
 
 	// Purge automatically purges useless plan baselines, whose LastActive < NOW()-tidb_plan_baseline_retention_days.
 	Purge() error
+}
 
-	Evolve() error
+type EvolutionResult struct {
+	BaselineDigest string
+	EstPlanCost    float64
+	ExecTime       time.Duration
+	EvolutionTime  time.Time
+	SQLText        string
+	PlanText       string
+}
+
+type EvolutionHandle interface {
+	EvolveAll() error
+
+	EvolveOne(baselineDigest string) error
 }
