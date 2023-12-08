@@ -3,7 +3,6 @@ package bindinfo
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 	"time"
 
@@ -131,8 +130,8 @@ func (h *planBaselineHandle) AddUnVerifiedBaseline(sqlDigest, planDigest, outlin
 func (h *planBaselineHandle) CreateBaselineByPlanDigest(planDigest string) error {
 	return callWithSCtx(h.sPool, false, func(sctx sessionctx.Context) error {
 		rows, _, err := execRows(sctx,
-			fmt.Sprintf(`select plan_hint, digest, digest_text, query_sample_text, plan, charset, collation, schema_name
-            from information_schema.cluster_statements_summary_history where plan_digest='%v'`, planDigest))
+			`select plan_hint, digest, digest_text, query_sample_text, plan, charset, collation, schema_name
+            from information_schema.cluster_statements_summary_history where plan_digest=?`, planDigest)
 		if err != nil {
 			return err
 		}
@@ -166,11 +165,9 @@ func (h *planBaselineHandle) CreateBaselineByPlanDigest(planDigest string) error
 			Extras:       "",
 		}
 
-		insertStmt := fmt.Sprintf(`insert into mysql.plan_baseline values
-        ('%v','%v','%v','%v','%v','%v','%v','%v','%v','%v','%v','%v','%v','%v','%v','%v') on duplicate key update`,
+		_, _, err = execRows(sctx, `insert into mysql.plan_baseline values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) on duplicate key update`,
 			b.Digest, b.SQLDigest, b.PlanDigest, b.PlanHint, b.Status, b.Creator, b.Source, b.Created,
 			b.Modified, b.LastActive, b.LastVerified, b.NormSQLText, b.SQLText, b.PlanText, b.Comment, b.Extras)
-		_, _, err = execRows(sctx, insertStmt)
 		if err != nil {
 			return err
 		}
