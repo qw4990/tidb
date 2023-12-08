@@ -141,14 +141,7 @@ func (h *planBaselineHandle) CreateBaselineByPlanDigest(planDigest string) error
 		}
 		planHint, sqlDigest, normSQLText, sqlText := rows[0].GetString(0), rows[0].GetString(1), rows[0].GetString(2), rows[0].GetString(3)
 		planText, charset, collation, dbName := rows[0].GetString(4), rows[0].GetString(5), rows[0].GetString(6), rows[0].GetString(7)
-
-		p := parser.New()
-		stmt, err := p.ParseOneStmt(sqlText, charset, collation)
-		if err != nil {
-			return err
-		}
-		sqlWithHint := GenerateBindSQL(context.Background(), stmt, planHint, false, dbName)
-		hintSet, _, _, err := hint.ParseHintsSet(p, sqlWithHint, charset, collation, dbName)
+		hintSet, err := planHintText2HintSet(sqlText, charset, collation, dbName, planHint)
 		if err != nil {
 			return err
 		}
@@ -209,4 +202,15 @@ func (h *planBaselineHandle) Purge() error {
 func rows2Baselines(rows []chunk.Row) []*PlanBaseline {
 	// TODO
 	return nil
+}
+
+func planHintText2HintSet(sqlText, charset, collation, dbName, planHint string) (*hint.HintsSet, error) {
+	p := parser.New()
+	stmt, err := p.ParseOneStmt(sqlText, charset, collation)
+	if err != nil {
+		return nil, err
+	}
+	sqlWithHint := GenerateBindSQL(context.Background(), stmt, planHint, false, dbName)
+	hintSet, _, _, err := hint.ParseHintsSet(p, sqlWithHint, charset, collation, dbName)
+	return hintSet, err
 }
