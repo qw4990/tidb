@@ -1,6 +1,8 @@
 package bindinfo
 
-import "time"
+import (
+	"time"
+)
 
 const StateAccepted = "accepted"
 const StatePreferred = "preferred"
@@ -14,6 +16,7 @@ type PlanBaseline struct {
 	PlanDigest string // identifier of the execution plan.
 	Outline    string // a set of hints corresponding to the SQL to generate the execution plan.
 	Status     string // the status of this plan baseline: accepted, preferred, unverified, disabled.
+	//TODO: SchemaVer
 
 	// meta information
 	Creator      string    // the user who created this plan baseline.
@@ -32,9 +35,12 @@ type PlanBaseline struct {
 }
 
 type PlanBaselineHandle interface {
-	// GetBaseline returns the plan baseline of the specified conditions.
+	// GetBaseline returns baselines of the specified conditions.
 	// All returned baselines are read-only.
 	GetBaseline(digest, sqlDigest, planDigest, status string) ([]*PlanBaseline, error)
+
+	// AddUnVerifiedBaseline adds an unverified plan baseline.
+	AddUnVerifiedBaseline(sqlDigest, planDigest, Outline string) error
 
 	// CreateBaselineByPlanDigest creates a plan baseline from the specified plan digest.
 	// CREATE PLAN BASELINE FROM HISTORY PLAN DIGEST {PlanDigest}
@@ -47,4 +53,6 @@ type PlanBaselineHandle interface {
 
 	// Purge automatically purges useless plan baselines, whose LastActive < NOW()-tidb_plan_baseline_retention_days.
 	Purge() error
+
+	Evolve() error
 }
