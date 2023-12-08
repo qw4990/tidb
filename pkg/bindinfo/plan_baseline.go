@@ -2,6 +2,11 @@ package bindinfo
 
 import "time"
 
+const StateAccepted = "accepted"
+const StatePreferred = "preferred"
+const StateUnverified = "unverified"
+const StateDisabled = "disabled"
+
 type PlanBaseline struct {
 	// core fields
 	Digest     string // identifier of this plan baseline.
@@ -27,5 +32,10 @@ type PlanBaseline struct {
 }
 
 type PlanBaselineHandle interface {
-	GetBaseline(sqlDigest, normalizedSQL string)
+	// GetBaseline returns the plan baseline of the specified conditions.
+	// All returned baselines are read-only.
+	GetBaseline(sqlDigest, normalizedSQL, state string) ([]*PlanBaseline, error)
+
+	// Purge automatically purges useless plan baselines, whose LastActive < NOW()-tidb_plan_baseline_retention_days.
+	Purge() error
 }
