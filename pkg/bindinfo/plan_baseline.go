@@ -53,6 +53,9 @@ type PlanBaselineHandle interface {
 	// UpdateBaselineStatus updates the status of the specified plan baseline.
 	UpdateBaselineStatus(digest, sqlDigest, planDigest, status string) error
 
+	// DropBaseline drops the specified plan baseline.
+	DropBaseline(digest, sqlDigest, planDigest, status string) error
+
 	// Purge automatically purges useless plan baselines, whose LastActive < NOW()-tidb_plan_baseline_retention_days.
 	Purge() error
 }
