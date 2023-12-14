@@ -668,6 +668,8 @@ func getBindRecord(ctx sessionctx.Context, stmt ast.StmtNode) (*bindinfo.BindRec
 	if ctx.Value(bindinfo.SessionBindInfoKeyType) == nil {
 		return nil, "", nil
 	}
+	// The priority: session normal binding > session universal binding > global normal binding > global universal binding.
+
 	stmtNode, normalizedSQL, sqlDigest, err := NormalizeStmtForBinding(stmt, ctx.GetSessionVars().CurrentDB, false)
 	if err != nil || stmtNode == nil {
 		return nil, "", err
@@ -680,11 +682,33 @@ func getBindRecord(ctx sessionctx.Context, stmt ast.StmtNode) (*bindinfo.BindRec
 		}
 		return nil, "", nil
 	}
+
+	// TODO: use a variable to control whether to enable universal binding.
+	stmtNodeUni, normalizedSQLUni, sqlDigestUni, err := NormalizeStmtForBinding(stmt, ctx.GetSessionVars().CurrentDB, true)
+	if err != nil || stmtNodeUni == nil {
+		return nil, "", err
+	}
+	bindRecord = sessionHandle.GetSessionBinding(sqlDigestUni, normalizedSQLUni, "")
+	if bindRecord != nil {
+		if bindRecord.HasEnabledBinding() {
+			return bindRecord, metrics.ScopeSession, nil
+		}
+		return nil, "", nil
+	}
+
 	globalHandle := domain.GetDomain(ctx).BindHandle()
 	if globalHandle == nil {
 		return nil, "", nil
 	}
 	bindRecord = globalHandle.GetGlobalBinding(sqlDigest, normalizedSQL, "")
+	if bindRecord != nil {
+		if bindRecord.HasEnabledBinding() {
+			return bindRecord, metrics.ScopeGlobal, nil
+		}
+		return nil, "", nil
+	}
+
+	bindRecord = globalHandle.GetGlobalBinding(sqlDigestUni, normalizedSQLUni, "")
 	return bindRecord, metrics.ScopeGlobal, nil
 }
 
