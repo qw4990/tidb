@@ -196,7 +196,7 @@ func (br *BindRecord) prepareHints(sctx sessionctx.Context) error {
 		if err != nil {
 			return err
 		}
-		if sctx != nil && bind.Type == TypeNormal && isFuzzyBinding(stmt) { // TODO
+		if sctx != nil && bind.Type == TypeNormal && !isFuzzyBinding(stmt) { // TODO
 			paramChecker := &paramMarkerChecker{}
 			stmt.Accept(paramChecker)
 			if !paramChecker.hasParamMarker {
