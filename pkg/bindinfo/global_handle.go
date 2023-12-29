@@ -596,6 +596,12 @@ func newBindRecord(sctx sessionctx.Context, row chunk.Row) (string, *BindRecord,
 	if defaultDB == "" {
 		bindingType = TypeUniversal
 	}
+
+	stmtNode, err := parser.New().ParseOneStmt(row.GetString(1), "", "")
+	if err != nil {
+		panic(err)
+	}
+
 	binding := Binding{
 		BindSQL:    row.GetString(1),
 		Status:     status,
@@ -607,15 +613,16 @@ func newBindRecord(sctx sessionctx.Context, row chunk.Row) (string, *BindRecord,
 		SQLDigest:  row.GetString(9),
 		PlanDigest: row.GetString(10),
 		Type:       bindingType,
+		TableNames: CollectTableNames(stmtNode),
 	}
 	bindRecord := &BindRecord{
 		OriginalSQL: row.GetString(0),
 		Db:          strings.ToLower(defaultDB),
 		Bindings:    []Binding{binding},
 	}
-	sqlDigest := parser.DigestNormalized(bindRecord.OriginalSQL)
+	sqlDigest := parser.DigestNormalized(utilparser.RestoreWithoutDB(stmtNode))
 	sctx.GetSessionVars().CurrentDB = bindRecord.Db
-	err := bindRecord.prepareHints(sctx)
+	err = bindRecord.prepareHints(sctx)
 	return sqlDigest.String(), bindRecord, err
 }
 
