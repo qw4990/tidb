@@ -347,7 +347,3 @@ func updateMetrics(scope string, before *BindRecord, after *BindRecord, sizeOnly
 		}
 	}
 }
-
-func isFuzzyBinding(node ast.StmtNode) bool {
-	return false
-}
