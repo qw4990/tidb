@@ -662,6 +662,17 @@ func normalizeStmt(stmtNode ast.StmtNode, specifiedDB string, flag int) (stmt as
 	return nil, "", "", nil
 }
 
+func getBinding(sctx sessionctx.Context, stmt ast.StmtNode) (*bindinfo.BindRecord, string, error) {
+	_, normalizedSQL, sqlDigest, err := NormalizeStmtForBinding(stmt, sctx.GetSessionVars().CurrentDB, true)
+	if err != nil {
+		panic(err)
+	}
+	globalHandle := domain.GetDomain(sctx).BindHandle()
+	if bindRecord := globalHandle.GetGlobalBinding(sqlDigest, normalizedSQL, ""); bindRecord != nil && bindRecord.HasEnabledBinding() {
+		return bindRecord, metrics.ScopeGlobal, nil
+	}
+}
+
 func getBindRecord(ctx sessionctx.Context, stmt ast.StmtNode) (*bindinfo.BindRecord, string, error) {
 	// When the domain is initializing, the bind will be nil.
 	if ctx.Value(bindinfo.SessionBindInfoKeyType) == nil {
