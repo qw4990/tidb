@@ -15,7 +15,6 @@
 package bindinfo
 
 import (
-	"github.com/pingcap/tidb/pkg/parser/ast"
 	"time"
 	"unsafe"
 
