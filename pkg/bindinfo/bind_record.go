@@ -15,6 +15,7 @@
 package bindinfo
 
 import (
+	"github.com/pingcap/tidb/pkg/parser/ast"
 	"time"
 	"unsafe"
 
@@ -196,7 +197,7 @@ func (br *BindRecord) prepareHints(sctx sessionctx.Context) error {
 		if err != nil {
 			return err
 		}
-		if sctx != nil && bind.Type == TypeNormal {
+		if sctx != nil && bind.Type == TypeNormal && isFuzzyBinding(stmt) { // TODO
 			paramChecker := &paramMarkerChecker{}
 			stmt.Accept(paramChecker)
 			if !paramChecker.hasParamMarker {
@@ -345,4 +346,8 @@ func updateMetrics(scope string, before *BindRecord, after *BindRecord, sizeOnly
 			metrics.BindTotalGauge.WithLabelValues(scope, status).Add(float64(afterCount[index] - beforeCount[index]))
 		}
 	}
+}
+
+func isFuzzyBinding(node ast.StmtNode) bool {
+	return false
 }
