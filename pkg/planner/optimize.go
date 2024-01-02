@@ -596,7 +596,7 @@ func NormalizeStmtForBinding(stmtNode ast.StmtNode, specifiedDB string, isUniver
 	if isUniversalBinding {
 		return normalizeStmt(stmtNode, specifiedDB, 2)
 	}
-	return normalizeStmt(stmtNode, specifiedDB, 1)
+	return normalizeStmt(stmtNode, specifiedDB, 2)
 }
 
 // flag 0 is for plan cache, 1 is for normal bindings and 2 is for universal bindings.
