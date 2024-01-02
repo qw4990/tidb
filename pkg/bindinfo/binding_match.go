@@ -20,6 +20,16 @@ import (
 	"github.com/pingcap/tidb/pkg/parser/ast"
 )
 
+// isFuzzyBinding checks if the stmtNode is a fuzzy binding, which has wildcards as database names.
+func isFuzzyBinding(node ast.StmtNode) bool {
+	for _, t := range CollectTableNames(node) {
+		if t.Schema.L == "*" {
+			return true
+		}
+	}
+	return false
+}
+
 // CollectTableNames gets all table names from ast.Node.
 // This function is mainly for binding fuzzy matching.
 // ** the return is read-only.

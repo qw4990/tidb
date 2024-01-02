@@ -605,27 +605,45 @@ func newBindRecord(sctx sessionctx.Context, row chunk.Row) (string, *BindRecord,
 	if defaultDB == "" {
 		bindingType = TypeUniversal
 	}
+
+	originalSQL, bindingSQL := row.GetString(0), row.GetString(1)
+	charset, collation := row.GetString(6), row.GetString(7)
+
+	stmtNode, err := parser.New().ParseOneStmt(bindingSQL, charset, collation)
+	if err != nil {
+		return "", nil, err
+	}
+	tableNames := CollectTableNames(stmtNode)
+
 	binding := Binding{
-		BindSQL:    row.GetString(1),
+		BindSQL:    bindingSQL,
 		Status:     status,
 		CreateTime: row.GetTime(4),
 		UpdateTime: row.GetTime(5),
-		Charset:    row.GetString(6),
-		Collation:  row.GetString(7),
+		Charset:    charset,
+		Collation:  collation,
 		Source:     row.GetString(8),
 		SQLDigest:  row.GetString(9),
 		PlanDigest: row.GetString(10),
 		Type:       bindingType,
+		TableNames: tableNames,
 	}
 	bindRecord := &BindRecord{
-		OriginalSQL: row.GetString(0),
+		OriginalSQL: originalSQL,
 		Db:          strings.ToLower(defaultDB),
 		Bindings:    []Binding{binding},
 	}
-	sqlDigest := parser.DigestNormalized(bindRecord.OriginalSQL)
+
+	originalStmt, err := parser.New().ParseOneStmt(originalSQL, charset, collation)
+	if err != nil {
+		return "", nil, err
+	}
+	sqlWithoutDB := utilparser.RestoreWithoutDB(originalStmt)
+	sqlDigestWithoutDB := parser.DigestNormalized(sqlWithoutDB)
+
 	sctx.GetSessionVars().CurrentDB = bindRecord.Db
-	err := bindRecord.prepareHints(sctx)
-	return sqlDigest.String(), bindRecord, err
+	err = bindRecord.prepareHints(sctx)
+	return sqlDigestWithoutDB.String(), bindRecord, err
 }
 
 // setGlobalCacheBinding sets the BindRecord to the cache, if there already exists a BindRecord,
