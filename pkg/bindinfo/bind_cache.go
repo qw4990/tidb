@@ -138,10 +138,8 @@ func (c *bindCache) GetBinding(sqlDigest, normalizedSQL, _ string) *BindRecord {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	bindRecords := c.get(bindCacheKey(sqlDigest))
-	for _, bindRecord := range bindRecords {
-		if bindRecord.OriginalSQL == normalizedSQL {
-			return bindRecord
-		}
+	if len(bindRecords) > 0 {
+		return bindRecords[0]
 	}
 	return nil
 }

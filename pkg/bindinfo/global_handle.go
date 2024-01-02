@@ -232,6 +232,8 @@ func (h *globalBindingHandle) Update(fullLoad bool) (err error) {
 			}
 			sqlDigest, meta, err := newBindRecord(sctx, row)
 
+			fmt.Println(">>>>>>>>>>> update >>> ", sqlDigest)
+
 			// Update lastUpdateTime to the newest one.
 			// Even if this one is an invalid bind.
 			if meta.Bindings[0].UpdateTime.Compare(lastUpdateTime) > 0 {
@@ -630,7 +632,8 @@ func newBindRecord(sctx sessionctx.Context, row chunk.Row) (string, *BindRecord,
 		return "", nil, err
 	}
 	sqlWithoutDB := utilparser.RestoreWithoutDB(originalStmt)
-	sqlDigestWithoutDB := parser.DigestNormalized(sqlWithoutDB)
+	fmt.Println(">>>>>>> update record >>> ", sqlWithoutDB)
+	_, sqlDigestWithoutDB := parser.NormalizeDigestForBinding(sqlWithoutDB)
 
 	sctx.GetSessionVars().CurrentDB = bindRecord.Db
 	err = bindRecord.prepareHints(sctx)

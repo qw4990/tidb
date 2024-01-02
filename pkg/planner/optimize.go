@@ -671,6 +671,11 @@ func getBindRecord(ctx sessionctx.Context, stmt ast.StmtNode) (*bindinfo.BindRec
 	if err != nil || stmtNode == nil {
 		return nil, "", err
 	}
+
+	if strings.Contains(ctx.GetSessionVars().StmtCtx.OriginalSQL, "txx") {
+		fmt.Println(">>>>>>>>>>>> ", normalizedSQL, sqlDigest)
+	}
+
 	var normalizedSQLUni, sqlDigestUni string
 	if ctx.GetSessionVars().EnableUniversalBinding {
 		_, normalizedSQLUni, sqlDigestUni, err = NormalizeStmtForBinding(stmt, ctx.GetSessionVars().CurrentDB, true)
