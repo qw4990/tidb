@@ -634,11 +634,7 @@ func newBindRecord(sctx sessionctx.Context, row chunk.Row) (string, *BindRecord,
 		Bindings:    []Binding{binding},
 	}
 
-	originalStmt, err := parser.New().ParseOneStmt(originalSQL, charset, collation)
-	if err != nil {
-		return "", nil, err
-	}
-	sqlWithoutDB := utilparser.RestoreWithoutDB(originalStmt)
+	sqlWithoutDB := utilparser.RestoreWithoutDB(stmtNode)
 	sqlDigestWithoutDB := parser.DigestNormalized(sqlWithoutDB)
 
 	sctx.GetSessionVars().CurrentDB = bindRecord.Db
