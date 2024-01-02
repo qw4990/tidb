@@ -15,6 +15,7 @@
 package bindinfo
 
 import (
+	"github.com/pingcap/tidb/pkg/parser/ast"
 	"time"
 	"unsafe"
 
@@ -85,6 +86,11 @@ type Binding struct {
 	PlanDigest string
 	// Type indicates the type of this binding, currently only 2 types: "" for normal and "u" for universal bindings.
 	Type string
+
+	// TableNames are all tables in this binding used for fuzzy binding matching.
+	// `create binding using select t1.a from db1.t1, db2.t2 where t1.a=t2.a` --> [db1.t1, db2.t2]
+	// `create binding using select t1.a from *.t1, db2.t2` --> [*.t1, db2.t2]
+	TableNames []*ast.TableName
 }
 
 func (b *Binding) isSame(rb *Binding) bool {
@@ -196,7 +202,7 @@ func (br *BindRecord) prepareHints(sctx sessionctx.Context) error {
 		if err != nil {
 			return err
 		}
-		if sctx != nil && bind.Type == TypeNormal {
+		if sctx != nil && bind.Type == TypeNormal && !isFuzzyBinding(stmt) {
 			paramChecker := &paramMarkerChecker{}
 			stmt.Accept(paramChecker)
 			if !paramChecker.hasParamMarker {
