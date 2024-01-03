@@ -272,14 +272,6 @@ func (h *globalBindingHandle) CreateGlobalBinding(sctx sessionctx.Context, recor
 
 	record.Db = strings.ToLower(record.Db)
 	return h.callWithSCtx(true, func(sctx sessionctx.Context) error {
-		defer func() {
-			if err != nil {
-				return
-			}
-			sqlDigest := parser.DigestNormalized(record.OriginalSQL)
-			h.setGlobalCacheBinding(sqlDigest.String(), record)
-		}()
-
 		// Lock mysql.bind_info to synchronize with CreateBindRecord / AddBindRecord / DropBindRecord on other tidb instances.
 		if err = h.lockBindInfoTable(sctx); err != nil {
 			return err
@@ -323,19 +315,6 @@ func (h *globalBindingHandle) CreateGlobalBinding(sctx sessionctx.Context, recor
 // DropGlobalBinding drops a BindRecord to the storage and BindRecord int the cache.
 func (h *globalBindingHandle) DropGlobalBinding(originalSQL, db string, binding *Binding) (deletedRows uint64, err error) {
 	err = h.callWithSCtx(false, func(sctx sessionctx.Context) error {
-		db = strings.ToLower(db)
-		defer func() {
-			if err != nil || deletedRows == 0 {
-				return
-			}
-
-			record := &BindRecord{OriginalSQL: originalSQL, Db: db}
-			if binding != nil {
-				record.Bindings = append(record.Bindings, *binding)
-			}
-			h.removeGlobalCacheBinding(parser.DigestNormalized(originalSQL).String(), record)
-		}()
-
 		// Lock mysql.bind_info to synchronize with CreateBindRecord / AddBindRecord / DropBindRecord on other tidb instances.
 		if err = h.lockBindInfoTable(sctx); err != nil {
 			return err
@@ -376,7 +355,6 @@ func (h *globalBindingHandle) SetGlobalBindingStatus(originalSQL string, binding
 	var (
 		updateTs               types.Time
 		oldStatus0, oldStatus1 string
-		affectRows             int
 	)
 	if newStatus == Disabled {
 		// For compatibility reasons, when we need to 'set binding disabled for <stmt>',
@@ -390,35 +368,6 @@ func (h *globalBindingHandle) SetGlobalBindingStatus(originalSQL string, binding
 	}
 
 	err = h.callWithSCtx(true, func(sctx sessionctx.Context) error {
-		defer func() {
-			if err != nil || affectRows == 0 {
-				return
-			}
-
-			// The set binding status operation is success.
-			ok = true
-			record := &BindRecord{OriginalSQL: originalSQL}
-			sqlDigest := parser.DigestNormalized(record.OriginalSQL)
-			oldRecord := h.GetGlobalBinding(sqlDigest.String())
-			setBindingStatusInCacheSucc := false
-			if oldRecord != nil && len(oldRecord.Bindings) > 0 {
-				record.Bindings = make([]Binding, len(oldRecord.Bindings))
-				copy(record.Bindings, oldRecord.Bindings)
-				for ind, oldBinding := range record.Bindings {
-					if oldBinding.Status == oldStatus0 || oldBinding.Status == oldStatus1 {
-						if binding == nil || (binding != nil && oldBinding.isSame(binding)) {
-							setBindingStatusInCacheSucc = true
-							record.Bindings[ind].Status = newStatus
-							record.Bindings[ind].UpdateTime = updateTs
-						}
-					}
-				}
-			}
-			if setBindingStatusInCacheSucc {
-				h.setGlobalCacheBinding(sqlDigest.String(), record)
-			}
-		}()
-
 		// Lock mysql.bind_info to synchronize with SetBindingStatus on other tidb instances.
 		if err = h.lockBindInfoTable(sctx); err != nil {
 			return err
@@ -434,7 +383,6 @@ func (h *globalBindingHandle) SetGlobalBindingStatus(originalSQL string, binding
 			_, err = exec(sctx, `UPDATE mysql.bind_info SET status = %?, update_time = %? WHERE original_sql = %? AND update_time < %? AND bind_sql = %? AND status IN (%?, %?)`,
 				newStatus, updateTsStr, originalSQL, updateTsStr, binding.BindSQL, oldStatus0, oldStatus1)
 		}
-		affectRows = int(sctx.GetSessionVars().StmtCtx.AffectedRows())
 		return nil
 	})
 	return
@@ -612,34 +560,6 @@ func newBindRecord(sctx sessionctx.Context, row chunk.Row) (string, *BindRecord,
 	sctx.GetSessionVars().CurrentDB = bindRecord.Db
 	err := bindRecord.prepareHints(sctx)
 	return sqlDigest.String(), bindRecord, err
-}
-
-// setGlobalCacheBinding sets the BindRecord to the cache, if there already exists a BindRecord,
-// it will be overridden.
-func (h *globalBindingHandle) setGlobalCacheBinding(sqlDigest string, meta *BindRecord) {
-	newCache, err0 := h.getCache().Copy()
-	if err0 != nil {
-		logutil.BgLogger().Warn("BindHandle.setGlobalCacheBindRecord", zap.String("category", "sql-bind"), zap.Error(err0))
-	}
-	oldRecord := newCache.GetBinding(sqlDigest)
-	err1 := newCache.SetBinding(sqlDigest, meta)
-	if err1 != nil && err0 == nil {
-		logutil.BgLogger().Warn("BindHandle.setGlobalCacheBindRecord", zap.String("category", "sql-bind"), zap.Error(err1))
-	}
-	h.setCache(newCache) // TODO: update it in place
-	updateMetrics(metrics.ScopeGlobal, oldRecord, meta, false)
-}
-
-// removeGlobalCacheBinding removes the BindRecord from the cache.
-func (h *globalBindingHandle) removeGlobalCacheBinding(sqlDigest string, meta *BindRecord) {
-	newCache, err := h.getCache().Copy()
-	if err != nil {
-		logutil.BgLogger().Warn("", zap.String("category", "sql-bind"), zap.Error(err))
-	}
-	oldRecord := newCache.GetBinding(sqlDigest)
-	newCache.RemoveBinding(sqlDigest, meta)
-	h.setCache(newCache) // TODO: update it in place
-	updateMetrics(metrics.ScopeGlobal, oldRecord, newCache.GetBinding(sqlDigest), false)
 }
 
 func copyBindRecordUpdateMap(oldMap map[string]*bindRecordUpdate) map[string]*bindRecordUpdate {
