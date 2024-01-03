@@ -287,6 +287,7 @@ func (b *PlanBuilder) buildAggregation(ctx context.Context, p LogicalPlan, aggFu
 					if _, ok = b.correlatedAggMapper[aggFuncList[j]]; !ok {
 						b.correlatedAggMapper[aggFuncList[j]] = &expression.CorrelatedColumn{
 							Column: *schema4Agg.Columns[aggIndexMap[j]],
+							Data:   new(types.Datum),
 						}
 					}
 					b.correlatedAggMapper[aggFunc] = b.correlatedAggMapper[aggFuncList[j]]
@@ -308,6 +309,7 @@ func (b *PlanBuilder) buildAggregation(ctx context.Context, p LogicalPlan, aggFu
 			if _, ok := correlatedAggMap[aggFunc]; ok {
 				b.correlatedAggMapper[aggFunc] = &expression.CorrelatedColumn{
 					Column: column,
+					Data:   new(types.Datum),
 				}
 			}
 		}
@@ -1816,6 +1818,12 @@ func (b *PlanBuilder) buildSetOpr(ctx context.Context, setOpr *ast.SetOprStmt) (
 				if *x.AfterSetOperator != ast.Intersect && *x.AfterSetOperator != ast.IntersectAll {
 					breakIteration = true
 				}
+				if x.Limit != nil || x.OrderBy != nil {
+					// when SetOprSelectList's limit and order-by is not nil, it means itself is converted from
+					// an independent ast.SetOprStmt in parser, its data should be evaluated first, and ordered
+					// by given items and conduct a limit on it, then it can only be integrated with other brothers.
+					breakIteration = true
+				}
 			}
 			if breakIteration {
 				break
@@ -1914,7 +1922,7 @@ func (b *PlanBuilder) buildIntersect(ctx context.Context, selects []ast.Node) (L
 		leftPlan, err = b.buildSelect(ctx, x)
 	case *ast.SetOprSelectList:
 		afterSetOperator = x.AfterSetOperator
-		leftPlan, err = b.buildSetOpr(ctx, &ast.SetOprStmt{SelectList: x, With: x.With})
+		leftPlan, err = b.buildSetOpr(ctx, &ast.SetOprStmt{SelectList: x, With: x.With, Limit: x.Limit, OrderBy: x.OrderBy})
 	}
 	if err != nil {
 		return nil, nil, err
@@ -1938,7 +1946,7 @@ func (b *PlanBuilder) buildIntersect(ctx context.Context, selects []ast.Node) (L
 				// TODO: support intersect all
 				return nil, nil, errors.Errorf("TiDB do not support intersect all")
 			}
-			rightPlan, err = b.buildSetOpr(ctx, &ast.SetOprStmt{SelectList: x, With: x.With})
+			rightPlan, err = b.buildSetOpr(ctx, &ast.SetOprStmt{SelectList: x, With: x.With, Limit: x.Limit, OrderBy: x.OrderBy})
 		}
 		if err != nil {
 			return nil, nil, err
@@ -7271,7 +7279,7 @@ func (b *PlanBuilder) buildRecursiveCTE(ctx context.Context, cte ast.ResultSetNo
 				p, err = b.buildSelect(ctx, y)
 				afterOpr = y.AfterSetOperator
 			case *ast.SetOprSelectList:
-				p, err = b.buildSetOpr(ctx, &ast.SetOprStmt{SelectList: y, With: y.With})
+				p, err = b.buildSetOpr(ctx, &ast.SetOprStmt{SelectList: y, With: y.With, Limit: y.Limit, OrderBy: y.OrderBy})
 				afterOpr = y.AfterSetOperator
 			}
 
