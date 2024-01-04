@@ -110,8 +110,8 @@ type GlobalBindingHandle interface {
 type globalBindingHandle struct {
 	sPool SessionPool
 
-	bindingCache atomic.Pointer[bindCache]
-	digestMap    map[string][]string
+	bindingCache   atomic.Pointer[bindCache]
+	fuzzyDigestMap atomic.Value // map[string][]string
 
 	// lastTaskTime records the last update time for the global sql bind cache.
 	// This value is used to avoid reload duplicated bindings from storage.
@@ -164,6 +164,33 @@ func (h *globalBindingHandle) getCache() *bindCache {
 func (h *globalBindingHandle) setCache(c *bindCache) {
 	// TODO: update the global cache in-place instead of replacing it and remove this function.
 	h.bindingCache.Store(c)
+}
+
+func (h *globalBindingHandle) getFuzzyDigestMap() map[string][]string {
+	return h.fuzzyDigestMap.Load().(map[string][]string)
+}
+
+func (h *globalBindingHandle) setFuzzyDigestMap(m map[string][]string) {
+	h.fuzzyDigestMap.Store(m)
+}
+
+func buildFuzzyDigestMap(bindRecords []*BindRecord) map[string][]string {
+	m := make(map[string][]string)
+	p := parser.New()
+	for _, bindRecord := range bindRecords {
+		for _, binding := range bindRecord.Bindings {
+			stmt, err := p.ParseOneStmt(binding.BindSQL, binding.Charset, binding.Collation)
+			if err != nil {
+				logutil.BgLogger().Warn("parse bindSQL failed", zap.String("bindSQL", binding.BindSQL), zap.Error(err))
+				p = parser.New()
+				continue
+			}
+			sqlWithoutDB := utilparser.RestoreWithoutDB(stmt)
+			_, fuzzyDigest := parser.NormalizeDigestForBinding(sqlWithoutDB)
+			m[fuzzyDigest.String()] = append(m[fuzzyDigest.String()], binding.SQLDigest)
+		}
+	}
+	return m
 }
 
 // Reset is to reset the BindHandle and clean old info.
@@ -220,23 +247,8 @@ func (h *globalBindingHandle) LoadFromStorageToCache(fullLoad bool) (err error) 
 
 		defer func() {
 			h.setLastUpdateTime(lastUpdateTime)
-
-			digestMap := make(map[string][]string)
-			for _, b := range newCache.GetAllBindings() {
-				if len(b.Bindings) == 0 {
-					continue
-				}
-				stmt, err := parser.New().ParseOneStmt(b.Bindings[0].BindSQL, b.Bindings[0].Charset, b.Bindings[0].Collation)
-				if err != nil {
-					panic(err)
-				}
-				sqlWithoutDB := utilparser.RestoreWithoutDB(stmt)
-				_, digest := parser.NormalizeDigestForBinding(sqlWithoutDB)
-				digestMap[digest.String()] = append(digestMap[digest.String()], b.Bindings[0].SQLDigest)
-			}
-
 			h.setCache(newCache) // TODO: update it in place
-			h.digestMap = digestMap
+			h.setFuzzyDigestMap(buildFuzzyDigestMap(newCache.GetAllBindings()))
 		}()
 
 		for _, row := range rows {
