@@ -519,7 +519,8 @@ func (h *globalBindingHandle) Size() int {
 // MatchGlobalBinding returns the matched binding for this statement.
 func (h *globalBindingHandle) MatchGlobalBinding(currentDB string, stmt ast.StmtNode) (*BindRecord, error) {
 	bindingCache := h.getCache()
-	if bindingCache.Size() == 0 {
+	fuzzyDigestMap := h.getFuzzyDigestMap()
+	if bindingCache.Size() == 0 || len(fuzzyDigestMap) == 0 {
 		return nil, nil
 	}
 	// TODO: support fuzzy matching.
@@ -528,8 +529,8 @@ func (h *globalBindingHandle) MatchGlobalBinding(currentDB string, stmt ast.Stmt
 		return nil, err
 	}
 
-	exactDigest := h.digestMap[fuzzDigest]
-	if len(exactDigest) > 0 {
+	exactDigests := fuzzyDigestMap[fuzzDigest]
+	if len(exactDigests) > 0 {
 		return bindingCache.GetBinding(exactDigest[0]), nil
 	}
 
