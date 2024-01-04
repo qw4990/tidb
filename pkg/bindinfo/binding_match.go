@@ -81,7 +81,7 @@ func normalizeStmt(stmtNode ast.StmtNode, specifiedDB string) (stmt ast.StmtNode
 	normalize := func(n ast.StmtNode) (normalizedStmt, sqlDigest string) {
 		eraseLastSemicolon(n)
 		var digest *parser.Digest
-		normalizedStmt, digest = parser.NormalizeDigestForBinding(utilparser.RestoreWithDefaultDB(n, specifiedDB, n.Text()))
+		normalizedStmt, digest = parser.NormalizeDigestForBinding(utilparser.RestoreWithoutDB(n))
 		return normalizedStmt, digest.String()
 	}
 
@@ -129,6 +129,15 @@ func normalizeStmt(stmtNode ast.StmtNode, specifiedDB string) (stmt ast.StmtNode
 		return x, normalizedSQL, digest, nil
 	}
 	return nil, "", "", nil
+}
+
+func IsFuzzyBinding(stmt ast.Node) bool {
+	for _, t := range CollectTableNames(stmt) {
+		if t.Schema.L == "*" {
+			return true
+		}
+	}
+	return false
 }
 
 // CollectTableNames gets all table names from ast.Node.

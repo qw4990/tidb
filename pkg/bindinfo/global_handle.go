@@ -226,8 +226,8 @@ func (h *globalBindingHandle) LoadFromStorageToCache(fullLoad bool) (err error) 
 				if len(b.Bindings) == 0 {
 					continue
 				}
-				stmt, err := parser.New().ParseOneStmt(b.OriginalSQL, b.Bindings[0].Charset, b.Bindings[0].Collation)
-				if err == nil {
+				stmt, err := parser.New().ParseOneStmt(b.Bindings[0].BindSQL, b.Bindings[0].Charset, b.Bindings[0].Collation)
+				if err != nil {
 					panic(err)
 				}
 				sqlWithoutDB := utilparser.RestoreWithoutDB(stmt)
@@ -511,11 +511,17 @@ func (h *globalBindingHandle) MatchGlobalBinding(currentDB string, stmt ast.Stmt
 		return nil, nil
 	}
 	// TODO: support fuzzy matching.
-	_, _, sqlDigest, err := normalizeStmt(stmt, currentDB)
+	_, _, fuzzDigest, err := normalizeStmt(stmt, currentDB)
 	if err != nil {
 		return nil, err
 	}
-	return bindingCache.GetBinding(sqlDigest), nil
+
+	exactDigest := h.digestMap[fuzzDigest]
+	if len(exactDigest) > 0 {
+		return bindingCache.GetBinding(exactDigest[0]), nil
+	}
+
+	return bindingCache.GetBinding(fuzzDigest), nil
 }
 
 // GetAllGlobalBindings returns all bind records in cache.
