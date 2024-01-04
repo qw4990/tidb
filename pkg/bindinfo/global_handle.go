@@ -111,6 +111,7 @@ type globalBindingHandle struct {
 	sPool SessionPool
 
 	bindingCache atomic.Pointer[bindCache]
+	digestMap    map[string][]string
 
 	// lastTaskTime records the last update time for the global sql bind cache.
 	// This value is used to avoid reload duplicated bindings from storage.
@@ -219,7 +220,23 @@ func (h *globalBindingHandle) LoadFromStorageToCache(fullLoad bool) (err error) 
 
 		defer func() {
 			h.setLastUpdateTime(lastUpdateTime)
+
+			digestMap := make(map[string][]string)
+			for _, b := range newCache.GetAllBindings() {
+				if len(b.Bindings) == 0 {
+					continue
+				}
+				stmt, err := parser.New().ParseOneStmt(b.OriginalSQL, b.Bindings[0].Charset, b.Bindings[0].Collation)
+				if err == nil {
+					panic(err)
+				}
+				sqlWithoutDB := utilparser.RestoreWithoutDB(stmt)
+				_, digest := parser.NormalizeDigestForBinding(sqlWithoutDB)
+				digestMap[digest.String()] = append(digestMap[digest.String()], b.Bindings[0].SQLDigest)
+			}
+
 			h.setCache(newCache) // TODO: update it in place
+			h.digestMap = digestMap
 		}()
 
 		for _, row := range rows {
