@@ -28,7 +28,6 @@ import (
 	"github.com/pingcap/tidb/pkg/parser/auth"
 	"github.com/pingcap/tidb/pkg/parser/model"
 	"github.com/pingcap/tidb/pkg/testkit"
-	utilparser "github.com/pingcap/tidb/pkg/util/parser"
 	"github.com/pingcap/tidb/pkg/util/stmtsummary"
 	"github.com/stretchr/testify/require"
 	"go.opencensus.io/stats/view"
@@ -990,7 +989,7 @@ func TestCaptureHints(t *testing.T) {
 		parser4binding := parser.New()
 		originNode, err := parser4binding.ParseOneStmt(capCase.query, "utf8mb4", "utf8mb4_general_ci")
 		require.NoError(t, err)
-		_, sqlDigestWithDB := parser.NormalizeDigest(utilparser.RestoreWithDefaultDB(originNode, "test", capCase.query))
-		require.Equal(t, res[0][9], sqlDigestWithDB.String())
+		_, sqlDigestWithDB := bindinfo.NormalizeStmtForBinding(originNode, "test", capCase.query)
+		require.Equal(t, res[0][9], sqlDigestWithDB)
 	}
 }
