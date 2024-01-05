@@ -743,7 +743,7 @@ func (b *PlanBuilder) buildDropBindPlan(v *ast.DropBindingStmt) (Plan, error) {
 			SQLDigest:    sqlDigestWithDB,
 		}
 		if v.HintedNode != nil {
-			p.BindSQL = utilparser.RestoreWithDefaultDB(v.HintedNode, b.ctx.GetSessionVars().CurrentDB, v.HintedNode.Text())
+			p.BindSQL, _ = bindinfo.NormalizeStmtForBinding(v.HintedNode, b.ctx.GetSessionVars().CurrentDB, v.HintedNode.Text())
 		}
 	} else {
 		p = &SQLBindPlan{
@@ -780,7 +780,7 @@ func (b *PlanBuilder) buildSetBindingStatusPlan(v *ast.SetBindingStmt) (Plan, er
 		p.NewStatus = bindinfo.Disabled
 	}
 	if v.HintedNode != nil {
-		p.BindSQL = utilparser.RestoreWithDefaultDB(v.HintedNode, b.ctx.GetSessionVars().CurrentDB, v.HintedNode.Text())
+		p.BindSQL, _ = bindinfo.NormalizeStmtForBinding(v.HintedNode, b.ctx.GetSessionVars().CurrentDB, v.HintedNode.Text())
 	}
 	b.visitInfo = appendVisitInfo(b.visitInfo, mysql.SuperPriv, "", "", "", nil)
 	return p, nil
@@ -856,7 +856,7 @@ func (b *PlanBuilder) buildCreateBindPlanFromPlanDigest(v *ast.CreateBindingStmt
 		return nil, errors.Errorf("binding failed: %v", err)
 	}
 
-	bindSQL = utilparser.RestoreWithDefaultDB(hintNode, bindableStmt.Schema, hintNode.Text())
+	bindSQL, _ = bindinfo.NormalizeStmtForBinding(hintNode, bindableStmt.Schema, hintNode.Text())
 	db := utilparser.GetDefaultDB(originNode, bindableStmt.Schema)
 	normdOrigSQL, sqlDigestWithDB := bindinfo.NormalizeStmtForBinding(originNode, bindableStmt.Schema, bindableStmt.Query)
 
@@ -892,7 +892,7 @@ func (b *PlanBuilder) buildCreateBindPlan(v *ast.CreateBindingStmt) (Plan, error
 		return nil, err
 	}
 
-	bindSQL := utilparser.RestoreWithDefaultDB(v.HintedNode, b.ctx.GetSessionVars().CurrentDB, v.HintedNode.Text())
+	bindSQL, _ := bindinfo.NormalizeStmtForBinding(v.HintedNode, b.ctx.GetSessionVars().CurrentDB, v.HintedNode.Text())
 	db := utilparser.GetDefaultDB(v.OriginNode, b.ctx.GetSessionVars().CurrentDB)
 	normdOrigSQL, sqlDigestWithDB := bindinfo.NormalizeStmtForBinding(v.OriginNode, b.ctx.GetSessionVars().CurrentDB, v.OriginNode.Text())
 	p := &SQLBindPlan{
