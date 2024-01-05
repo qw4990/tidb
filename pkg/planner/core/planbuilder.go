@@ -855,10 +855,9 @@ func (b *PlanBuilder) buildCreateBindPlanFromPlanDigest(v *ast.CreateBindingStmt
 		return nil, errors.Errorf("binding failed: %v", err)
 	}
 
-	restoredSQL := utilparser.RestoreWithDefaultDB(originNode, bindableStmt.Schema, bindableStmt.Query)
 	bindSQL = utilparser.RestoreWithDefaultDB(hintNode, bindableStmt.Schema, hintNode.Text())
 	db := utilparser.GetDefaultDB(originNode, bindableStmt.Schema)
-	normdOrigSQL, sqlDigestWithDB := parser.NormalizeDigestForBinding(restoredSQL)
+	normdOrigSQL, sqlDigestWithDB := bindinfo.NormalizeStmtForBinding(originNode, bindableStmt.Schema, bindableStmt.Query)
 
 	p := &SQLBindPlan{
 		SQLBindOp:    OpSQLBindCreate,
@@ -870,7 +869,7 @@ func (b *PlanBuilder) buildCreateBindPlanFromPlanDigest(v *ast.CreateBindingStmt
 		Charset:      bindableStmt.Charset,
 		Collation:    bindableStmt.Collation,
 		Source:       bindinfo.History,
-		SQLDigest:    sqlDigestWithDB.String(),
+		SQLDigest:    sqlDigestWithDB,
 		PlanDigest:   v.PlanDigest,
 	}
 	b.visitInfo = appendVisitInfo(b.visitInfo, mysql.SuperPriv, "", "", "", nil)
@@ -892,10 +891,9 @@ func (b *PlanBuilder) buildCreateBindPlan(v *ast.CreateBindingStmt) (Plan, error
 		return nil, err
 	}
 
-	restoredSQL := utilparser.RestoreWithDefaultDB(v.OriginNode, b.ctx.GetSessionVars().CurrentDB, v.OriginNode.Text())
 	bindSQL := utilparser.RestoreWithDefaultDB(v.HintedNode, b.ctx.GetSessionVars().CurrentDB, v.HintedNode.Text())
 	db := utilparser.GetDefaultDB(v.OriginNode, b.ctx.GetSessionVars().CurrentDB)
-	normdOrigSQL, sqlDigestWithDB := parser.NormalizeDigestForBinding(restoredSQL)
+	normdOrigSQL, sqlDigestWithDB := bindinfo.NormalizeStmtForBinding(v.OriginNode, b.ctx.GetSessionVars().CurrentDB, v.OriginNode.Text())
 	p := &SQLBindPlan{
 		SQLBindOp:    OpSQLBindCreate,
 		NormdOrigSQL: normdOrigSQL,
@@ -906,7 +904,7 @@ func (b *PlanBuilder) buildCreateBindPlan(v *ast.CreateBindingStmt) (Plan, error
 		Charset:      charSet,
 		Collation:    collation,
 		Source:       bindinfo.Manual,
-		SQLDigest:    sqlDigestWithDB.String(),
+		SQLDigest:    sqlDigestWithDB,
 	}
 	b.visitInfo = appendVisitInfo(b.visitInfo, mysql.SuperPriv, "", "", "", nil)
 	return p, nil
