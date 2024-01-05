@@ -37,7 +37,6 @@ import (
 	"github.com/pingcap/tidb/pkg/util/chunk"
 	"github.com/pingcap/tidb/pkg/util/hint"
 	"github.com/pingcap/tidb/pkg/util/logutil"
-	utilparser "github.com/pingcap/tidb/pkg/util/parser"
 	"go.uber.org/zap"
 )
 
@@ -666,7 +665,7 @@ func GenerateBindSQL(ctx context.Context, stmtNode ast.StmtNode, planHint string
 	// We need to evolve plan based on the current sql, not the original sql which may have different parameters.
 	// So here we would remove the hint and inject the current best plan hint.
 	hint.BindHint(stmtNode, &hint.HintsSet{})
-	bindSQL := utilparser.RestoreWithDefaultDB(stmtNode, defaultDB, "")
+	bindSQL, _ := NormalizeStmtForBinding(stmtNode, defaultDB, "")
 	if bindSQL == "" {
 		return ""
 	}

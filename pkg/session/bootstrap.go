@@ -53,7 +53,6 @@ import (
 	"github.com/pingcap/tidb/pkg/util/dbterror"
 	"github.com/pingcap/tidb/pkg/util/intest"
 	"github.com/pingcap/tidb/pkg/util/logutil"
-	utilparser "github.com/pingcap/tidb/pkg/util/parser"
 	"github.com/pingcap/tidb/pkg/util/sqlescape"
 	"github.com/pingcap/tidb/pkg/util/sqlexec"
 	"github.com/pingcap/tidb/pkg/util/timeutil"
@@ -2123,8 +2122,9 @@ func updateBindInfo(iter *chunk.Iterator4Chunk, p *parser.Parser, bindMap map[st
 			// Therefore, if repeated, we can skip to keep the latest binding.
 			continue
 		}
+		bindSQL, _ := bindinfo.NormalizeStmtForBinding(stmt, db, bind)
 		bindMap[originWithDB] = bindInfo{
-			bindSQL:    utilparser.RestoreWithDefaultDB(stmt, db, bind),
+			bindSQL:    bindSQL,
 			status:     status,
 			createTime: row.GetTime(3),
 			charset:    charset,
