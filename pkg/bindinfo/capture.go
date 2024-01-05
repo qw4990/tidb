@@ -190,7 +190,7 @@ func (h *globalBindingHandle) CaptureBaselines() {
 			Charset:   charset,
 			Collation: collation,
 			Source:    Capture,
-			SQLDigest: digest.String(),
+			SQLDigest: digest,
 		}
 		// We don't need to pass the `sctx` because the BindSQL has been validated already.
 		err = h.CreateGlobalBinding(nil, &BindRecord{OriginalSQL: normalizedSQL, Db: dbName, Bindings: []Binding{binding}})
