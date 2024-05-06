@@ -270,7 +270,10 @@ func getCachedPointPlan(stmt *PlanCacheStmt, sessVars *variable.SessionVars, stm
 	// type from "paramMarker" to "Constant".When Point Select queries are executed,
 	// the expression in the where condition will not be evaluated,
 	// so you don't need to consider whether prepared.useCache is enabled.
-	plan := stmt.PointGet.Plan.(base.Plan)
+	plan, err := stmt.PointGet.Plan.(base.PhysicalPlan).Clone()
+	if err != nil {
+		return nil, nil, false, err
+	}
 	names := stmt.PointGet.ColumnNames.(types.NameSlice)
 	if !RebuildPlan4CachedPlan(plan) {
 		return nil, nil, false, nil
@@ -311,7 +314,13 @@ func getCachedPlan(sctx sessionctx.Context, isNonPrepared bool, cacheKey kvcache
 			return nil, nil, false, nil
 		}
 	}
-	if !RebuildPlan4CachedPlan(cachedVal.Plan) {
+
+	plan, err := cachedVal.Plan.(base.PhysicalPlan).Clone()
+	if err != nil {
+		return nil, nil, false, err
+	}
+
+	if !RebuildPlan4CachedPlan(plan) {
 		return nil, nil, false, nil
 	}
 	sessVars.FoundInPlanCache = true
@@ -327,7 +336,7 @@ func getCachedPlan(sctx sessionctx.Context, isNonPrepared bool, cacheKey kvcache
 	}
 	stmtCtx.SetPlanDigest(stmt.NormalizedPlan, stmt.PlanDigest)
 	stmtCtx.StmtHints = *cachedVal.stmtHints
-	return cachedVal.Plan, cachedVal.OutPutNames, true, nil
+	return plan, cachedVal.OutPutNames, true, nil
 }
 
 // generateNewPlan call the optimizer to generate a new plan for current statement
