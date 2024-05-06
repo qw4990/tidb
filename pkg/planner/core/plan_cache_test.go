@@ -1517,6 +1517,21 @@ func TestPlanCacheMVIndexManually(t *testing.T) {
 	}
 }
 
+func BenchmarkPlanCacheTableScan(b *testing.B) {
+	store := testkit.CreateMockStore(b)
+	tk := testkit.NewTestKit(b, store)
+	tk.MustExec("use test")
+	tk.MustExec("create table t (a int)")
+	tk.MustExec(`insert into t values (1), (2), (3), (4), (5), (6), (7), (8), (9), (10)`)
+
+	tk.MustExec("prepare st from 'select * from t where a<?'")
+	tk.MustExec("set @a=5")
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		tk.MustExec("execute st using @a")
+	}
+}
+
 func BenchmarkPlanCacheBindingMatch(b *testing.B) {
 	store := testkit.CreateMockStore(b)
 	tk := testkit.NewTestKit(b, store)
