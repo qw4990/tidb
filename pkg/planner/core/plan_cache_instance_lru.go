@@ -97,7 +97,7 @@ func (pc *instancePlanCache) Put(sctx sessionctx.Context, key kvcache.Key, value
 }
 
 // Evict evicts some values. There should be a background thread to perform the eviction.
-// step 1: iterate all values to collectes their last_used
+// step 1: iterate all values to collects their last_used
 // step 2: estimate a eviction threshold time based on all last_used values
 // step 3: iterate all values again and evict qualified values
 func (pc *instancePlanCache) Evict() {
