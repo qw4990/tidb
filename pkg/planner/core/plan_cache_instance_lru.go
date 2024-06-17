@@ -31,6 +31,10 @@ type instancePCNode struct {
 }
 
 // instancePlanCache is the instance level plan cache.
+// [key1] --> [headNode1] --> [node1] --> [node2] --> [node3]
+// [key2] --> [headNode2] --> [node4] --> [node5]
+// [key3] --> [headNode3] --> [node6] --> [node7] --> [node8]
+// headNode.value is always empty, headNode is designed to make it easier to implement.
 type instancePlanCache struct {
 	buckets sync.Map
 	totCost atomic.Uint64
