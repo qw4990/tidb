@@ -18,6 +18,7 @@ import (
 	"github.com/pingcap/tidb/pkg/util/kvcache"
 	utilpc "github.com/pingcap/tidb/pkg/util/plancache"
 	"go.uber.org/atomic"
+	"sort"
 	"sync"
 	"time"
 )
@@ -87,6 +88,39 @@ func (pc *instancePlanCache) Put(key kvcache.Key, value kvcache.Value, opts *uti
 	if headNode.next.CompareAndSwap(firstNode, currNode) { // if failed, some other thread has updated this node,
 		pc.totCost.Add(vMem) // then skip this Put and wait for the next time.
 	}
+}
+
+func (pc *instancePlanCache) calcEvictionThreshold(nodes []*instancePCNode) (t time.Time) {
+	avgPerPlan := pc.totCost.Load() / uint64(len(nodes))
+	if avgPerPlan <= 0 {
+		return
+	}
+	numToEvict := (pc.totCost.Load() - pc.softMemLimit.Load()) / avgPerPlan
+	if numToEvict <= 0 {
+		return
+	}
+
+	lastUsedTimes := make([]time.Time, 0, len(nodes))
+	for _, node := range nodes {
+		lastUsedTimes = append(lastUsedTimes, node.lastUsed.Load())
+	}
+	sort.Slice(lastUsedTimes, func(i, j int) bool {
+		return lastUsedTimes[i].Before(lastUsedTimes[j])
+	})
+	if len(lastUsedTimes) <= int(numToEvict) {
+		return
+	}
+	return lastUsedTimes[numToEvict]
+}
+
+func (pc *instancePlanCache) foreach(callback func(prev, this *instancePCNode)) {
+	pc.buckets.Range(func(_, v any) bool {
+		headNode := v.(*instancePCNode)
+		for prev, this := headNode, headNode.next.Load(); this != nil; prev, this = this, this.next.Load() {
+			callback(prev, this)
+		}
+		return true
+	})
 }
 
 func (pc *instancePlanCache) valueMem(value kvcache.Value) uint64 {
