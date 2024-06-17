@@ -37,7 +37,7 @@ type instancePCNode struct {
 // [key3] --> [headNode3] --> [node6] --> [node7] --> [node8]
 // headNode.value is always empty, headNode is designed to make it easier to implement.
 type instancePlanCache struct {
-	buckets sync.Map
+	heads   sync.Map
 	totCost atomic.Uint64
 
 	softMemLimit atomic.Uint64
@@ -45,7 +45,7 @@ type instancePlanCache struct {
 }
 
 func (pc *instancePlanCache) getHead(key kvcache.Key, create bool) *instancePCNode {
-	headNode, ok := pc.buckets.Load(key)
+	headNode, ok := pc.heads.Load(key)
 	if ok { // cache hit
 		return headNode.(*instancePCNode)
 	}
@@ -53,7 +53,7 @@ func (pc *instancePlanCache) getHead(key kvcache.Key, create bool) *instancePCNo
 		return nil
 	}
 	newHeadNode := pc.createNode(nil)
-	actual, _ := pc.buckets.LoadOrStore(key, newHeadNode)
+	actual, _ := pc.heads.LoadOrStore(key, newHeadNode)
 	if headNode, ok := actual.(*instancePCNode); ok { // for safety
 		return headNode
 	}
@@ -137,7 +137,7 @@ func (pc *instancePlanCache) calcEvictionThreshold(lastUsedTimes []time.Time) (t
 }
 
 func (pc *instancePlanCache) foreach(callback func(prev, this *instancePCNode)) {
-	pc.buckets.Range(func(_, v any) bool {
+	pc.heads.Range(func(_, v any) bool {
 		headNode := v.(*instancePCNode)
 		for prev, this := headNode, headNode.next.Load(); this != nil; prev, this = this, this.next.Load() {
 			callback(prev, this)
