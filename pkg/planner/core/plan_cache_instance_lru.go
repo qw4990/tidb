@@ -79,7 +79,7 @@ func (pc *instancePlanCache) getPlanFromList(sctx sessionctx.Context, headNode *
 }
 
 func (pc *instancePlanCache) Put(sctx sessionctx.Context, key kvcache.Key, value kvcache.Value, opts *utilpc.PlanCacheMatchOpts) {
-	vMem := pc.valueMem(value)
+	vMem := uint64(value.(*PlanCacheValue).MemoryUsage())
 	if vMem+pc.totCost.Load() > pc.hardMemLimit.Load() {
 		return // do nothing if it exceeds the hard limit
 	}
@@ -112,7 +112,7 @@ func (pc *instancePlanCache) Evict() {
 	pc.foreach(func(prev, this *instancePCNode) {        // step 3
 		if this.lastUsed.Load().Before(threshold) { // evict this value
 			if prev.next.CompareAndSwap(this, this.next.Load()) { // have to use CAS since
-				pc.totCost.Sub(pc.valueMem(this.value)) //  it might have been updated by other thread
+				pc.totCost.Sub(uint64(this.value.(*PlanCacheValue).MemoryUsage())) //  it might have been updated by other thread
 			}
 		}
 	})
@@ -144,10 +144,6 @@ func (pc *instancePlanCache) foreach(callback func(prev, this *instancePCNode)) 
 		}
 		return true
 	})
-}
-
-func (pc *instancePlanCache) valueMem(value kvcache.Value) uint64 {
-	return uint64(value.(*PlanCacheValue).MemoryUsage())
 }
 
 func (pc *instancePlanCache) createNode(value kvcache.Value) *instancePCNode {
