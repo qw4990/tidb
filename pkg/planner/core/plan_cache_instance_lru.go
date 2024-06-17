@@ -24,7 +24,6 @@ import (
 
 type instancePCNode struct {
 	value    any // the underlying value, which should be (*PlanCacheValue)
-	memCost  uint64
 	lastUsed atomic.Time
 	next     atomic.Pointer[instancePCNode]
 }
@@ -33,11 +32,9 @@ type instancePCNode struct {
 type instancePlanCache struct {
 	buckets sync.Map
 	totCost atomic.Uint64
-}
 
-func (pc *instancePlanCache) createNode() *instancePCNode {
-	panic("TODO")
-	return nil
+	softMemLimit atomic.Uint64
+	hardMemLimit atomic.Uint64
 }
 
 func (pc *instancePlanCache) getHead(key kvcache.Key, create bool) *instancePCNode {
@@ -74,7 +71,37 @@ func (pc *instancePlanCache) getPlanFromList(headNode *instancePCNode, opts *uti
 	return nil, false
 }
 
+func (pc *instancePlanCache) Put(key kvcache.Key, value kvcache.Value, opts *utilpc.PlanCacheMatchOpts) {
+	vMem := pc.valueMem(value)
+	if vMem+pc.totCost.Load() > pc.hardMemLimit.Load() {
+		return // do nothing if it exceeds the hard limit
+	}
+	headNode := pc.getHead(key, true)
+	if _, ok := pc.getPlanFromList(headNode, opts); ok {
+		return // some other thread has inserted the same plan before
+	}
+
+	firstNode := headNode.next.Load()
+	currNode := pc.createNode(value)
+	currNode.next.Store(firstNode)
+	if headNode.next.CompareAndSwap(firstNode, currNode) { // if failed, some other thread has updated this node,
+		pc.totCost.Add(vMem) // then skip this Put and wait for the next time.
+	}
+}
+
+func (pc *instancePlanCache) valueMem(value kvcache.Value) uint64 {
+	panic("TODO")
+	return 0
+}
+
 func (pc *instancePlanCache) match(val *PlanCacheValue, opts *utilpc.PlanCacheMatchOpts) bool {
 	panic("TODO")
 	return false
+}
+
+func (pc *instancePlanCache) createNode(value kvcache.Value) *instancePCNode {
+	node := new(instancePCNode)
+	node.value = value
+	node.lastUsed.Store(time.Now())
+	return node
 }
