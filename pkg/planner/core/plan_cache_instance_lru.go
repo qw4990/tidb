@@ -61,18 +61,17 @@ func (pc *instancePlanCache) Get(key kvcache.Key, opts *utilpc.PlanCacheMatchOpt
 	if headNode == nil { // cache miss
 		return nil, false
 	}
-
-	//return pc.getPlanFromList(head, opt)
+	return pc.getPlanFromList(headNode, opts)
 }
 
-func (pc *instancePlanCache) getPlanFromList(headNode *instancePCNode, opts *utilpc.PlanCacheMatchOpts) kvcache.Value {
+func (pc *instancePlanCache) getPlanFromList(headNode *instancePCNode, opts *utilpc.PlanCacheMatchOpts) (kvcache.Value, bool) {
 	for node := headNode.next.Load(); node != nil; node = node.next.Load() {
 		if pc.match(node.value.(*PlanCacheValue), opts) { // v.Plan is read-only, no need to lock
 			node.lastUsed.Store(time.Now()) // atomically update the lastUsed field
-			return node.value
+			return node.value, true
 		}
 	}
-	return nil
+	return nil, false
 }
 
 func (pc *instancePlanCache) match(val *PlanCacheValue, opts *utilpc.PlanCacheMatchOpts) bool {
