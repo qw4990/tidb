@@ -15,12 +15,13 @@
 package core
 
 import (
-	"github.com/pingcap/tidb/pkg/util/kvcache"
-	utilpc "github.com/pingcap/tidb/pkg/util/plancache"
-	"go.uber.org/atomic"
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/pingcap/tidb/pkg/util/kvcache"
+	utilpc "github.com/pingcap/tidb/pkg/util/plancache"
+	"go.uber.org/atomic"
 )
 
 type instancePCNode struct {
@@ -90,19 +91,36 @@ func (pc *instancePlanCache) Put(key kvcache.Key, value kvcache.Value, opts *uti
 	}
 }
 
-func (pc *instancePlanCache) calcEvictionThreshold(nodes []*instancePCNode) (t time.Time) {
-	avgPerPlan := pc.totCost.Load() / uint64(len(nodes))
+// Evict evicts some values. There should be a background thread to perform the eviction.
+// step 1: iterate all values to collectes their last_used
+// step 2: estimate a eviction threshold time based on all last_used values
+// step 3: iterate all values again and evict qualified values
+func (pc *instancePlanCache) Evict() {
+	if pc.totCost.Load() < pc.softMemLimit.Load() {
+		return // do nothing
+	}
+	lastUsedTimes := make([]time.Time, 0, 64)
+	pc.foreach(func(_, this *instancePCNode) { // step 1
+		lastUsedTimes = append(lastUsedTimes, this.lastUsed.Load())
+	})
+	threshold := pc.calcEvictionThreshold(lastUsedTimes) // step 2
+	pc.foreach(func(prev, this *instancePCNode) {        // step 3
+		if this.lastUsed.Load().Before(threshold) { // evict this value
+			if prev.next.CompareAndSwap(this, this.next.Load()) { // have to use CAS since
+				pc.totCost.Sub(pc.valueMem(this.value)) //  it might have been updated by other thread
+			}
+		}
+	})
+}
+
+func (pc *instancePlanCache) calcEvictionThreshold(lastUsedTimes []time.Time) (t time.Time) {
+	avgPerPlan := pc.totCost.Load() / uint64(len(lastUsedTimes))
 	if avgPerPlan <= 0 {
 		return
 	}
 	numToEvict := (pc.totCost.Load() - pc.softMemLimit.Load()) / avgPerPlan
 	if numToEvict <= 0 {
 		return
-	}
-
-	lastUsedTimes := make([]time.Time, 0, len(nodes))
-	for _, node := range nodes {
-		lastUsedTimes = append(lastUsedTimes, node.lastUsed.Load())
 	}
 	sort.Slice(lastUsedTimes, func(i, j int) bool {
 		return lastUsedTimes[i].Before(lastUsedTimes[j])
