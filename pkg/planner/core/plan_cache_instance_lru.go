@@ -32,6 +32,13 @@ type InstancePlanCache interface {
 	Evict()
 }
 
+func NewInstancePlanCache(softMemLimit, hardMemLimit uint64) InstancePlanCache {
+	planCache := new(instancePlanCache)
+	planCache.softMemLimit.Store(softMemLimit)
+	planCache.hardMemLimit.Store(hardMemLimit)
+	return planCache
+}
+
 type instancePCNode struct {
 	value    any // the underlying value, which should be (*PlanCacheValue)
 	lastUsed atomic.Time
