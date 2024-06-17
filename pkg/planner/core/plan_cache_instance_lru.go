@@ -25,6 +25,13 @@ import (
 	"go.uber.org/atomic"
 )
 
+// InstancePlanCache ...
+type InstancePlanCache interface {
+	Get(sctx sessionctx.Context, key kvcache.Key, opts *utilpc.PlanCacheMatchOpts) (value kvcache.Value, ok bool)
+	Put(sctx sessionctx.Context, key kvcache.Key, value kvcache.Value, opts *utilpc.PlanCacheMatchOpts)
+	Evict()
+}
+
 type instancePCNode struct {
 	value    any // the underlying value, which should be (*PlanCacheValue)
 	lastUsed atomic.Time
