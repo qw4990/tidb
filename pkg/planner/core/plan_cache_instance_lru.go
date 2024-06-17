@@ -45,7 +45,7 @@ func (pc *instancePlanCache) getHead(key kvcache.Key, create bool) *instancePCNo
 	if !create { // cache miss
 		return nil
 	}
-	newHeadNode := pc.createNode()
+	newHeadNode := pc.createNode(nil)
 	actual, _ := pc.buckets.LoadOrStore(key, newHeadNode)
 	if headNode, ok := actual.(*instancePCNode); ok { // for safety
 		return headNode
@@ -90,13 +90,7 @@ func (pc *instancePlanCache) Put(key kvcache.Key, value kvcache.Value, opts *uti
 }
 
 func (pc *instancePlanCache) valueMem(value kvcache.Value) uint64 {
-	panic("TODO")
-	return 0
-}
-
-func (pc *instancePlanCache) match(val *PlanCacheValue, opts *utilpc.PlanCacheMatchOpts) bool {
-	panic("TODO")
-	return false
+	return uint64(value.(*PlanCacheValue).MemoryUsage())
 }
 
 func (pc *instancePlanCache) createNode(value kvcache.Value) *instancePCNode {
@@ -104,4 +98,9 @@ func (pc *instancePlanCache) createNode(value kvcache.Value) *instancePCNode {
 	node.value = value
 	node.lastUsed.Store(time.Now())
 	return node
+}
+
+func (pc *instancePlanCache) match(val *PlanCacheValue, opts *utilpc.PlanCacheMatchOpts) bool {
+	panic("TODO")
+	return false
 }
