@@ -137,13 +137,22 @@ func (pc *instancePlanCache) calcEvictionThreshold(lastUsedTimes []time.Time) (t
 }
 
 func (pc *instancePlanCache) foreach(callback func(prev, this *instancePCNode)) {
-	pc.heads.Range(func(_, v any) bool {
-		headNode := v.(*instancePCNode)
-		for prev, this := headNode, headNode.next.Load(); this != nil; prev, this = this, this.next.Load() {
-			callback(prev, this)
+	for _, hKey := range pc.headKeys() {
+		if headNode := pc.getHead(hKey, false); headNode != nil {
+			for prev, this := headNode, headNode.next.Load(); this != nil; prev, this = this, this.next.Load() {
+				callback(prev, this)
+			}
 		}
+	}
+}
+
+func (pc *instancePlanCache) headKeys() []kvcache.Key {
+	keys := make([]kvcache.Key, 0, 64)
+	pc.heads.Range(func(k, _ any) bool {
+		keys = append(keys, k.(kvcache.Key))
 		return true
 	})
+	return keys
 }
 
 func (pc *instancePlanCache) createNode(value kvcache.Value) *instancePCNode {
