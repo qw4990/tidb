@@ -116,6 +116,7 @@ func (pc *instancePlanCache) Evict() {
 			}
 		}
 	})
+	pc.clearEmptyHead()
 }
 
 func (pc *instancePlanCache) calcEvictionThreshold(lastUsedTimes []time.Time) (t time.Time) {
@@ -137,22 +138,32 @@ func (pc *instancePlanCache) calcEvictionThreshold(lastUsedTimes []time.Time) (t
 }
 
 func (pc *instancePlanCache) foreach(callback func(prev, this *instancePCNode)) {
-	for _, hKey := range pc.headKeys() {
-		if headNode := pc.getHead(hKey, false); headNode != nil {
-			for prev, this := headNode, headNode.next.Load(); this != nil; prev, this = this, this.next.Load() {
-				callback(prev, this)
-			}
+	_, headNodes := pc.headNodes()
+	for _, headNode := range headNodes {
+		for prev, this := headNode, headNode.next.Load(); this != nil; prev, this = this, this.next.Load() {
+			callback(prev, this)
 		}
 	}
 }
 
-func (pc *instancePlanCache) headKeys() []kvcache.Key {
+func (pc *instancePlanCache) headNodes() ([]kvcache.Key, []*instancePCNode) {
 	keys := make([]kvcache.Key, 0, 64)
-	pc.heads.Range(func(k, _ any) bool {
+	headNodes := make([]*instancePCNode, 0, 64)
+	pc.heads.Range(func(k, v any) bool {
 		keys = append(keys, k.(kvcache.Key))
+		headNodes = append(headNodes, v.(*instancePCNode))
 		return true
 	})
-	return keys
+	return keys, headNodes
+}
+
+func (pc *instancePlanCache) clearEmptyHead() {
+	keys, headNodes := pc.headNodes()
+	for i, headNode := range headNodes {
+		if headNode.next.Load() == nil {
+			pc.heads.Delete(keys[i])
+		}
+	}
 }
 
 func (pc *instancePlanCache) createNode(value kvcache.Value) *instancePCNode {
