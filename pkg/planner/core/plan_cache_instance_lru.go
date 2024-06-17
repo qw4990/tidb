@@ -15,6 +15,7 @@
 package core
 
 import (
+	"github.com/pingcap/tidb/pkg/sessionctx"
 	"sort"
 	"sync"
 	"time"
@@ -59,17 +60,17 @@ func (pc *instancePlanCache) getHead(key kvcache.Key, create bool) *instancePCNo
 	return nil
 }
 
-func (pc *instancePlanCache) Get(key kvcache.Key, opts *utilpc.PlanCacheMatchOpts) (value kvcache.Value, ok bool) {
+func (pc *instancePlanCache) Get(sctx sessionctx.Context, key kvcache.Key, opts *utilpc.PlanCacheMatchOpts) (value kvcache.Value, ok bool) {
 	headNode := pc.getHead(key, false)
 	if headNode == nil { // cache miss
 		return nil, false
 	}
-	return pc.getPlanFromList(headNode, opts)
+	return pc.getPlanFromList(sctx, headNode, opts)
 }
 
-func (pc *instancePlanCache) getPlanFromList(headNode *instancePCNode, opts *utilpc.PlanCacheMatchOpts) (kvcache.Value, bool) {
+func (pc *instancePlanCache) getPlanFromList(sctx sessionctx.Context, headNode *instancePCNode, opts *utilpc.PlanCacheMatchOpts) (kvcache.Value, bool) {
 	for node := headNode.next.Load(); node != nil; node = node.next.Load() {
-		if pc.match(node.value.(*PlanCacheValue), opts) { // v.Plan is read-only, no need to lock
+		if matchCachedPlan(sctx, node.value.(*PlanCacheValue), opts) { // v.Plan is read-only, no need to lock
 			node.lastUsed.Store(time.Now()) // atomically update the lastUsed field
 			return node.value, true
 		}
@@ -77,13 +78,13 @@ func (pc *instancePlanCache) getPlanFromList(headNode *instancePCNode, opts *uti
 	return nil, false
 }
 
-func (pc *instancePlanCache) Put(key kvcache.Key, value kvcache.Value, opts *utilpc.PlanCacheMatchOpts) {
+func (pc *instancePlanCache) Put(sctx sessionctx.Context, key kvcache.Key, value kvcache.Value, opts *utilpc.PlanCacheMatchOpts) {
 	vMem := pc.valueMem(value)
 	if vMem+pc.totCost.Load() > pc.hardMemLimit.Load() {
 		return // do nothing if it exceeds the hard limit
 	}
 	headNode := pc.getHead(key, true)
-	if _, ok := pc.getPlanFromList(headNode, opts); ok {
+	if _, ok := pc.getPlanFromList(sctx, headNode, opts); ok {
 		return // some other thread has inserted the same plan before
 	}
 
@@ -154,9 +155,4 @@ func (pc *instancePlanCache) createNode(value kvcache.Value) *instancePCNode {
 	node.value = value
 	node.lastUsed.Store(time.Now())
 	return node
-}
-
-func (pc *instancePlanCache) match(val *PlanCacheValue, opts *utilpc.PlanCacheMatchOpts) bool {
-	panic("TODO")
-	return false
 }
