@@ -19,7 +19,6 @@ import (
 	"testing"
 
 	"github.com/pingcap/tidb/pkg/domain"
-	"github.com/pingcap/tidb/pkg/util/size"
 	"github.com/stretchr/testify/require"
 )
 
@@ -44,7 +43,7 @@ func TestInstancePlanCacheBasic(t *testing.T) {
 		require.False(t, ok)
 	}
 
-	pc = NewInstancePlanCache(int64(size.GB), int64(size.GB))
+	pc = NewInstancePlanCache(1000, 1000)
 	put(1, 100)
 	put(2, 100)
 	put(3, 100)
@@ -117,4 +116,36 @@ func TestInstancePlanCacheBasic(t *testing.T) {
 	hit(1)
 	hit(2)
 	hit(3)
+}
+
+func TestInstancePlanCacheWithMatchOpts(t *testing.T) {
+	sctx := MockContext()
+	defer func() {
+		domain.GetDomain(sctx).StatsHandle().Close()
+	}()
+
+	var pc InstancePlanCache
+	put := func(testKey, memUsage, statsHash int64) {
+		v := &PlanCacheValue{testKey: testKey, memoryUsage: memUsage, matchOpts: &PlanCacheMatchOpts{StatsVersionHash: uint64(statsHash)}}
+		pc.Put(sctx, fmt.Sprintf("%v", testKey), v, &PlanCacheMatchOpts{StatsVersionHash: uint64(statsHash)})
+	}
+	hit := func(testKey, statsHash int64) {
+		v, ok := pc.Get(sctx, fmt.Sprintf("%v", testKey), &PlanCacheMatchOpts{StatsVersionHash: uint64(statsHash)})
+		require.True(t, ok)
+		require.Equal(t, v.(*PlanCacheValue).testKey, testKey)
+	}
+	miss := func(testKey, statsHash int) {
+		_, ok := pc.Get(sctx, fmt.Sprintf("%v", testKey), &PlanCacheMatchOpts{StatsVersionHash: uint64(statsHash)})
+		require.False(t, ok)
+	}
+
+	// same key with different statsHash
+	pc = NewInstancePlanCache(1000, 1000)
+	put(1, 100, 1)
+	put(1, 100, 2)
+	put(1, 100, 3)
+	hit(1, 1)
+	hit(1, 2)
+	hit(1, 3)
+	miss(1, 4)
 }
