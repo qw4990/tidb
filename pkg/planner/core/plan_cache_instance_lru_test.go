@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"math/rand"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -245,6 +246,55 @@ func TestInstancePlanCacheConcurrentRead(t *testing.T) {
 					miss(k, statsHash)
 				}
 				time.Sleep(time.Nanosecond * 10)
+			}
+		}()
+	}
+	wg.Wait()
+}
+
+func TestInstancePlanCacheConcurrentWriteRead(t *testing.T) {
+	sctx := MockContext()
+	defer func() {
+		domain.GetDomain(sctx).StatsHandle().Close()
+	}()
+	sctx.GetSessionVars().PlanCacheInvalidationOnFreshStats = true
+
+	var pc InstancePlanCache
+	put := func(testKey, memUsage, statsHash int64) {
+		v := &PlanCacheValue{testKey: testKey, memoryUsage: memUsage, matchOpts: &PlanCacheMatchOpts{StatsVersionHash: uint64(statsHash)}}
+		pc.Put(sctx, fmt.Sprintf("%v", testKey), v, &PlanCacheMatchOpts{StatsVersionHash: uint64(statsHash)})
+	}
+	hit := func(testKey, statsHash int) {
+		v, ok := pc.Get(sctx, fmt.Sprintf("%v", testKey), &PlanCacheMatchOpts{StatsVersionHash: uint64(statsHash)})
+		require.True(t, ok)
+		require.Equal(t, v.(*PlanCacheValue).testKey, int64(testKey))
+	}
+
+	var flag [100][100]atomic.Bool
+	pc = NewInstancePlanCache(300, 100000)
+	var wg sync.WaitGroup
+	for i := 0; i < 5; i++ { // writers
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := 0; i < 1000; i++ {
+				k, statsHash := rand.Intn(100), rand.Intn(100)
+				put(int64(k), 1, int64(statsHash))
+				flag[k][statsHash].Store(true)
+				time.Sleep(time.Nanosecond * 10)
+			}
+		}()
+	}
+	for i := 0; i < 5; i++ { // readers
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := 0; i < 2000; i++ {
+				k, statsHash := rand.Intn(100), rand.Intn(100)
+				if flag[k][statsHash].Load() {
+					hit(k, statsHash)
+				}
+				time.Sleep(time.Nanosecond * 5)
 			}
 		}()
 	}
