@@ -45,6 +45,7 @@ func TestInstancePlanCacheBasic(t *testing.T) {
 	pc.Put(sctx, "k99", mockPCVal(99), nil)
 	pc.Put(sctx, "k100", mockPCVal(100), nil)
 	pc.Put(sctx, "k101", mockPCVal(101), nil)
+	require.Equal(t, pc.MemUsage(sctx), int64(199))
 	for i := 99; i <= 100; i++ {
 		v, ok := pc.Get(sctx, fmt.Sprintf("k%v", i), nil)
 		require.Equal(t, ok, true)
@@ -52,4 +53,13 @@ func TestInstancePlanCacheBasic(t *testing.T) {
 	}
 	_, ok := pc.Get(sctx, "k101", nil)
 	require.Equal(t, ok, false)
+
+	// can Put 2 same values
+	pc = NewInstancePlanCache(250, 250)
+	pc.Put(sctx, "k99", mockPCVal(99), nil)
+	pc.Put(sctx, "k99", mockPCVal(100), nil)
+	require.Equal(t, pc.MemUsage(sctx), int64(99)) // the second one will be ignored
+	v, ok := pc.Get(sctx, "k99", nil)
+	require.Equal(t, ok, true)
+	require.Equal(t, v.(*PlanCacheValue).memoryUsage, int64(99))
 }
