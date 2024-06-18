@@ -16,11 +16,20 @@ package core
 
 import (
 	"github.com/pingcap/tidb/pkg/util/size"
+	"github.com/stretchr/testify/require"
 	"testing"
 )
 
-func TestInstancePlanCache(t *testing.T) {
-	pc := NewInstancePlanCache(size.GB, size.GB)
-	sctx:= MockContext()
-	pc.Put(sctx, nil, nil, nil)
+func mockPCVal(memUsage int64) *PlanCacheValue {
+	return &PlanCacheValue{memoryUsage: memUsage}
+}
+
+func TestInstancePlanCacheBasic(t *testing.T) {
+	pc := NewInstancePlanCache(int64(size.GB), int64(size.GB))
+	sctx := MockContext()
+	defer sctx.Close()
+	pc.Put(sctx, "k1", mockPCVal(100), nil)
+	pc.Put(sctx, "k2", mockPCVal(100), nil)
+	pc.Put(sctx, "k3", mockPCVal(100), nil)
+	require.Equal(t, pc.MemUsage(sctx), int64(300))
 }

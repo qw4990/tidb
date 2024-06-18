@@ -15,11 +15,11 @@
 package core
 
 import (
-	"github.com/pingcap/tidb/pkg/sessionctx"
 	"sort"
 	"sync"
 	"time"
 
+	"github.com/pingcap/tidb/pkg/sessionctx"
 	"github.com/pingcap/tidb/pkg/util/kvcache"
 	"go.uber.org/atomic"
 )
@@ -28,10 +28,11 @@ import (
 type InstancePlanCache interface {
 	Get(sctx sessionctx.Context, key string, opts any) (value any, ok bool)
 	Put(sctx sessionctx.Context, key string, value, opts any)
-	Evict()
+	Evict(sctx sessionctx.Context)
+	MemUsage(sctx sessionctx.Context) int64
 }
 
-func NewInstancePlanCache(softMemLimit, hardMemLimit uint64) InstancePlanCache {
+func NewInstancePlanCache(softMemLimit, hardMemLimit int64) InstancePlanCache {
 	planCache := new(instancePlanCache)
 	planCache.softMemLimit.Store(softMemLimit)
 	planCache.hardMemLimit.Store(hardMemLimit)
@@ -51,10 +52,10 @@ type instancePCNode struct {
 // headNode.value is always empty, headNode is designed to make it easier to implement.
 type instancePlanCache struct {
 	heads   sync.Map
-	totCost atomic.Uint64
+	totCost atomic.Int64
 
-	softMemLimit atomic.Uint64
-	hardMemLimit atomic.Uint64
+	softMemLimit atomic.Int64
+	hardMemLimit atomic.Int64
 }
 
 func (pc *instancePlanCache) getHead(key string, create bool) *instancePCNode {
@@ -92,7 +93,7 @@ func (pc *instancePlanCache) getPlanFromList(sctx sessionctx.Context, headNode *
 }
 
 func (pc *instancePlanCache) Put(sctx sessionctx.Context, key string, value, opts any) {
-	vMem := uint64(value.(*PlanCacheValue).MemoryUsage())
+	vMem := value.(*PlanCacheValue).MemoryUsage()
 	if vMem+pc.totCost.Load() > pc.hardMemLimit.Load() {
 		return // do nothing if it exceeds the hard limit
 	}
@@ -113,7 +114,7 @@ func (pc *instancePlanCache) Put(sctx sessionctx.Context, key string, value, opt
 // step 1: iterate all values to collects their last_used
 // step 2: estimate a eviction threshold time based on all last_used values
 // step 3: iterate all values again and evict qualified values
-func (pc *instancePlanCache) Evict() {
+func (pc *instancePlanCache) Evict(_ sessionctx.Context) {
 	if pc.totCost.Load() < pc.softMemLimit.Load() {
 		return // do nothing
 	}
@@ -125,15 +126,19 @@ func (pc *instancePlanCache) Evict() {
 	pc.foreach(func(prev, this *instancePCNode) {        // step 3
 		if this.lastUsed.Load().Before(threshold) { // evict this value
 			if prev.next.CompareAndSwap(this, this.next.Load()) { // have to use CAS since
-				pc.totCost.Sub(uint64(this.value.(*PlanCacheValue).MemoryUsage())) //  it might have been updated by other thread
+				pc.totCost.Sub(this.value.(*PlanCacheValue).MemoryUsage()) //  it might have been updated by other thread
 			}
 		}
 	})
 	pc.clearEmptyHead()
 }
 
+func (pc *instancePlanCache) MemUsage(_ sessionctx.Context) int64 {
+	return pc.totCost.Load()
+}
+
 func (pc *instancePlanCache) calcEvictionThreshold(lastUsedTimes []time.Time) (t time.Time) {
-	avgPerPlan := pc.totCost.Load() / uint64(len(lastUsedTimes))
+	avgPerPlan := pc.totCost.Load() / int64(len(lastUsedTimes))
 	if avgPerPlan <= 0 {
 		return
 	}
