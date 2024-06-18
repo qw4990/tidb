@@ -149,4 +149,21 @@ func TestInstancePlanCacheWithMatchOpts(t *testing.T) {
 	hit(1, 2)
 	hit(1, 3)
 	miss(1, 4)
+	miss(2, 1)
+
+	// multiple keys with same statsHash
+	pc = NewInstancePlanCache(1000, 1000)
+	put(1, 100, 1)
+	put(1, 100, 2)
+	put(2, 100, 1)
+	put(2, 100, 2)
+	hit(1, 1)
+	hit(1, 2)
+	miss(1, 3)
+	hit(2, 1)
+	hit(2, 2)
+	miss(2, 3)
+	miss(3, 1)
+	miss(3, 2)
+	miss(3, 3)
 }
