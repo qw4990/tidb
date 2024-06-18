@@ -21,14 +21,13 @@ import (
 	"time"
 
 	"github.com/pingcap/tidb/pkg/util/kvcache"
-	utilpc "github.com/pingcap/tidb/pkg/util/plancache"
 	"go.uber.org/atomic"
 )
 
 // InstancePlanCache ...
 type InstancePlanCache interface {
-	Get(sctx sessionctx.Context, key kvcache.Key, opts *utilpc.PlanCacheMatchOpts) (value kvcache.Value, ok bool)
-	Put(sctx sessionctx.Context, key kvcache.Key, value kvcache.Value, opts *utilpc.PlanCacheMatchOpts)
+	Get(sctx sessionctx.Context, key string, opts any) (value any, ok bool)
+	Put(sctx sessionctx.Context, key string, value, opts any)
 	Evict()
 }
 
@@ -58,7 +57,7 @@ type instancePlanCache struct {
 	hardMemLimit atomic.Uint64
 }
 
-func (pc *instancePlanCache) getHead(key kvcache.Key, create bool) *instancePCNode {
+func (pc *instancePlanCache) getHead(key string, create bool) *instancePCNode {
 	headNode, ok := pc.heads.Load(key)
 	if ok { // cache hit
 		return headNode.(*instancePCNode)
@@ -74,7 +73,7 @@ func (pc *instancePlanCache) getHead(key kvcache.Key, create bool) *instancePCNo
 	return nil
 }
 
-func (pc *instancePlanCache) Get(sctx sessionctx.Context, key kvcache.Key, opts *utilpc.PlanCacheMatchOpts) (value kvcache.Value, ok bool) {
+func (pc *instancePlanCache) Get(sctx sessionctx.Context, key string, opts any) (value any, ok bool) {
 	headNode := pc.getHead(key, false)
 	if headNode == nil { // cache miss
 		return nil, false
@@ -82,9 +81,9 @@ func (pc *instancePlanCache) Get(sctx sessionctx.Context, key kvcache.Key, opts 
 	return pc.getPlanFromList(sctx, headNode, opts)
 }
 
-func (pc *instancePlanCache) getPlanFromList(sctx sessionctx.Context, headNode *instancePCNode, opts *utilpc.PlanCacheMatchOpts) (kvcache.Value, bool) {
+func (pc *instancePlanCache) getPlanFromList(sctx sessionctx.Context, headNode *instancePCNode, opts any) (any, bool) {
 	for node := headNode.next.Load(); node != nil; node = node.next.Load() {
-		if matchCachedPlan(sctx, node.value.(*PlanCacheValue), opts) { // v.Plan is read-only, no need to lock
+		if matchCachedPlan(sctx, node.value.(*PlanCacheValue), opts.(*PlanCacheMatchOpts)) { // v.Plan is read-only, no need to lock
 			node.lastUsed.Store(time.Now()) // atomically update the lastUsed field
 			return node.value, true
 		}
@@ -92,7 +91,7 @@ func (pc *instancePlanCache) getPlanFromList(sctx sessionctx.Context, headNode *
 	return nil, false
 }
 
-func (pc *instancePlanCache) Put(sctx sessionctx.Context, key kvcache.Key, value kvcache.Value, opts *utilpc.PlanCacheMatchOpts) {
+func (pc *instancePlanCache) Put(sctx sessionctx.Context, key string, value, opts any) {
 	vMem := uint64(value.(*PlanCacheValue).MemoryUsage())
 	if vMem+pc.totCost.Load() > pc.hardMemLimit.Load() {
 		return // do nothing if it exceeds the hard limit
