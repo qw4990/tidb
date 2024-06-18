@@ -166,4 +166,16 @@ func TestInstancePlanCacheWithMatchOpts(t *testing.T) {
 	miss(3, 1)
 	miss(3, 2)
 	miss(3, 3)
+
+	// hard limit can take effect in this case
+	pc = NewInstancePlanCache(200, 200)
+	put(1, 100, 1)
+	put(1, 100, 2)
+	put(1, 100, 3) // the third one will be ignored
+	require.Equal(t, pc.MemUsage(sctx), int64(200))
+	hit(1, 1)
+	hit(1, 2)
+	miss(1, 3)
+
+	// eviction this case
 }
