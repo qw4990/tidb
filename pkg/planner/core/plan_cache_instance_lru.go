@@ -197,11 +197,11 @@ func (pc *instancePlanCache) foreach(callback func(prev, this *instancePCNode)) 
 	}
 }
 
-func (pc *instancePlanCache) headNodes() ([]kvcache.Key, []*instancePCNode) {
-	keys := make([]kvcache.Key, 0, 64)
+func (pc *instancePlanCache) headNodes() ([]string, []*instancePCNode) {
+	keys := make([]string, 0, 64)
 	headNodes := make([]*instancePCNode, 0, 64)
 	pc.heads.Range(func(k, v any) bool {
-		keys = append(keys, k.(kvcache.Key))
+		keys = append(keys, k.(string))
 		headNodes = append(headNodes, v.(*instancePCNode))
 		return true
 	})
