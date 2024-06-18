@@ -80,4 +80,11 @@ func TestInstancePlanCacheBasic(t *testing.T) {
 		require.Equal(t, ok, true)
 		require.Equal(t, v.(*PlanCacheValue).memoryUsage, int64(i))
 	}
+
+	// invalid hard or soft limit
+	pc = NewInstancePlanCache(250, 250)
+	require.Error(t, pc.SetHardLimit(-1))
+	require.Error(t, pc.SetHardLimit(200))
+	require.Error(t, pc.SetSoftLimit(-1))
+	require.Error(t, pc.SetSoftLimit(300))
 }
