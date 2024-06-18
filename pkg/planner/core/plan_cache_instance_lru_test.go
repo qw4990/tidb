@@ -16,7 +16,10 @@ package core
 
 import (
 	"fmt"
+	"math/rand"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/pingcap/tidb/pkg/domain"
 	"github.com/stretchr/testify/require"
@@ -194,4 +197,56 @@ func TestInstancePlanCacheWithMatchOpts(t *testing.T) {
 	hit(1, 3)
 	miss(1, 4)
 	miss(1, 5)
+}
+
+func TestInstancePlanCacheConcurrentRead(t *testing.T) {
+	sctx := MockContext()
+	defer func() {
+		domain.GetDomain(sctx).StatsHandle().Close()
+	}()
+	sctx.GetSessionVars().PlanCacheInvalidationOnFreshStats = true
+
+	var pc InstancePlanCache
+	put := func(testKey, memUsage, statsHash int64) {
+		v := &PlanCacheValue{testKey: testKey, memoryUsage: memUsage, matchOpts: &PlanCacheMatchOpts{StatsVersionHash: uint64(statsHash)}}
+		pc.Put(sctx, fmt.Sprintf("%v", testKey), v, &PlanCacheMatchOpts{StatsVersionHash: uint64(statsHash)})
+	}
+	hit := func(testKey, statsHash int) {
+		v, ok := pc.Get(sctx, fmt.Sprintf("%v", testKey), &PlanCacheMatchOpts{StatsVersionHash: uint64(statsHash)})
+		require.True(t, ok)
+		require.Equal(t, v.(*PlanCacheValue).testKey, int64(testKey))
+	}
+	miss := func(testKey, statsHash int) {
+		_, ok := pc.Get(sctx, fmt.Sprintf("%v", testKey), &PlanCacheMatchOpts{StatsVersionHash: uint64(statsHash)})
+		require.False(t, ok)
+	}
+
+	pc = NewInstancePlanCache(300, 100000)
+	var flag [100][100]bool
+	for k := 0; k < 100; k++ {
+		for statsHash := 0; statsHash < 100; statsHash++ {
+			if rand.Intn(10) < 7 {
+				put(int64(k), 1, int64(statsHash))
+				flag[k][statsHash] = true
+			}
+		}
+	}
+
+	var wg sync.WaitGroup
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := 0; i < 10000; i++ {
+				k, statsHash := rand.Intn(100), rand.Intn(100)
+				if flag[k][statsHash] {
+					hit(k, statsHash)
+				} else {
+					miss(k, statsHash)
+				}
+				time.Sleep(time.Nanosecond * 10)
+			}
+		}()
+	}
+	wg.Wait()
 }
