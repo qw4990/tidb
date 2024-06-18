@@ -108,4 +108,15 @@ func TestInstancePlanCacheBasic(t *testing.T) {
 	hitPC(t, sctx, pc, 3)
 	missPC(t, sctx, pc, 4) // 4-5 have been evicted
 	missPC(t, sctx, pc, 5)
+
+	// no need to eviction if mem < softLimit
+	pc = NewInstancePlanCache(320, 500)
+	putPC(sctx, pc, 1, 100)
+	putPC(sctx, pc, 2, 100)
+	putPC(sctx, pc, 3, 100)
+	require.Equal(t, pc.Evict(sctx), false)
+	require.Equal(t, pc.MemUsage(sctx), int64(300))
+	hitPC(t, sctx, pc, 1)
+	hitPC(t, sctx, pc, 2)
+	hitPC(t, sctx, pc, 3)
 }
