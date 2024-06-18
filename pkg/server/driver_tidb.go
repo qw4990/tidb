@@ -208,7 +208,7 @@ func (ts *TiDBStatement) Close() error {
 				return err
 			}
 			if !ts.ctx.GetSessionVars().IgnorePreparedCacheCloseStmt { // keep the plan in cache
-				ts.ctx.GetSessionPlanCache().Delete(cacheKey)
+				ts.ctx.GetSessionPlanCache().Delete(ts.ctx, cacheKey)
 			}
 		}
 		ts.ctx.GetSessionVars().RemovePreparedStmt(ts.id)

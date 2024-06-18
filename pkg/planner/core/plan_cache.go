@@ -155,7 +155,7 @@ func planCachePreprocess(ctx context.Context, sctx sessionctx.Context, isNonPrep
 	// And update lastUpdateTime to the newest one.
 	expiredTimeStamp4PC := domain.GetDomain(sctx).ExpiredTimeStamp4PC()
 	if stmt.StmtCacheable && expiredTimeStamp4PC.Compare(vars.LastUpdateTime4PC) > 0 {
-		sctx.GetSessionPlanCache().DeleteAll()
+		sctx.GetSessionPlanCache().DeleteAll(sctx)
 		vars.LastUpdateTime4PC = expiredTimeStamp4PC
 	}
 
@@ -230,7 +230,7 @@ func GetPlanFromSessionPlanCache(ctx context.Context, sctx sessionctx.Context,
 			isPointPlan, hit = true, true
 		} else {
 			matchOpts = GetMatchOpts(sctx, is, stmt, params)
-			cacheVal, hit = sctx.GetSessionPlanCache().Get(cacheKey, matchOpts)
+			cacheVal, hit = sctx.GetSessionPlanCache().Get(sctx, cacheKey, matchOpts)
 		}
 		if hit {
 			if plan, names, ok, err := adjustCachedPlan(sctx, cacheVal.(*PlanCacheValue), isNonPrepared, isPointPlan, cacheKey, bindSQL, is, stmt); err != nil || ok {
@@ -259,7 +259,7 @@ func adjustCachedPlan(sctx sessionctx.Context, cachedVal *PlanCacheValue, isNonP
 		if !unionScan && tableHasDirtyContent(sctx.GetPlanCtx(), tblInfo) {
 			// TODO we can inject UnionScan into cached plan to avoid invalidating it, though
 			// rebuilding the filters in UnionScan is pretty trivial.
-			sctx.GetSessionPlanCache().Delete(cacheKey)
+			sctx.GetSessionPlanCache().Delete(sctx, cacheKey)
 			return nil, nil, false, nil
 		}
 	}
@@ -321,7 +321,7 @@ func generateNewPlan(ctx context.Context, sctx sessionctx.Context, isNonPrepared
 		stmt.NormalizedPlan, stmt.PlanDigest = NormalizePlan(p)
 		stmtCtx.SetPlan(p)
 		stmtCtx.SetPlanDigest(stmt.NormalizedPlan, stmt.PlanDigest)
-		sctx.GetSessionPlanCache().Put(cacheKey, cached, matchOpts)
+		sctx.GetSessionPlanCache().Put(sctx, cacheKey, cached, matchOpts)
 		if _, ok := p.(*PointGetPlan); ok {
 			stmt.PointGet.pointPlan = p
 			stmt.PointGet.columnNames = names

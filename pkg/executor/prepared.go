@@ -215,7 +215,7 @@ func (e *DeallocateExec) Next(context.Context, *chunk.Chunk) error {
 			return err
 		}
 		if !vars.IgnorePreparedCacheCloseStmt { // keep the plan in cache
-			e.Ctx().GetSessionPlanCache().Delete(cacheKey)
+			e.Ctx().GetSessionPlanCache().Delete(e.Ctx(), cacheKey)
 		}
 	}
 	vars.RemovePreparedStmt(id)

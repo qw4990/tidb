@@ -53,13 +53,13 @@ type SessionStatesHandler interface {
 
 // PlanCache is an interface for prepare and non-prepared plan cache
 type PlanCache interface {
-	Get(key string, opts any) (value any, ok bool)
-	Put(key string, value, opts any)
-	Delete(key string)
-	DeleteAll()
-	Size() int
-	SetCapacity(capacity uint) error
-	Close()
+	Get(sctx Context, key string, opts any) (value any, ok bool)
+	Put(sctx Context, key string, value, opts any)
+	Delete(sctx Context, key string)
+	DeleteAll(sctx Context)
+	Size(sctx Context) int
+	SetCapacity(sctx Context, capacity uint) error
+	Close(sctx Context)
 }
 
 // Context is an interface for transaction and executive args environment.

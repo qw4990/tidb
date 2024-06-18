@@ -323,7 +323,7 @@ func (s *session) cleanRetryInfo() {
 				}
 			}
 			if !s.sessionVars.IgnorePreparedCacheCloseStmt { // keep the plan in cache
-				s.GetSessionPlanCache().Delete(cacheKey)
+				s.GetSessionPlanCache().Delete(s, cacheKey)
 			}
 		}
 		s.sessionVars.RemovePreparedStmt(stmtID)
@@ -397,7 +397,7 @@ func (s *session) GetSessionPlanCache() sessionctx.PlanCache {
 	}
 	if s.sessionPlanCache == nil { // lazy construction
 		s.sessionPlanCache = plannercore.NewLRUPlanCache(uint(s.GetSessionVars().SessionPlanCacheSize),
-			variable.PreparedPlanCacheMemoryGuardRatio.Load(), plannercore.PreparedPlanCacheMaxMemory.Load(), s, false)
+			variable.PreparedPlanCacheMemoryGuardRatio.Load(), plannercore.PreparedPlanCacheMaxMemory.Load())
 	}
 	return s.sessionPlanCache
 }
@@ -2526,7 +2526,7 @@ func (s *session) Close() {
 	}
 	s.sessionVars.ClearDiskFullOpt()
 	if s.sessionPlanCache != nil {
-		s.sessionPlanCache.Close()
+		s.sessionPlanCache.Close(s)
 	}
 }
 
