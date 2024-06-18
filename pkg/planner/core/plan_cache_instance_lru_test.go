@@ -178,4 +178,20 @@ func TestInstancePlanCacheWithMatchOpts(t *testing.T) {
 	miss(1, 3)
 
 	// eviction this case
+	pc = NewInstancePlanCache(300, 500)
+	put(1, 100, 1)
+	put(1, 100, 2)
+	put(1, 100, 3)
+	put(1, 100, 4)
+	put(1, 100, 5)
+	hit(1, 1) // refresh 1-3's last_used
+	hit(1, 2)
+	hit(1, 3)
+	require.True(t, pc.Evict(sctx))
+	require.Equal(t, pc.MemUsage(sctx), int64(300))
+	hit(1, 1)
+	hit(1, 2)
+	hit(1, 3)
+	miss(1, 4)
+	miss(1, 5)
 }
