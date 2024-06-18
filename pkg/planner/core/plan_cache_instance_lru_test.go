@@ -26,9 +26,10 @@ func mockPCVal(memUsage int64) *PlanCacheValue {
 }
 
 func TestInstancePlanCacheBasic(t *testing.T) {
-	pc := NewInstancePlanCache(int64(size.GB), int64(size.GB))
 	sctx := MockContext()
 	defer sctx.Close()
+
+	pc := NewInstancePlanCache(int64(size.GB), int64(size.GB))
 	pc.Put(sctx, "k99", mockPCVal(99), nil)
 	pc.Put(sctx, "k100", mockPCVal(100), nil)
 	pc.Put(sctx, "k101", mockPCVal(101), nil)
@@ -38,4 +39,17 @@ func TestInstancePlanCacheBasic(t *testing.T) {
 		require.Equal(t, ok, true)
 		require.Equal(t, v.(*PlanCacheValue).memoryUsage, int64(i))
 	}
+
+	// exceed the hard limit during Put
+	pc = NewInstancePlanCache(250, 250)
+	pc.Put(sctx, "k99", mockPCVal(99), nil)
+	pc.Put(sctx, "k100", mockPCVal(100), nil)
+	pc.Put(sctx, "k101", mockPCVal(101), nil)
+	for i := 99; i <= 100; i++ {
+		v, ok := pc.Get(sctx, fmt.Sprintf("k%v", i), nil)
+		require.Equal(t, ok, true)
+		require.Equal(t, v.(*PlanCacheValue).memoryUsage, int64(i))
+	}
+	_, ok := pc.Get(sctx, "k101", nil)
+	require.Equal(t, ok, false)
 }
