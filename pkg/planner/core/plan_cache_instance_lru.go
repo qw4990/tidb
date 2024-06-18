@@ -84,7 +84,11 @@ func (pc *instancePlanCache) Get(sctx sessionctx.Context, key string, opts any) 
 
 func (pc *instancePlanCache) getPlanFromList(sctx sessionctx.Context, headNode *instancePCNode, opts any) (any, bool) {
 	for node := headNode.next.Load(); node != nil; node = node.next.Load() {
-		if matchCachedPlan(sctx, node.value.(*PlanCacheValue), opts.(*PlanCacheMatchOpts)) { // v.Plan is read-only, no need to lock
+		var matchOpts *PlanCacheMatchOpts
+		if opts != nil {
+			matchOpts = opts.(*PlanCacheMatchOpts)
+		}
+		if matchCachedPlan(sctx, node.value.(*PlanCacheValue), matchOpts) { // v.Plan is read-only, no need to lock
 			node.lastUsed.Store(time.Now()) // atomically update the lastUsed field
 			return node.value, true
 		}
