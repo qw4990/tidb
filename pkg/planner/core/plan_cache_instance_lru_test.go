@@ -123,6 +123,7 @@ func TestInstancePlanCacheWithMatchOpts(t *testing.T) {
 	defer func() {
 		domain.GetDomain(sctx).StatsHandle().Close()
 	}()
+	sctx.GetSessionVars().PlanCacheInvalidationOnFreshStats = true
 
 	var pc InstancePlanCache
 	put := func(testKey, memUsage, statsHash int64) {
