@@ -27,11 +27,11 @@ func mockPCVal(memUsage int64) *PlanCacheValue {
 }
 
 func TestInstancePlanCacheBasic(t *testing.T) {
-	//var sctx sessionctx.Context
 	sctx := MockContext()
 	defer func() {
 		domain.GetDomain(sctx).StatsHandle().Close()
 	}()
+
 	pc := NewInstancePlanCache(int64(size.GB), int64(size.GB))
 	pc.Put(sctx, "k99", mockPCVal(99), nil)
 	pc.Put(sctx, "k100", mockPCVal(100), nil)
@@ -57,7 +57,7 @@ func TestInstancePlanCacheBasic(t *testing.T) {
 	_, ok := pc.Get(sctx, "k101", nil)
 	require.Equal(t, ok, false)
 
-	// can Put 2 same values
+	// can't Put 2 same values
 	pc = NewInstancePlanCache(250, 250)
 	pc.Put(sctx, "k99", mockPCVal(99), nil)
 	pc.Put(sctx, "k99", mockPCVal(100), nil)
@@ -65,4 +65,6 @@ func TestInstancePlanCacheBasic(t *testing.T) {
 	v, ok := pc.Get(sctx, "k99", nil)
 	require.Equal(t, ok, true)
 	require.Equal(t, v.(*PlanCacheValue).memoryUsage, int64(99))
+
+	//
 }

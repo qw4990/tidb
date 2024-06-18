@@ -19,6 +19,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb/pkg/sessionctx"
 	"github.com/pingcap/tidb/pkg/util/kvcache"
 	"go.uber.org/atomic"
@@ -30,6 +31,8 @@ type InstancePlanCache interface {
 	Put(sctx sessionctx.Context, key string, value, opts any)
 	Evict(sctx sessionctx.Context)
 	MemUsage(sctx sessionctx.Context) int64
+	SetHardLimit(hardMemLimit int64) error
+	SetSoftLimit(softMemLimit int64) error
 }
 
 func NewInstancePlanCache(softMemLimit, hardMemLimit int64) InstancePlanCache {
@@ -139,6 +142,30 @@ func (pc *instancePlanCache) Evict(_ sessionctx.Context) {
 
 func (pc *instancePlanCache) MemUsage(_ sessionctx.Context) int64 {
 	return pc.totCost.Load()
+}
+
+func (pc *instancePlanCache) SetHardLimit(hardMemLimit int64) error {
+	currentSoft, currentHard := pc.softMemLimit.Load(), pc.hardMemLimit.Load()
+	if hardMemLimit < 0 || hardMemLimit < currentSoft {
+		return errors.NewNoStackErrorf("Plan Cache hard memory limit shouldn't be less than 0 or less than soft memory limit(%v)", currentSoft)
+	}
+	ok := pc.hardMemLimit.CompareAndSwap(currentHard, hardMemLimit)
+	if !ok {
+		return errors.NewNoStackError("some other threads are updating hard memory limit simultaneously")
+	}
+	return nil
+}
+
+func (pc *instancePlanCache) SetSoftLimit(softMemLimit int64) error {
+	currentSoft, currentHard := pc.softMemLimit.Load(), pc.hardMemLimit.Load()
+	if softMemLimit < 0 || softMemLimit > currentHard {
+		return errors.NewNoStackErrorf("Plan Cache soft memory limit shouldn't be less than 0 or greater than hard memory limit(%v)", currentHard)
+	}
+	ok := pc.softMemLimit.CompareAndSwap(currentSoft, softMemLimit)
+	if !ok {
+		return errors.NewNoStackError("some other threads are updating soft memory limit simultaneously")
+	}
+	return nil
 }
 
 func (pc *instancePlanCache) calcEvictionThreshold(lastUsedTimes []time.Time) (t time.Time) {
