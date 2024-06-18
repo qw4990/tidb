@@ -175,7 +175,7 @@ func (pc *instancePlanCache) calcEvictionThreshold(lastUsedTimes []time.Time) (t
 	if avgPerPlan <= 0 {
 		return
 	}
-	numToEvict := (pc.totCost.Load() - pc.softMemLimit.Load()) / avgPerPlan
+	numToEvict := (pc.totCost.Load() - pc.softMemLimit.Load() + avgPerPlan - 1) / avgPerPlan
 	if numToEvict <= 0 {
 		return
 	}

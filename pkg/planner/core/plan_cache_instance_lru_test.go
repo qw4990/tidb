@@ -92,15 +92,20 @@ func TestInstancePlanCacheBasic(t *testing.T) {
 	require.Error(t, pc.SetSoftLimit(300))
 
 	// eviction
-	//pc = NewInstancePlanCache(320, 500)
-	//pc.Put(sctx, "k98", mockPCVal(98), nil)
-	//pc.Put(sctx, "k99", mockPCVal(99), nil)
-	//pc.Put(sctx, "k100", mockPCVal(100), nil)
-	//pc.Put(sctx, "k101", mockPCVal(101), nil)
-	//pc.Put(sctx, "k102", mockPCVal(102), nil)
-	//pc.Get(sctx, "k98", nil) // access 98-100 to refresh their last_used
-	//pc.Get(sctx, "k99", nil)
-	//pc.Get(sctx, "k100", nil)
-	//require.Equal(t, pc.Evict(sctx), true)
-	//require.Equal(t, pc.MemUsage(sctx), int64(98+99+100))
+	pc = NewInstancePlanCache(320, 500)
+	putPC(sctx, pc, 1, 100)
+	putPC(sctx, pc, 2, 100)
+	putPC(sctx, pc, 3, 100)
+	putPC(sctx, pc, 4, 100)
+	putPC(sctx, pc, 5, 100)
+	hitPC(t, sctx, pc, 1) // access 1-3 to refresh their last_used
+	hitPC(t, sctx, pc, 2)
+	hitPC(t, sctx, pc, 3)
+	require.Equal(t, pc.Evict(sctx), true)
+	require.Equal(t, pc.MemUsage(sctx), int64(300))
+	hitPC(t, sctx, pc, 1) // access 1-3 to refresh their last_used
+	hitPC(t, sctx, pc, 2)
+	hitPC(t, sctx, pc, 3)
+	missPC(t, sctx, pc, 4) // 4-5 have been evicted
+	missPC(t, sctx, pc, 5)
 }
