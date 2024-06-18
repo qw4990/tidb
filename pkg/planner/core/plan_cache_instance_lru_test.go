@@ -19,26 +19,9 @@ import (
 	"testing"
 
 	"github.com/pingcap/tidb/pkg/domain"
-	"github.com/pingcap/tidb/pkg/util/mock"
 	"github.com/pingcap/tidb/pkg/util/size"
 	"github.com/stretchr/testify/require"
 )
-
-func putPC(sctx *mock.Context, pc InstancePlanCache, testKey, memUsage int64) {
-	v := &PlanCacheValue{testKey: testKey, memoryUsage: memUsage}
-	pc.Put(sctx, fmt.Sprintf("%v", testKey), v, nil)
-}
-
-func hitPC(t *testing.T, sctx *mock.Context, pc InstancePlanCache, testKey int64) {
-	v, ok := pc.Get(sctx, fmt.Sprintf("%v", testKey), nil)
-	require.True(t, ok)
-	require.Equal(t, v.(*PlanCacheValue).testKey, testKey)
-}
-
-func missPC(t *testing.T, sctx *mock.Context, pc InstancePlanCache, testKey int) {
-	_, ok := pc.Get(sctx, fmt.Sprintf("%v", testKey), nil)
-	require.False(t, ok)
-}
 
 func TestInstancePlanCacheBasic(t *testing.T) {
 	sctx := MockContext()
@@ -46,43 +29,58 @@ func TestInstancePlanCacheBasic(t *testing.T) {
 		domain.GetDomain(sctx).StatsHandle().Close()
 	}()
 
-	pc := NewInstancePlanCache(int64(size.GB), int64(size.GB))
-	putPC(sctx, pc, 1, 100)
-	putPC(sctx, pc, 2, 100)
-	putPC(sctx, pc, 3, 100)
+	var pc InstancePlanCache
+	put := func(testKey, memUsage int64) {
+		v := &PlanCacheValue{testKey: testKey, memoryUsage: memUsage}
+		pc.Put(sctx, fmt.Sprintf("%v", testKey), v, nil)
+	}
+	hit := func(testKey int64) {
+		v, ok := pc.Get(sctx, fmt.Sprintf("%v", testKey), nil)
+		require.True(t, ok)
+		require.Equal(t, v.(*PlanCacheValue).testKey, testKey)
+	}
+	miss := func(testKey int) {
+		_, ok := pc.Get(sctx, fmt.Sprintf("%v", testKey), nil)
+		require.False(t, ok)
+	}
+
+	pc = NewInstancePlanCache(int64(size.GB), int64(size.GB))
+	put(1, 100)
+	put(2, 100)
+	put(3, 100)
 	require.Equal(t, pc.MemUsage(sctx), int64(300))
-	hitPC(t, sctx, pc, 1)
-	hitPC(t, sctx, pc, 2)
-	hitPC(t, sctx, pc, 3)
+	hit(1)
+	hit(2)
+	hit(3)
 
 	// exceed the hard limit during Put
 	pc = NewInstancePlanCache(250, 250)
-	putPC(sctx, pc, 1, 100)
-	putPC(sctx, pc, 2, 100)
-	putPC(sctx, pc, 3, 100)
+	put(1, 100)
+	put(2, 100)
+	put(3, 100)
 	require.Equal(t, pc.MemUsage(sctx), int64(200))
-	hitPC(t, sctx, pc, 1)
-	hitPC(t, sctx, pc, 2)
-	missPC(t, sctx, pc, 3)
+	hit(1)
+	hit(2)
+	miss(3)
 
 	// can't Put 2 same values
 	pc = NewInstancePlanCache(250, 250)
-	putPC(sctx, pc, 1, 100)
-	putPC(sctx, pc, 1, 101)
+	put(1, 100)
+	put(1, 101)
 	require.Equal(t, pc.MemUsage(sctx), int64(100)) // the second one will be ignored
 
 	// update the hard limit after exceeding it
 	pc = NewInstancePlanCache(250, 250)
-	putPC(sctx, pc, 1, 100)
-	putPC(sctx, pc, 2, 100)
-	putPC(sctx, pc, 3, 100)
+	put(1, 100)
+	put(2, 100)
+	put(3, 100)
 	require.Equal(t, pc.MemUsage(sctx), int64(200))
 	pc.SetHardLimit(300)
-	putPC(sctx, pc, 3, 100)
+	put(3, 100)
 	require.Equal(t, pc.MemUsage(sctx), int64(300))
-	hitPC(t, sctx, pc, 1)
-	hitPC(t, sctx, pc, 2)
-	hitPC(t, sctx, pc, 3)
+	hit(1)
+	hit(2)
+	hit(3)
 
 	// invalid hard or soft limit
 	pc = NewInstancePlanCache(250, 250)
@@ -93,30 +91,30 @@ func TestInstancePlanCacheBasic(t *testing.T) {
 
 	// eviction
 	pc = NewInstancePlanCache(320, 500)
-	putPC(sctx, pc, 1, 100)
-	putPC(sctx, pc, 2, 100)
-	putPC(sctx, pc, 3, 100)
-	putPC(sctx, pc, 4, 100)
-	putPC(sctx, pc, 5, 100)
-	hitPC(t, sctx, pc, 1) // access 1-3 to refresh their last_used
-	hitPC(t, sctx, pc, 2)
-	hitPC(t, sctx, pc, 3)
+	put(1, 100)
+	put(2, 100)
+	put(3, 100)
+	put(4, 100)
+	put(5, 100)
+	hit(1) // access 1-3 to refresh their last_used
+	hit(2)
+	hit(3)
 	require.Equal(t, pc.Evict(sctx), true)
 	require.Equal(t, pc.MemUsage(sctx), int64(300))
-	hitPC(t, sctx, pc, 1) // access 1-3 to refresh their last_used
-	hitPC(t, sctx, pc, 2)
-	hitPC(t, sctx, pc, 3)
-	missPC(t, sctx, pc, 4) // 4-5 have been evicted
-	missPC(t, sctx, pc, 5)
+	hit(1) // access 1-3 to refresh their last_used
+	hit(2)
+	hit(3)
+	miss(4) // 4-5 have been evicted
+	miss(5)
 
 	// no need to eviction if mem < softLimit
 	pc = NewInstancePlanCache(320, 500)
-	putPC(sctx, pc, 1, 100)
-	putPC(sctx, pc, 2, 100)
-	putPC(sctx, pc, 3, 100)
+	put(1, 100)
+	put(2, 100)
+	put(3, 100)
 	require.Equal(t, pc.Evict(sctx), false)
 	require.Equal(t, pc.MemUsage(sctx), int64(300))
-	hitPC(t, sctx, pc, 1)
-	hitPC(t, sctx, pc, 2)
-	hitPC(t, sctx, pc, 3)
+	hit(1)
+	hit(2)
+	hit(3)
 }
