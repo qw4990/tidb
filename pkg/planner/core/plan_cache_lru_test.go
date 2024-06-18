@@ -49,11 +49,11 @@ func TestLRUPCPut(t *testing.T) {
 	defer func() {
 		domain.GetDomain(mockCtx).StatsHandle().Close()
 	}()
-	lruA := NewLRUPlanCache(0, 0, 0, mockCtx, false)
+	lruA := NewLRUPlanCache(0, 0, 0)
 	require.Equal(t, lruA.capacity, uint(100))
 
 	dropCnt := 0
-	lru := NewLRUPlanCache(3, 0, 0, mockCtx, false)
+	lru := NewLRUPlanCache(3, 0, 0)
 	lru.onEvict = func(key string, value any) {
 		dropCnt++
 	}
@@ -81,7 +81,7 @@ func TestLRUPCPut(t *testing.T) {
 		vals[i] = &PlanCacheValue{
 			matchOpts: opts,
 		}
-		lru.Put(keys[i], vals[i], opts)
+		lru.Put(mockCtx, keys[i], vals[i], opts)
 	}
 	require.Equal(t, lru.size, lru.capacity)
 	require.Equal(t, uint(3), lru.size)
@@ -115,7 +115,7 @@ func TestLRUPCPut(t *testing.T) {
 			ParamTypes:          pTypes[i],
 			LimitOffsetAndCount: limitParams[i],
 		}
-		element, exist := lru.pickFromBucket(bucket, matchOpts)
+		element, exist := lru.pickFromBucket(mockCtx, bucket, matchOpts)
 		require.NotNil(t, element)
 		require.True(t, exist)
 		require.Equal(t, root, element)
@@ -138,7 +138,7 @@ func TestLRUPCGet(t *testing.T) {
 	defer func() {
 		domain.GetDomain(mockCtx).StatsHandle().Close()
 	}()
-	lru := NewLRUPlanCache(3, 0, 0, mockCtx, false)
+	lru := NewLRUPlanCache(3, 0, 0)
 
 	keys := make([]string, 5)
 	vals := make([]*PlanCacheValue, 5)
@@ -161,7 +161,7 @@ func TestLRUPCGet(t *testing.T) {
 		vals[i] = &PlanCacheValue{
 			matchOpts: opts,
 		}
-		lru.Put(keys[i], vals[i], opts)
+		lru.Put(mockCtx, keys[i], vals[i], opts)
 	}
 
 	// test for non-existent elements
@@ -170,7 +170,7 @@ func TestLRUPCGet(t *testing.T) {
 			ParamTypes:          pTypes[i],
 			LimitOffsetAndCount: limitParams[i],
 		}
-		value, exists := lru.Get(keys[i], opts)
+		value, exists := lru.Get(mockCtx, keys[i], opts)
 		require.False(t, exists)
 		require.Nil(t, value)
 	}
@@ -180,7 +180,7 @@ func TestLRUPCGet(t *testing.T) {
 			ParamTypes:          pTypes[i],
 			LimitOffsetAndCount: limitParams[i],
 		}
-		value, exists := lru.Get(keys[i], opts)
+		value, exists := lru.Get(mockCtx, keys[i], opts)
 		require.True(t, exists)
 		require.NotNil(t, value)
 		require.Equal(t, vals[i], value)
@@ -206,7 +206,7 @@ func TestLRUPCDelete(t *testing.T) {
 	defer func() {
 		domain.GetDomain(mockCtx).StatsHandle().Close()
 	}()
-	lru := NewLRUPlanCache(3, 0, 0, mockCtx, false)
+	lru := NewLRUPlanCache(3, 0, 0)
 
 	keys := make([]string, 3)
 	vals := make([]*PlanCacheValue, 3)
@@ -226,13 +226,13 @@ func TestLRUPCDelete(t *testing.T) {
 		vals[i] = &PlanCacheValue{
 			matchOpts: opts,
 		}
-		lru.Put(keys[i], vals[i], opts)
+		lru.Put(mockCtx, keys[i], vals[i], opts)
 	}
 	require.Equal(t, 3, int(lru.size))
 
-	lru.Delete(keys[1])
+	lru.Delete(mockCtx, keys[1])
 
-	value, exists := lru.Get(keys[1], &PlanCacheMatchOpts{
+	value, exists := lru.Get(mockCtx, keys[1], &PlanCacheMatchOpts{
 		ParamTypes:          pTypes[1],
 		LimitOffsetAndCount: limitParams[1],
 	})
@@ -240,13 +240,13 @@ func TestLRUPCDelete(t *testing.T) {
 	require.Nil(t, value)
 	require.Equal(t, 2, int(lru.size))
 
-	_, exists = lru.Get(keys[0], &PlanCacheMatchOpts{
+	_, exists = lru.Get(mockCtx, keys[0], &PlanCacheMatchOpts{
 		ParamTypes:          pTypes[0],
 		LimitOffsetAndCount: limitParams[0],
 	})
 	require.True(t, exists)
 
-	_, exists = lru.Get(keys[2], &PlanCacheMatchOpts{
+	_, exists = lru.Get(mockCtx, keys[2], &PlanCacheMatchOpts{
 		ParamTypes:          pTypes[2],
 		LimitOffsetAndCount: limitParams[2],
 	})
@@ -255,7 +255,7 @@ func TestLRUPCDelete(t *testing.T) {
 
 func TestLRUPCDeleteAll(t *testing.T) {
 	ctx := MockContext()
-	lru := NewLRUPlanCache(3, 0, 0, ctx, false)
+	lru := NewLRUPlanCache(3, 0, 0)
 	defer func() {
 		domain.GetDomain(ctx).StatsHandle().Close()
 	}()
@@ -274,18 +274,18 @@ func TestLRUPCDeleteAll(t *testing.T) {
 		vals[i] = &PlanCacheValue{
 			matchOpts: opts,
 		}
-		lru.Put(keys[i], vals[i], opts)
+		lru.Put(ctx, keys[i], vals[i], opts)
 	}
 	require.Equal(t, 3, int(lru.size))
 
-	lru.DeleteAll()
+	lru.DeleteAll(ctx)
 
 	for i := 0; i < 3; i++ {
 		opts := &PlanCacheMatchOpts{
 			ParamTypes:          pTypes[i],
 			LimitOffsetAndCount: []uint64{},
 		}
-		value, exists := lru.Get(keys[i], opts)
+		value, exists := lru.Get(ctx, keys[i], opts)
 		require.False(t, exists)
 		require.Nil(t, value)
 		require.Equal(t, 0, int(lru.size))
@@ -294,7 +294,7 @@ func TestLRUPCDeleteAll(t *testing.T) {
 
 func TestLRUPCSetCapacity(t *testing.T) {
 	ctx := MockContext()
-	lru := NewLRUPlanCache(5, 0, 0, ctx, false)
+	lru := NewLRUPlanCache(5, 0, 0)
 	defer func() {
 		domain.GetDomain(ctx).StatsHandle().Close()
 	}()
@@ -323,12 +323,12 @@ func TestLRUPCSetCapacity(t *testing.T) {
 		vals[i] = &PlanCacheValue{
 			matchOpts: opts,
 		}
-		lru.Put(keys[i], vals[i], opts)
+		lru.Put(ctx, keys[i], vals[i], opts)
 	}
 	require.Equal(t, lru.size, lru.capacity)
 	require.Equal(t, uint(5), lru.size)
 
-	err := lru.SetCapacity(3)
+	err := lru.SetCapacity(ctx, 3)
 	require.NoError(t, err)
 
 	// test for non-existent elements
@@ -360,13 +360,13 @@ func TestLRUPCSetCapacity(t *testing.T) {
 	// test for end of double-linked list
 	require.Nil(t, root)
 
-	err = lru.SetCapacity(0)
+	err = lru.SetCapacity(ctx, 0)
 	require.Error(t, err, "capacity of LRU cache should be at least 1")
 }
 
 func TestIssue37914(t *testing.T) {
 	ctx := MockContext()
-	lru := NewLRUPlanCache(3, 0.1, 1, ctx, false)
+	lru := NewLRUPlanCache(3, 0.1, 1)
 	defer func() {
 		domain.GetDomain(ctx).StatsHandle().Close()
 	}()
@@ -379,13 +379,13 @@ func TestIssue37914(t *testing.T) {
 	val := &PlanCacheValue{matchOpts: opts}
 
 	require.NotPanics(t, func() {
-		lru.Put(key, val, opts)
+		lru.Put(ctx, key, val, opts)
 	})
 }
 
 func TestIssue38244(t *testing.T) {
 	ctx := MockContext()
-	lru := NewLRUPlanCache(3, 0, 0, ctx, false)
+	lru := NewLRUPlanCache(3, 0, 0)
 	defer func() {
 		domain.GetDomain(ctx).StatsHandle().Close()
 	}()
@@ -408,7 +408,7 @@ func TestIssue38244(t *testing.T) {
 			LimitOffsetAndCount: []uint64{},
 		}
 		vals[i] = &PlanCacheValue{matchOpts: opts}
-		lru.Put(keys[i], vals[i], opts)
+		lru.Put(ctx, keys[i], vals[i], opts)
 	}
 	require.Equal(t, lru.size, lru.capacity)
 	require.Equal(t, uint(3), lru.size)
@@ -422,7 +422,7 @@ func TestLRUPlanCacheMemoryUsage(t *testing.T) {
 		domain.GetDomain(ctx).StatsHandle().Close()
 	}()
 	ctx.GetSessionVars().EnablePreparedPlanCacheMemoryMonitor = true
-	lru := NewLRUPlanCache(3, 0, 0, ctx, false)
+	lru := NewLRUPlanCache(3, 0, 0)
 	evict := make(map[string]any)
 	lru.onEvict = func(key string, value any) {
 		evict[key] = value
@@ -436,9 +436,9 @@ func TestLRUPlanCacheMemoryUsage(t *testing.T) {
 			ParamTypes:          pTypes,
 			LimitOffsetAndCount: []uint64{},
 		}
-		lru.Put(k, v, opts)
+		lru.Put(ctx, k, v, opts)
 		res += int64(len(k)) + v.MemoryUsage()
-		require.Equal(t, lru.MemoryUsage(), res)
+		require.Equal(t, lru.MemoryUsage(ctx), res)
 	}
 	// evict
 	p := &PhysicalTableScan{}
@@ -448,17 +448,17 @@ func TestLRUPlanCacheMemoryUsage(t *testing.T) {
 		ParamTypes:          pTypes,
 		LimitOffsetAndCount: []uint64{},
 	}
-	lru.Put(k, v, opts)
+	lru.Put(ctx, k, v, opts)
 	res += int64(len(k)) + v.MemoryUsage()
 	for kk, vv := range evict {
 		res -= int64(len(kk)) + vv.(*PlanCacheValue).MemoryUsage()
 	}
-	require.Equal(t, lru.MemoryUsage(), res)
+	require.Equal(t, lru.MemoryUsage(ctx), res)
 	// delete
-	lru.Delete(k)
+	lru.Delete(ctx, k)
 	res -= int64(len(k)) + v.MemoryUsage()
-	require.Equal(t, lru.MemoryUsage(), res)
+	require.Equal(t, lru.MemoryUsage(ctx), res)
 	// delete all
-	lru.DeleteAll()
-	require.Equal(t, lru.MemoryUsage(), int64(0))
+	lru.DeleteAll(ctx)
+	require.Equal(t, lru.MemoryUsage(ctx), int64(0))
 }
