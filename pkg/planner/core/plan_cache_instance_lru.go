@@ -29,7 +29,7 @@ import (
 type InstancePlanCache interface {
 	Get(sctx sessionctx.Context, key string, opts any) (value any, ok bool)
 	Put(sctx sessionctx.Context, key string, value, opts any)
-	Evict(sctx sessionctx.Context)
+	Evict(sctx sessionctx.Context) (evicted bool)
 	MemUsage(sctx sessionctx.Context) int64
 	SetHardLimit(hardMemLimit int64) error
 	SetSoftLimit(softMemLimit int64) error
@@ -121,7 +121,7 @@ func (pc *instancePlanCache) Put(sctx sessionctx.Context, key string, value, opt
 // step 1: iterate all values to collects their last_used
 // step 2: estimate a eviction threshold time based on all last_used values
 // step 3: iterate all values again and evict qualified values
-func (pc *instancePlanCache) Evict(_ sessionctx.Context) {
+func (pc *instancePlanCache) Evict(_ sessionctx.Context) (evicted bool) {
 	if pc.totCost.Load() < pc.softMemLimit.Load() {
 		return // do nothing
 	}
@@ -133,11 +133,13 @@ func (pc *instancePlanCache) Evict(_ sessionctx.Context) {
 	pc.foreach(func(prev, this *instancePCNode) {        // step 3
 		if this.lastUsed.Load().Before(threshold) { // evict this value
 			if prev.next.CompareAndSwap(this, this.next.Load()) { // have to use CAS since
+				evicted = true
 				pc.totCost.Sub(this.value.(*PlanCacheValue).MemoryUsage()) //  it might have been updated by other thread
 			}
 		}
 	})
 	pc.clearEmptyHead()
+	return
 }
 
 func (pc *instancePlanCache) MemUsage(_ sessionctx.Context) int64 {
