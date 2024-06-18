@@ -66,5 +66,18 @@ func TestInstancePlanCacheBasic(t *testing.T) {
 	require.Equal(t, ok, true)
 	require.Equal(t, v.(*PlanCacheValue).memoryUsage, int64(99))
 
-	//
+	// update the hard limit after exceeding it
+	pc = NewInstancePlanCache(250, 250)
+	pc.Put(sctx, "k99", mockPCVal(99), nil)
+	pc.Put(sctx, "k100", mockPCVal(100), nil)
+	pc.Put(sctx, "k101", mockPCVal(101), nil)
+	require.Equal(t, pc.MemUsage(sctx), int64(199))
+	pc.SetHardLimit(300)
+	pc.Put(sctx, "k101", mockPCVal(101), nil)
+	require.Equal(t, pc.MemUsage(sctx), int64(300))
+	for i := 99; i <= 101; i++ {
+		v, ok := pc.Get(sctx, fmt.Sprintf("k%v", i), nil)
+		require.Equal(t, ok, true)
+		require.Equal(t, v.(*PlanCacheValue).memoryUsage, int64(i))
+	}
 }

@@ -133,8 +133,8 @@ func (pc *instancePlanCache) Evict(_ sessionctx.Context) (evicted bool) {
 	pc.foreach(func(prev, this *instancePCNode) {        // step 3
 		if this.lastUsed.Load().Before(threshold) { // evict this value
 			if prev.next.CompareAndSwap(this, this.next.Load()) { // have to use CAS since
-				evicted = true
 				pc.totCost.Sub(this.value.(*PlanCacheValue).MemoryUsage()) //  it might have been updated by other thread
+				evicted = true
 			}
 		}
 	})
