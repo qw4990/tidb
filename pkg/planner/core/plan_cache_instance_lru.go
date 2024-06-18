@@ -57,6 +57,7 @@ type instancePlanCache struct {
 	heads   sync.Map
 	totCost atomic.Int64
 
+	evictMutex   sync.Mutex
 	softMemLimit atomic.Int64
 	hardMemLimit atomic.Int64
 }
@@ -122,21 +123,26 @@ func (pc *instancePlanCache) Put(sctx sessionctx.Context, key string, value, opt
 // step 2: estimate a eviction threshold time based on all last_used values
 // step 3: iterate all values again and evict qualified values
 func (pc *instancePlanCache) Evict(_ sessionctx.Context) (evicted bool) {
+	pc.evictMutex.Lock() // make sure only one thread to trigger eviction for safety
+	defer pc.evictMutex.Unlock()
 	if pc.totCost.Load() < pc.softMemLimit.Load() {
 		return // do nothing
 	}
 	lastUsedTimes := make([]time.Time, 0, 64)
-	pc.foreach(func(_, this *instancePCNode) { // step 1
+	pc.foreach(func(_, this *instancePCNode) bool { // step 1
 		lastUsedTimes = append(lastUsedTimes, this.lastUsed.Load())
+		return false
 	})
 	threshold := pc.calcEvictionThreshold(lastUsedTimes) // step 2
-	pc.foreach(func(prev, this *instancePCNode) {        // step 3
+	pc.foreach(func(prev, this *instancePCNode) bool {   // step 3
 		if this.lastUsed.Load().Before(threshold) { // evict this value
 			if prev.next.CompareAndSwap(this, this.next.Load()) { // have to use CAS since
 				pc.totCost.Sub(this.value.(*PlanCacheValue).MemoryUsage()) //  it might have been updated by other thread
 				evicted = true
+				return true
 			}
 		}
+		return false
 	})
 	pc.clearEmptyHead()
 	return
@@ -188,11 +194,16 @@ func (pc *instancePlanCache) calcEvictionThreshold(lastUsedTimes []time.Time) (t
 	return lastUsedTimes[numToEvict]
 }
 
-func (pc *instancePlanCache) foreach(callback func(prev, this *instancePCNode)) {
+func (pc *instancePlanCache) foreach(callback func(prev, this *instancePCNode) (thisRemoved bool)) {
 	_, headNodes := pc.headNodes()
 	for _, headNode := range headNodes {
-		for prev, this := headNode, headNode.next.Load(); this != nil; prev, this = this, this.next.Load() {
-			callback(prev, this)
+		for prev, this := headNode, headNode.next.Load(); this != nil; {
+			thisRemoved := callback(prev, this)
+			if !thisRemoved {
+				prev, this = this, this.next.Load()
+			} else {
+				this = this.next.Load()
+			}
 		}
 	}
 }
