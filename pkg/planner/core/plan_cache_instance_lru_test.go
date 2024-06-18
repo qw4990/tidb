@@ -16,6 +16,7 @@ package core
 
 import (
 	"fmt"
+	"github.com/pingcap/tidb/pkg/domain"
 	"github.com/pingcap/tidb/pkg/util/size"
 	"github.com/stretchr/testify/require"
 	"testing"
@@ -26,9 +27,11 @@ func mockPCVal(memUsage int64) *PlanCacheValue {
 }
 
 func TestInstancePlanCacheBasic(t *testing.T) {
+	//var sctx sessionctx.Context
 	sctx := MockContext()
-	defer sctx.Close()
-
+	defer func() {
+		domain.GetDomain(sctx).StatsHandle().Close()
+	}()
 	pc := NewInstancePlanCache(int64(size.GB), int64(size.GB))
 	pc.Put(sctx, "k99", mockPCVal(99), nil)
 	pc.Put(sctx, "k100", mockPCVal(100), nil)
