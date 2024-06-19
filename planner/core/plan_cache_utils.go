@@ -119,7 +119,6 @@ func GeneratePlanCacheStmtWithAST(ctx context.Context, sctx sessionctx.Context, 
 	} else {
 		cacheable, reason := CacheableWithCtx(sctx, stmt, ret.InfoSchema)
 		prepared.UseCache = cacheable
-
 		fixValue, _ := sctx.GetSessionVars().GetOptimizerFixControlValue(variable.TiDBOptFixControl49736)
 		if !cacheable && !variable.TiDBOptOn(fixValue) {
 			sctx.GetSessionVars().StmtCtx.AppendWarning(errors.Errorf("skip plan-cache: " + reason))
