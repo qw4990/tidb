@@ -1337,6 +1337,9 @@ var (
 	TiDBOptFixControl44262 uint64 = 44262
 	// TiDBOptFixControl44389 controls whether to consider non-point ranges of some CNF item when building ranges.
 	TiDBOptFixControl44389 uint64 = 44389
+	// TiDBOptFixControl49736 controls whether to force the optimizer to use plan cache even if there is risky optimization.
+	// This fix-control is test-only.
+	TiDBOptFixControl49736 uint64 = 49736
 )
 
 // GetOptimizerFixControlValue returns the specified value of the optimizer fix control.
