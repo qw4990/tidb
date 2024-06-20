@@ -1639,7 +1639,7 @@ func detachCondAndBuildRangeForPath(
 		return nil
 	}
 
-	debug := strings.Contains(fmt.Sprintf("%v", conds), "test.t")
+	debug := strings.Contains(fmt.Sprintf("%v", conds), "where a")
 
 	res, err := ranger.DetachCondAndBuildRangeForIndex(sctx.GetRangerCtx(), conds, path.IdxCols, path.IdxColLens, sctx.GetSessionVars().RangeMaxSize)
 	if err != nil {

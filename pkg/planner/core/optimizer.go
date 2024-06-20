@@ -342,7 +342,7 @@ func doOptimize(
 	}
 
 	if strings.Contains(sctx.GetSessionVars().StmtCtx.OriginalSQL, "?") {
-		//DebugLogical(">> ", logic)
+		DebugLogical(">> ", logic)
 	}
 
 	physical, cost, err := physicalOptimize(logic, &planCounter)

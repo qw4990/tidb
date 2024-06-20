@@ -449,7 +449,7 @@ func (ds *DataSource) DeriveStats(_ []*property.StatsInfo, _ *expression.Schema,
 			continue
 		}
 		err := ds.fillIndexPath(path, ds.pushedDownConds)
-		if strings.Contains(ds.SCtx().GetSessionVars().StmtCtx.OriginalSQL, "test.t") {
+		if strings.Contains(ds.SCtx().GetSessionVars().StmtCtx.OriginalSQL, "where a") {
 			fmt.Println(">>>>>>>>>> derive >>> ", ds.pushedDownConds, err)
 		}
 		if err != nil {
