@@ -133,6 +133,14 @@ func getPotentialEqOrInColOffset(sctx *rangerctx.RangerContext, expr expression.
 				return -1
 			}
 			// Cast(Constant) from '?'
+			if expr.String() == "eq(test.t.a, cast(param:?, bigint(20) BINARY))" {
+				for i, col := range cols {
+					// When cols are a generated expression col, compare them in terms of virtual expr.
+					if col.EqualByExprAndID(evalCtx, c) {
+						return i
+					}
+				}
+			}
 			if constVal, ok := f.GetArgs()[1].(*expression.Constant); ok {
 				val, err := constVal.Eval(evalCtx, chunk.Row{})
 				if (err != nil && err.Error() != "XXX") || (!sctx.RegardNULLAsPoint && val.IsNull()) {
@@ -316,9 +324,6 @@ func (d *rangeDetacher) detachCNFCondAndBuildRangeForIndex(conditions []expressi
 	res := &DetachRangeResult{}
 
 	debug := strings.Contains(fmt.Sprintf("%v", conditions), "test.t")
-	if debug {
-		fmt.Println("??")
-	}
 
 	accessConds, filterConds, newConditions, columnValues, emptyRange := ExtractEqAndInCondition(d.sctx, conditions, d.cols, d.lengths)
 
@@ -331,6 +336,11 @@ func (d *rangeDetacher) detachCNFCondAndBuildRangeForIndex(conditions []expressi
 	}
 	var remainedConds []expression.Expression
 	ranges, accessConds, remainedConds, err = d.buildRangeOnColsByCNFCond(newTpSlice, len(accessConds), accessConds)
+
+	if debug {
+		fmt.Println(">>>>>> range >>> ", accessConds, ranges, remainedConds, err)
+	}
+
 	if err != nil {
 		return nil, err
 	}
