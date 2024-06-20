@@ -342,7 +342,7 @@ func doOptimize(
 	}
 
 	if strings.Contains(sctx.GetSessionVars().StmtCtx.OriginalSQL, "?") {
-		DebugLogical(">> ", logic)
+		//DebugLogical(">> ", logic)
 	}
 
 	physical, cost, err := physicalOptimize(logic, &planCounter)
@@ -355,6 +355,10 @@ func doOptimize(
 	}
 
 	finalPlan := postOptimize(ctx, sctx, physical)
+
+	if strings.Contains(sctx.GetSessionVars().StmtCtx.OriginalSQL, "?") {
+		DebugPhysical("F> ", finalPlan)
+	}
 
 	if sessVars.StmtCtx.EnableOptimizerCETrace {
 		refineCETrace(sctx)
