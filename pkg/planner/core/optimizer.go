@@ -298,6 +298,14 @@ func DebugLogical(prefix string, p base.LogicalPlan) {
 }
 
 func DebugPhysical(prefix string, p base.PhysicalPlan) {
+	switch x := p.(type) {
+	case *PhysicalSelection:
+		fmt.Println(prefix, reflect.TypeOf(p), x.Conditions)
+	case *PhysicalTableScan:
+		fmt.Println(prefix, reflect.TypeOf(p), x.AccessCondition, x.filterCondition)
+	default:
+		fmt.Println(prefix, reflect.TypeOf(p), p)
+	}
 }
 
 // doOptimize optimizes a logical plan into a physical plan,
@@ -332,6 +340,11 @@ func doOptimize(
 	if err != nil {
 		return nil, nil, 0, err
 	}
+
+	if strings.Contains(sctx.GetSessionVars().StmtCtx.OriginalSQL, "?") {
+		DebugPhysical("#> ", physical)
+	}
+
 	finalPlan := postOptimize(ctx, sctx, physical)
 
 	if sessVars.StmtCtx.EnableOptimizerCETrace {
