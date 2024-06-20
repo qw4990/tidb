@@ -1633,16 +1633,21 @@ func detachCondAndBuildRangeForPath(
 	conds []expression.Expression,
 	histColl *statistics.HistColl,
 ) error {
-	//fmt.Println(">>>>>>?? >> ", conds)
+	debug := strings.Contains(sctx.GetSessionVars().StmtCtx.OriginalSQL, "where a")
+	if debug {
+		fmt.Println(">>>>> path >>> ", path.IdxCols)
+	}
 	if len(path.IdxCols) == 0 {
 		path.TableFilters = conds
 		return nil
 	}
 
-	debug := strings.Contains(fmt.Sprintf("%v", conds), "where a")
 
 	res, err := ranger.DetachCondAndBuildRangeForIndex(sctx.GetRangerCtx(), conds, path.IdxCols, path.IdxColLens, sctx.GetSessionVars().RangeMaxSize)
 	if err != nil {
+		if debug {
+			fmt.Println(">>> detach err ", err)
+		}
 		return err
 	}
 
