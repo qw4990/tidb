@@ -238,8 +238,11 @@ func (c *Constant) VecEvalJSON(ctx EvalContext, input *chunk.Chunk, result *chun
 
 func (c *Constant) getLazyDatum(ctx EvalContext, row chunk.Row) (dt types.Datum, isLazy bool, err error) {
 	if c.ParamMarker != nil {
+		//ctx.sctx.GetSessionVars().PlanCacheParams
+		fmt.Println(">>>>>>>>>>> ", c.ParamMarker.order, c.ParamMarker.GetUserVar(ctx))
 		return c.ParamMarker.GetUserVar(ctx), true, nil
 	} else if c.DeferredExpr != nil {
+		fmt.Println(">?????>>> deffer >>> ", c.DeferredExpr)
 		dt, err = c.DeferredExpr.Eval(ctx, row)
 		return dt, true, err
 	}
