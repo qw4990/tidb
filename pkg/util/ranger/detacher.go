@@ -132,6 +132,7 @@ func getPotentialEqOrInColOffset(sctx *rangerctx.RangerContext, expr expression.
 			if (f.FuncName.L == ast.LT || f.FuncName.L == ast.GT) && c.RetType.EvalType() != types.ETInt {
 				return -1
 			}
+			// Cast(Constant) from '?'
 			if constVal, ok := f.GetArgs()[1].(*expression.Constant); ok {
 				val, err := constVal.Eval(evalCtx, chunk.Row{})
 				if (err != nil && err.Error() != "XXX") || (!sctx.RegardNULLAsPoint && val.IsNull()) {
