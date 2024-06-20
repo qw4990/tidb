@@ -306,6 +306,15 @@ func DebugPhysical(prefix string, p base.PhysicalPlan) {
 	default:
 		fmt.Println(prefix, reflect.TypeOf(p), p)
 	}
+
+	switch x := p.(type) {
+	case *PhysicalTableReader:
+		DebugPhysical(prefix+"  ", x.tablePlan)
+	default:
+		for _, c := range p.Children() {
+			DebugPhysical(prefix+"  ", c)
+		}
+	}
 }
 
 // doOptimize optimizes a logical plan into a physical plan,
