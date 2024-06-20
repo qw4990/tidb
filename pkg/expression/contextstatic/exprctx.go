@@ -282,3 +282,7 @@ func (ctx *StaticExprContext) GetWindowingUseHighPrecision() bool {
 func (ctx *StaticExprContext) GetGroupConcatMaxLen() uint64 {
 	return ctx.groupConcatMaxLen
 }
+
+func (ctx *StaticExprContext) InExplainStmt() bool {
+	return false
+}

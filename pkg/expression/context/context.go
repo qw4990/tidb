@@ -105,6 +105,7 @@ type BuildContext interface {
 	Rng() *mathutil.MysqlRng
 	// IsUseCache indicates whether to cache the build expression in plan cache.
 	IsUseCache() bool
+	InExplainStmt() bool
 	// SetSkipPlanCache sets to skip the plan cache and records the reason.
 	SetSkipPlanCache(reason string)
 	// AllocPlanColumnID allocates column id for plan.

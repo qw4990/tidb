@@ -278,6 +278,10 @@ func (ctx *SessionEvalContext) GetParamValue(idx int) types.Datum {
 	return ctx.sctx.GetSessionVars().PlanCacheParams.GetParamValue(idx)
 }
 
+func (ctx *SessionEvalContext) InExplainStmt() bool {
+	return ctx.sctx.GetSessionVars().StmtCtx.InExplainStmt
+}
+
 func getStmtTimestamp(ctx sessionctx.Context) (time.Time, error) {
 	if ctx != nil {
 		staleTSO, err := ctx.GetSessionVars().StmtCtx.GetStaleTSO()

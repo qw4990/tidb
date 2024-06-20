@@ -1550,6 +1550,9 @@ func containMutableConst(ctx EvalContext, exprs []Expression) bool {
 
 // RemoveMutableConst used to remove the `ParamMarker` and `DeferredExpr` in the `Constant` expr.
 func RemoveMutableConst(ctx BuildContext, exprs []Expression) (err error) {
+	if ctx.InExplainStmt() {
+		return nil
+	}
 	for _, expr := range exprs {
 		switch v := expr.(type) {
 		case *Constant:
