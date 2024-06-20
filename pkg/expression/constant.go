@@ -140,16 +140,22 @@ func (d *ParamMarker) GetUserVar(ctx EvalContext) types.Datum {
 	return ctx.GetParamValue(d.order)
 }
 
-func (d *ParamMarker) getUserVarWithInternalCtx() types.Datum {
+func (d *ParamMarker) getUserVarWithInternalCtx() (types.Datum, bool) {
 	// TODO: remove this function in the future
 	sessionVars := d.ctx.GetSessionVars()
-	return sessionVars.PlanCacheParams.GetParamValue(d.order)
+	if len(sessionVars.PlanCacheParams.AllParamValues()) == 0 {
+		return types.Datum{}, false
+	}
+	return sessionVars.PlanCacheParams.GetParamValue(d.order), true
 }
 
 // String implements fmt.Stringer interface.
 func (c *Constant) String() string {
 	if c.ParamMarker != nil {
-		dt := c.ParamMarker.getUserVarWithInternalCtx()
+		dt, ok := c.ParamMarker.getUserVarWithInternalCtx()
+		if !ok {
+			return "?"
+		}
 		c.Value.SetValue(dt.GetValue(), c.RetType)
 	} else if c.DeferredExpr != nil {
 		return c.DeferredExpr.String()
