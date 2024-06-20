@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/pingcap/tidb/pkg/expression"
 	"github.com/pingcap/tidb/pkg/kv"
@@ -130,6 +131,8 @@ func (p *LogicalUnionScan) PredicatePushDown(predicates []expression.Expression,
 
 // PredicatePushDown implements base.LogicalPlan PredicatePushDown interface.
 func (ds *DataSource) PredicatePushDown(predicates []expression.Expression, opt *optimizetrace.LogicalOptimizeOp) ([]expression.Expression, base.LogicalPlan) {
+	debug := strings.Contains(ds.SCtx().GetSessionVars().StmtCtx.OriginalSQL, "?")
+
 	predicates = expression.PropagateConstant(ds.SCtx().GetExprCtx(), predicates)
 	predicates = DeleteTrueExprs(ds, predicates)
 	// Add tidb_shard() prefix to the condtion for shard index in some scenarios
@@ -137,6 +140,11 @@ func (ds *DataSource) PredicatePushDown(predicates []expression.Expression, opt 
 	predicates = ds.AddPrefix4ShardIndexes(ds.SCtx(), predicates)
 	ds.allConds = predicates
 	ds.pushedDownConds, predicates = expression.PushDownExprs(GetPushDownCtx(ds.SCtx()), predicates, kv.UnSpecified)
+
+	if debug {
+		fmt.Println(">>>>> push down >>> ", ds.allConds, ds.pushedDownConds, predicates)
+	}
+
 	appendDataSourcePredicatePushDownTraceStep(ds, opt)
 	return predicates, ds
 }

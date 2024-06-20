@@ -98,7 +98,7 @@ func (pc PbConverter) ExprToPB(expr Expression) *tipb.Expr {
 func (pc PbConverter) conOrCorColToPBExpr(expr Expression) *tipb.Expr {
 	ft := expr.GetType(pc.ctx)
 	d, err := expr.Eval(pc.ctx, chunk.Row{})
-	if err != nil {
+	if err != nil && err.Error() != "XXX" {
 		logutil.BgLogger().Error("eval constant or correlated column", zap.String("expression", expr.ExplainInfo(pc.ctx)), zap.Error(err))
 		return nil
 	}
