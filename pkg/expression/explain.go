@@ -208,6 +208,8 @@ func SortedExplainExpressionListIgnoreInlist(exprs []Expression) []byte {
 }
 
 func sortedExplainExpressionList(ctx EvalContext, exprs []Expression, normalized bool, ignoreInlist bool) []byte {
+	//debug := strings.Contains(fmt.Sprintf("%v", exprs), "test.t.a")
+
 	intest.Assert(ignoreInlist || normalized || ctx != nil)
 	buffer := bytes.NewBufferString("")
 	exprInfos := make([]string, 0, len(exprs))
@@ -219,6 +221,18 @@ func sortedExplainExpressionList(ctx EvalContext, exprs []Expression, normalized
 		} else {
 			intest.Assert(ctx != nil)
 			exprInfos = append(exprInfos, expr.ExplainInfo(ctx))
+
+			//if debug {
+			//	fmt.Println("-------->>> ", expr, expr.ExplainInfo(ctx))
+			//	if sf, ok := expr.(*ScalarFunction); ok {
+			//		cast := sf.GetArgs()[1].(*ScalarFunction)
+			//		con := cast.GetArgs()[0].(*Constant)
+			//		_, eee := con.Eval(ctx, chunk.Row{})
+			//		_, _, err := con.getLazyDatum(ctx, chunk.Row{})
+			//		fmt.Println("???? con >>> ", con.String(), con.ExplainInfo(ctx), eee, err)
+			//	}
+			//}
+
 		}
 	}
 	slices.Sort(exprInfos)

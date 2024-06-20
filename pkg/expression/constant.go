@@ -268,10 +268,11 @@ func (c *Constant) Traverse(action TraverseAction) Expression {
 // Eval implements Expression interface.
 func (c *Constant) Eval(ctx EvalContext, row chunk.Row) (types.Datum, error) {
 	intest.AssertNotNil(ctx)
-	if dt, lazy, err := c.getLazyDatum(ctx, row); lazy {
-		if err != nil {
-			return c.Value, err
-		}
+	dt, lazy, err := c.getLazyDatum(ctx, row)
+	if err != nil {
+		return c.Value, err
+	}
+	if lazy {
 		if dt.IsNull() {
 			c.Value.SetNull()
 			return c.Value, nil
