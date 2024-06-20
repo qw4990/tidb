@@ -133,10 +133,10 @@ func (col *Column) ExplainNormalizedInfo4InList() string {
 // ExplainInfo implements the Expression interface.
 func (expr *Constant) ExplainInfo(ctx EvalContext) string {
 	dt, err := expr.Eval(ctx, chunk.Row{})
-	if err.Error() == "XXX" {
-		return "?"
-	}
 	if err != nil {
+		if err.Error() == "XXX" {
+			return "?"
+		}
 		return "not recognized const value"
 	}
 	return expr.format(dt)

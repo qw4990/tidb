@@ -351,13 +351,13 @@ func doOptimize(
 	}
 
 	if strings.Contains(sctx.GetSessionVars().StmtCtx.OriginalSQL, "?") {
-		DebugPhysical("#> ", physical)
+		//DebugPhysical("#> ", physical)
 	}
 
 	finalPlan := postOptimize(ctx, sctx, physical)
 
 	if strings.Contains(sctx.GetSessionVars().StmtCtx.OriginalSQL, "?") {
-		DebugPhysical("F> ", finalPlan)
+		//DebugPhysical("F> ", finalPlan)
 	}
 
 	if sessVars.StmtCtx.EnableOptimizerCETrace {
