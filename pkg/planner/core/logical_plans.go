@@ -1633,6 +1633,7 @@ func detachCondAndBuildRangeForPath(
 	conds []expression.Expression,
 	histColl *statistics.HistColl,
 ) error {
+	//fmt.Println(">>>>>>?? >> ", conds)
 	if len(path.IdxCols) == 0 {
 		path.TableFilters = conds
 		return nil
