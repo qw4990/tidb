@@ -15,6 +15,7 @@
 package expression
 
 import (
+	"errors"
 	"fmt"
 	"unsafe"
 
@@ -173,6 +174,9 @@ func (c *Constant) GetType(ctx EvalContext) *types.FieldType {
 		// GetType() may be called in multi-threaded context, e.g, in building inner executors of IndexJoin,
 		// so it should avoid data race. We achieve this by returning different FieldType pointer for each call.
 		tp := types.NewFieldType(mysql.TypeUnspecified)
+		if len(c.ParamMarker.ctx.GetSessionVars().PlanCacheParams.AllParamValues()) == 0 {
+			return tp
+		}
 		dt := c.ParamMarker.GetUserVar(ctx)
 		types.InferParamTypeFromDatum(&dt, tp)
 		return tp
@@ -238,11 +242,11 @@ func (c *Constant) VecEvalJSON(ctx EvalContext, input *chunk.Chunk, result *chun
 
 func (c *Constant) getLazyDatum(ctx EvalContext, row chunk.Row) (dt types.Datum, isLazy bool, err error) {
 	if c.ParamMarker != nil {
-		//ctx.sctx.GetSessionVars().PlanCacheParams
-		fmt.Println(">>>>>>>>>>> ", c.ParamMarker.order, c.ParamMarker.GetUserVar(ctx))
+		if len(c.ParamMarker.ctx.GetSessionVars().PlanCacheParams.AllParamValues()) == 0 {
+			return types.Datum{}, false, errors.New("XXX")
+		}
 		return c.ParamMarker.GetUserVar(ctx), true, nil
 	} else if c.DeferredExpr != nil {
-		fmt.Println(">?????>>> deffer >>> ", c.DeferredExpr)
 		dt, err = c.DeferredExpr.Eval(ctx, row)
 		return dt, true, err
 	}
