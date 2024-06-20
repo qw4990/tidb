@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"fmt"
 	"math"
+	"strings"
 	"unsafe"
 
 	"github.com/pingcap/tidb/pkg/expression"
@@ -1636,10 +1637,18 @@ func detachCondAndBuildRangeForPath(
 		path.TableFilters = conds
 		return nil
 	}
+
+	debug := strings.Contains(fmt.Sprintf("%v", conds), "test.t")
+
 	res, err := ranger.DetachCondAndBuildRangeForIndex(sctx.GetRangerCtx(), conds, path.IdxCols, path.IdxColLens, sctx.GetSessionVars().RangeMaxSize)
 	if err != nil {
 		return err
 	}
+
+	if debug {
+		fmt.Println(">>>>>>>>> ", conds, res.Ranges, res.AccessConds, res.RemainedConds)
+	}
+
 	path.Ranges = res.Ranges
 	path.AccessConds = res.AccessConds
 	path.TableFilters = res.RemainedConds
