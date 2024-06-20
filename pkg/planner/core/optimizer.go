@@ -19,9 +19,11 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"reflect"
 	"runtime"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/pingcap/errors"
@@ -282,6 +284,22 @@ func checkStableResultMode(sctx base.PlanContext) bool {
 	return s.EnableStableResultMode && (!st.InInsertStmt && !st.InUpdateStmt && !st.InDeleteStmt && !st.InLoadDataStmt)
 }
 
+func DebugLogical(prefix string, p base.LogicalPlan) {
+	switch x := p.(type) {
+	case *DataSource:
+		fmt.Println(prefix, reflect.TypeOf(p), x.pushedDownConds)
+	default:
+		fmt.Println(prefix, reflect.TypeOf(p), p)
+	}
+
+	for _, c := range p.Children() {
+		DebugLogical(prefix+"  ", c)
+	}
+}
+
+func DebugPhysical(prefix string, p base.PhysicalPlan) {
+}
+
 // doOptimize optimizes a logical plan into a physical plan,
 // while also returning the optimized logical plan, the final physical plan, and the cost of the final plan.
 // The returned logical plan is necessary for generating plans for Common Table Expressions (CTEs).
@@ -305,6 +323,11 @@ func doOptimize(
 	if planCounter == 0 {
 		planCounter = -1
 	}
+
+	if strings.Contains(sctx.GetSessionVars().StmtCtx.OriginalSQL, "?") {
+		DebugLogical(">> ", logic)
+	}
+
 	physical, cost, err := physicalOptimize(logic, &planCounter)
 	if err != nil {
 		return nil, nil, 0, err

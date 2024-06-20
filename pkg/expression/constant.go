@@ -154,13 +154,14 @@ func (c *Constant) String() string {
 	if c.ParamMarker != nil {
 		dt, ok := c.ParamMarker.getUserVarWithInternalCtx()
 		if !ok {
-			return "?"
+			return "param:?"
 		}
 		c.Value.SetValue(dt.GetValue(), c.RetType)
+		return fmt.Sprintf("param:%v", c.Value.GetValue())
 	} else if c.DeferredExpr != nil {
-		return c.DeferredExpr.String()
+		return "deffer:" + c.DeferredExpr.String()
 	}
-	return fmt.Sprintf("%v", c.Value.GetValue())
+	return fmt.Sprintf("normal:%v", c.Value.GetValue())
 }
 
 // MarshalJSON implements json.Marshaler interface.
