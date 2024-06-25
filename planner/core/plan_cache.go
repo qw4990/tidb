@@ -130,7 +130,8 @@ func GetPlanFromSessionPlanCache(ctx context.Context, sctx sessionctx.Context,
 		var ignoreByBinding bool
 		bindSQL, ignoreByBinding = GetBindSQL4PlanCache(sctx, stmt)
 		if ignoreByBinding {
-			stmtCtx.SetSkipPlanCache(errors.Errorf("skip plan-cache: ignore plan cache by binding"))
+			stmtCtx.UseCache = false
+			stmtCtx.AppendWarning(errors.New("skip plan-cache: ignore plan cache by binding"))
 		}
 	}
 
