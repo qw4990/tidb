@@ -134,6 +134,11 @@ type ParamMarker struct {
 	order int
 }
 
+// Clone clones this structure.
+func (d *ParamMarker) Clone() *ParamMarker {
+	return &ParamMarker{d.order}
+}
+
 // GetUserVar returns the corresponding user variable presented in the `EXECUTE` statement or `COM_EXECUTE` command.
 func (d *ParamMarker) GetUserVar(ctx ParamValues) (types.Datum, error) {
 	return ctx.GetParamValue(d.order)
@@ -157,6 +162,17 @@ func (c *Constant) StringWithCtx(ctx ParamValues) string {
 // Clone implements Expression interface.
 func (c *Constant) Clone() Expression {
 	con := *c
+	con.RetType = c.RetType.Clone()
+	if c.DeferredExpr != nil {
+		con.DeferredExpr = c.DeferredExpr.Clone()
+	}
+	if c.hashcode != nil {
+		con.hashcode = make([]byte, len(c.hashcode))
+		copy(con.hashcode, c.hashcode)
+	}
+	if c.ParamMarker != nil {
+		con.ParamMarker = c.ParamMarker.Clone()
+	}
 	return &con
 }
 
