@@ -72,6 +72,8 @@ type Collator interface {
 	KeyWithoutTrimRightSpace(str string) []byte
 	// Pattern get a collation-aware WildcardPattern.
 	Pattern() WildcardPattern
+	// Clone clones a new Collator.
+	Clone() Collator
 }
 
 // WildcardPattern is the interface used for wildcard pattern match.

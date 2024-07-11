@@ -17,6 +17,7 @@ package collate
 import (
 	"bytes"
 
+	"github.com/pingcap/tidb/pkg/parser/charset"
 	"github.com/pingcap/tidb/pkg/util/hack"
 	"golang.org/x/text/encoding"
 )
@@ -81,6 +82,11 @@ func (g *gbkBinCollator) KeyWithoutTrimRightSpace(str string) []byte {
 // Pattern implements Collator interface.
 func (*gbkBinCollator) Pattern() WildcardPattern {
 	return &gbkBinPattern{}
+}
+
+// Clone implements Collator interface.
+func (g *gbkBinCollator) Clone() Collator {
+	return &gbkBinCollator{e: charset.NewCustomGBKEncoder()}
 }
 
 // use binPattern directly, they are totally same.

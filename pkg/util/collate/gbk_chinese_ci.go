@@ -64,6 +64,11 @@ func (*gbkChineseCICollator) Pattern() WildcardPattern {
 	return &gbkChineseCIPattern{}
 }
 
+// Clone implements Collator interface.
+func (*gbkChineseCICollator) Clone() Collator {
+	return &gbkChineseCICollator{}
+}
+
 type gbkChineseCIPattern struct {
 	patChars []rune
 	patTypes []byte
