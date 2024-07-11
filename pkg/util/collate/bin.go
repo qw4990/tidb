@@ -22,6 +22,7 @@ import (
 
 // binCollator match pattern in bytes
 type binCollator struct {
+	_ int // to let the Clone return a different pointer.
 }
 
 // Compare implement Collator interface.

@@ -338,7 +338,14 @@ func (sf *ScalarFunction) Clone() Expression {
 		FuncName: sf.FuncName,
 		RetType:  sf.RetType.Clone(),
 		Function: sf.Function.Clone(),
-		hashcode: sf.hashcode,
+	}
+	if sf.hashcode != nil {
+		c.hashcode = make([]byte, len(sf.hashcode))
+		copy(c.hashcode, sf.hashcode)
+	}
+	if sf.canonicalhashcode != nil {
+		c.canonicalhashcode = make([]byte, len(sf.canonicalhashcode))
+		copy(c.canonicalhashcode, sf.canonicalhashcode)
 	}
 	c.SetCharsetAndCollation(sf.CharsetAndCollation())
 	c.SetCoercibility(sf.Coercibility())

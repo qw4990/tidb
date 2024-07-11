@@ -90,8 +90,9 @@ func testCachedPlanClone(t *testing.T, tk1, tk2 *testkit.TestKit, prep, set, exe
 	ctx := context.WithValue(context.Background(), core.PlanCacheKeyTestClone{}, func(plan, cloned base.Plan) {
 		checked = true
 		require.NoError(t, core.CheckPlanDeepClone(plan, cloned,
-			".ctx",   // ctx is not cloned
-			".stats", // stats is read-only
+			".ctx",         // ctx is not cloned
+			".stats",       // stats is read-only
+			".TableAsName", // read-only
 		))
 	})
 	tk2.MustQueryWithContext(ctx, exec2)

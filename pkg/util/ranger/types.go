@@ -91,7 +91,9 @@ func (ran *Range) Clone() *Range {
 	for i, length := 0, len(ran.HighVal); i < length; i++ {
 		newRange.HighVal = append(newRange.HighVal, ran.HighVal[i])
 	}
-	newRange.Collators = append(newRange.Collators, ran.Collators...)
+	for _, c := range ran.Collators {
+		newRange.Collators = append(newRange.Collators, c.Clone())
+	}
 	return newRange
 }
 
