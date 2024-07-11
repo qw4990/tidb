@@ -417,8 +417,8 @@ func checkPhysicalPlanClone(p base.PhysicalPlan) error {
 }
 
 // CheckPlanDeepClone checks if p2 is deep cloned from p1, which means they should share no same pointer / map / slice.
-func CheckPlanDeepClone(p1, p2 base.Plan) error {
-	return checkDeepClonedCore(reflect.ValueOf(p1), reflect.ValueOf(p2), typeName(reflect.TypeOf(p1)), nil, nil, nil)
+func CheckPlanDeepClone(p1, p2 base.Plan, whitePathList ...string) error {
+	return checkDeepClonedCore(reflect.ValueOf(p1), reflect.ValueOf(p2), typeName(reflect.TypeOf(p1)), whitePathList, nil, nil)
 }
 
 // checkDeepClonedCore is used to check if v2 is deep cloned from v1.

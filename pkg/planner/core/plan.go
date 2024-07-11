@@ -274,6 +274,9 @@ func (p *basePhysicalPlan) cloneWithSelf(newCtx base.PlanContext, newSelf base.P
 		self:                                 newSelf,
 		TiFlashFineGrainedShuffleStreamCount: p.TiFlashFineGrainedShuffleStreamCount,
 		probeParents:                         p.probeParents,
+		planCostInit:                         p.planCostInit,
+		planCost:                             p.planCost,
+		planCostVer2:                         p.planCostVer2,
 	}
 	base.SetSCtx(newCtx)
 	for _, child := range p.children {
