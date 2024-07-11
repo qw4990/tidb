@@ -156,6 +156,17 @@ type PhysPlanPartInfo struct {
 
 const emptyPartitionInfoSize = int64(unsafe.Sizeof(PhysPlanPartInfo{}))
 
+func (pi *PhysPlanPartInfo) Clone() *PhysPlanPartInfo {
+	cloned := new(PhysPlanPartInfo)
+	cloned.PruningConds = util.CloneExprs(pi.PruningConds)
+	cloned.PartitionNames = make([]model.CIStr, len(pi.PartitionNames))
+	copy(cloned.PartitionNames, pi.PartitionNames)
+	cloned.Columns = util.CloneCols(pi.Columns)
+	cloned.ColumnNames = make(types.NameSlice, 0, len(pi.ColumnNames))
+	copy(cloned.ColumnNames, pi.ColumnNames)
+	return cloned
+}
+
 // MemoryUsage return the memory usage of PhysPlanPartInfo
 func (pi *PhysPlanPartInfo) MemoryUsage() (sum int64) {
 	if pi == nil {
@@ -926,6 +937,15 @@ func (ts *PhysicalTableScan) Clone(newCtx base.PlanContext) (base.PhysicalPlan, 
 	for i, rf := range ts.runtimeFilterList {
 		clonedRF := rf.Clone()
 		clonedScan.runtimeFilterList[i] = clonedRF
+	}
+	if ts.HandleCols != nil {
+		clonedScan.HandleCols = ts.HandleCols.Clone(newCtx.GetSessionVars().StmtCtx)
+	}
+	if ts.PlanPartInfo != nil {
+		clonedScan.PlanPartInfo = ts.PlanPartInfo.Clone()
+	}
+	if ts.tblCols != nil {
+		clonedScan.tblCols = util.CloneCols(ts.tblCols)
 	}
 	return clonedScan, nil
 }

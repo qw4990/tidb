@@ -504,7 +504,7 @@ func checkDeepClonedCore(v1, v2 reflect.Value, path string, whitePathList, white
 		if v1.IsNil() != v2.IsNil() {
 			return errors.Errorf("invalid interfaces, path %v", path)
 		}
-		return checkDeepClonedCore(v1.Elem(), v2.Elem(), path, whitePathList, whiteTypeList, visited)
+		return checkDeepClonedCore(v1.Elem(), v2.Elem(), fmt.Sprintf("%v(%v)", path, typeName(v1.Elem().Type())), whitePathList, whiteTypeList, visited)
 	case reflect.Ptr:
 		if v1.IsNil() && v2.IsNil() {
 			return nil

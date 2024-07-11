@@ -93,6 +93,7 @@ func testCachedPlanClone(t *testing.T, tk1, tk2 *testkit.TestKit, prep, set, exe
 			".ctx",         // ctx is not cloned
 			".stats",       // stats is read-only
 			".TableAsName", // read-only
+			".PlanPartInfo.ColumnNames", // read-only
 		))
 	})
 	tk2.MustQueryWithContext(ctx, exec2)
