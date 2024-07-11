@@ -112,3 +112,8 @@ func (uc *unicodeCICollator) KeyWithoutTrimRightSpace(str string) []byte {
 func (uc *unicodeCICollator) Pattern() WildcardPattern {
 	return uc.impl.Pattern()
 }
+
+// Clone implements Collator interface.
+func (uc *unicodeCICollator) Clone() Collator {
+	return &unicodeCICollator{}
+}
