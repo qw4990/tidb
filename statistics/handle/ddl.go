@@ -16,6 +16,7 @@ package handle
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb/ddl/util"
@@ -49,6 +50,8 @@ func (h *Handle) HandleDDLEvent(t *util.Event) error {
 			}
 		}
 	case model.ActionAddTablePartition, model.ActionTruncateTablePartition:
+		fmt.Println(">>>>>>>>>>>>>>> drop ")
+		return nil
 		for _, def := range t.PartInfo.Definitions {
 			if err := h.insertTableStats2KV(t.TableInfo, def.ID); err != nil {
 				return err

@@ -412,12 +412,16 @@ func needDumpStatsDelta(h *Handle, id int64, item variable.TableDelta, currentTi
 	tbl, ok := h.statsCache.Load().(statsCache).Get(id)
 	if !ok {
 		// No need to dump if the stats is invalid.
+		fmt.Println(">>>> skip here?")
 		return false
 	}
 	if currentTime.Sub(item.InitTime) > dumpStatsMaxDuration {
 		// Dump the stats to kv at least once an hour.
 		return true
 	}
+
+	fmt.Println(">>>>>>>>>>>> tbl Count >>> ", item.Count, tbl.Count, float64(item.Count)/float64(tbl.Count) , DumpStatsDeltaRatio)
+
 	if tbl.Count == 0 || float64(item.Count)/float64(tbl.Count) > DumpStatsDeltaRatio {
 		// Dump the stats when there are many modifications.
 		return true
@@ -488,10 +492,13 @@ func (h *Handle) DumpStatsDeltaToKV(mode dumpMode) error {
 		h.globalMap.Unlock()
 	}()
 	currentTime := time.Now()
+	fmt.Println(">>>>>>> len delta Map ", len(deltaMap))
 	for id, item := range deltaMap {
 		if mode == DumpDelta && !needDumpStatsDelta(h, id, item, currentTime) {
+			fmt.Println(">>> skip ")
 			continue
 		}
+		fmt.Println(">>> dump")
 		updated, err := h.dumpTableStatCountToKV(id, item)
 		if err != nil {
 			return errors.Trace(err)
