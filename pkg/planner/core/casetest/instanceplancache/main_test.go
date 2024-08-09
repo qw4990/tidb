@@ -40,10 +40,10 @@ func randomIntVal() string {
 	case 3: // maxint64
 		return randomItem("9223372036854775807", "9223372036854775808", "9223372036854775806", "-9223372036854775807", "-9223372036854775808", "-9223372036854775806")
 	default:
-		return randomItem(fmt.Sprintf("%v", rand.Intn(10)), fmt.Sprintf("-%v", rand.Intn(10)),
-			fmt.Sprintf("%v", rand.Intn(10)+1000000), fmt.Sprintf("-%v", rand.Intn(10)+1000000),
-			fmt.Sprintf("%v", rand.Intn(10)+100000000000), fmt.Sprintf("-%v", rand.Intn(10)+100000000000),
-			fmt.Sprintf("%v", rand.Intn(10)+1000000000000000), fmt.Sprintf("-%v", rand.Intn(10)+1000000000000000))
+		return randomItem(fmt.Sprintf("%v", rand.Intn(3)+1000), fmt.Sprintf("-%v", rand.Intn(3)+1000),
+			fmt.Sprintf("%v", rand.Intn(3)+1000000), fmt.Sprintf("-%v", rand.Intn(3)+1000000),
+			fmt.Sprintf("%v", rand.Intn(3)+100000000000), fmt.Sprintf("-%v", rand.Intn(3)+100000000000),
+			fmt.Sprintf("%v", rand.Intn(3)+1000000000000000), fmt.Sprintf("-%v", rand.Intn(3)+1000000000000000))
 	}
 }
 
