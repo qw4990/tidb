@@ -105,7 +105,6 @@ type PointGetPlan struct {
 	outputNames      []*types.FieldName `plan-cache-clone:"shallow"`
 	LockWaitTime     int64
 	Columns          []*model.ColumnInfo `plan-cache-clone:"shallow"`
-	cost             float64
 
 	// required by cost model
 	planCostInit bool
@@ -146,16 +145,6 @@ type nameValuePair struct {
 // Schema implements the Plan interface.
 func (p *PointGetPlan) Schema() *expression.Schema {
 	return p.schema
-}
-
-// Cost implements PhysicalPlan interface
-func (p *PointGetPlan) Cost() float64 {
-	return p.cost
-}
-
-// SetCost implements PhysicalPlan interface
-func (p *PointGetPlan) SetCost(cost float64) {
-	p.cost = cost
 }
 
 // Attach2Task makes the current physical plan as the father of task's physicalPlan and updates the cost of

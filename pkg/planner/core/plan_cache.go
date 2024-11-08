@@ -224,10 +224,13 @@ func GetPlanFromPlanCache(ctx context.Context, sctx sessionctx.Context,
 
 	paramTypes := parseParamTypes(sctx, params)
 	if stmtCtx.UseCache() {
-		plan, outputCols, stmtHints, hit := lookupPlanCache(ctx, sctx, cacheKey, paramTypes)
-		skipPrivCheck := stmt.PointGet.Executor != nil // this case is specially handled
+		fastPointGet := stmt.PointGet.Executor != nil // this case is specially handled
+		if fastPointGet && stmt.PointGet.FastPlan == nil {
+			stmt.PointGet.FastPlan = new(PointGetPlan)
+		}
+		plan, outputCols, stmtHints, hit := lookupPlanCache(ctx, sctx, cacheKey, paramTypes, stmt.PointGet.FastPlan)
 		if hit {
-			if plan, ok, err := adjustCachedPlan(ctx, sctx, plan, stmtHints, isNonPrepared, skipPrivCheck, binding, is, stmt); err != nil || ok {
+			if plan, ok, err := adjustCachedPlan(ctx, sctx, plan, stmtHints, isNonPrepared, fastPointGet, binding, is, stmt); err != nil || ok {
 				return plan, outputCols, err
 			}
 		}
@@ -244,8 +247,8 @@ func instancePlanCacheEnabled(ctx context.Context) bool {
 	return enableInstancePlanCache
 }
 
-func lookupPlanCache(ctx context.Context, sctx sessionctx.Context, cacheKey string,
-	paramTypes []*types.FieldType) (plan base.Plan, outputCols types.NameSlice, stmtHints *hint.StmtHints, hit bool) {
+func lookupPlanCache(ctx context.Context, sctx sessionctx.Context, cacheKey string, paramTypes []*types.FieldType,
+	fastPlan *PointGetPlan) (plan base.Plan, outputCols types.NameSlice, stmtHints *hint.StmtHints, hit bool) {
 	useInstanceCache := instancePlanCacheEnabled(ctx)
 	defer func(begin time.Time) {
 		if hit {
@@ -255,9 +258,16 @@ func lookupPlanCache(ctx context.Context, sctx sessionctx.Context, cacheKey stri
 	if useInstanceCache {
 		if v, hit := domain.GetDomain(sctx).GetInstancePlanCache().Get(cacheKey, paramTypes); hit {
 			pcv := v.(*PlanCacheValue)
-			clonedPlan, ok := pcv.Plan.CloneForPlanCache(sctx.GetPlanCtx())
-			if !ok { // clone the value to solve concurrency problem
-				return nil, nil, nil, false
+			var clonedPlan base.Plan
+			if pointPlan, ok := pcv.Plan.(*PointGetPlan); ok && fastPlan != nil {
+				fastClonePointGetForPlanCache(sctx.GetPlanCtx(), pointPlan, fastPlan)
+				clonedPlan = fastPlan
+			} else {
+				var ok bool
+				clonedPlan, ok = pcv.Plan.CloneForPlanCache(sctx.GetPlanCtx())
+				if !ok { // clone the value to solve concurrency problem
+					return nil, nil, nil, false
+				}
 			}
 			if intest.InTest && ctx.Value(PlanCacheKeyTestClone{}) != nil {
 				ctx.Value(PlanCacheKeyTestClone{}).(func(plan, cloned base.Plan))(pcv.Plan, clonedPlan)
