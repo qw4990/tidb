@@ -176,6 +176,7 @@ func cloneConstant2DForPlanCache(constants [][]*expression.Constant) [][]*expres
 
 func fastClonePointGetForPlanCache(newCtx base.PlanContext, src, dst *PointGetPlan) *PointGetPlan {
 	if dst == nil {
+
 		dst = new(PointGetPlan)
 	}
 	dst.Plan = src.Plan
