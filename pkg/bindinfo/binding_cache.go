@@ -159,8 +159,11 @@ type crossDBBindingCache struct {
 
 func newCrossDBBindingCache(loadBindingFromStorageFunc func(sessionctx.Context, string) (Bindings, error)) CrossDBBindingCache {
 	return &crossDBBindingCache{
-		BindingCache:               newBindCache(),
-		digestBiMap:                new(digestBiMapImpl),
+		BindingCache: newBindCache(),
+		digestBiMap: &digestBiMapImpl{
+			noDBDigest2SQLDigest: make(map[string][]string),
+			sqlDigest2noDBDigest: make(map[string]string),
+		},
 		loadBindingFromStorageFunc: loadBindingFromStorageFunc,
 	}
 }
