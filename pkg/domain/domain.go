@@ -2123,7 +2123,7 @@ func (do *Domain) globalBindHandleWorkerLoop(owner owner.Manager) {
 		for {
 			select {
 			case <-do.exit:
-				do.BindHandle().CloseCache()
+				do.BindHandle().Close()
 				owner.Close()
 				return
 			case <-bindWorkerTicker.C:

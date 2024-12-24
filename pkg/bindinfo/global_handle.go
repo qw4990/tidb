@@ -81,8 +81,8 @@ type GlobalBindingHandle interface {
 	// GetMemCapacity returns the memory capacity for the bind cache.
 	GetMemCapacity() (memCapacity int64)
 
-	// CloseCache closes the binding cache.
-	CloseCache()
+	// Close closes the binding cache.
+	Close()
 
 	variable.Statistics
 }
@@ -593,7 +593,7 @@ func (h *globalBindingHandle) Stats(_ *variable.SessionVars) (map[string]any, er
 }
 
 // Close closes the binding cache.
-func (h *globalBindingHandle) CloseCache() {
+func (h *globalBindingHandle) Close() {
 	h.bindingCache.Close()
 }
 
