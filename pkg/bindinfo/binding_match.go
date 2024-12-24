@@ -15,6 +15,7 @@
 package bindinfo
 
 import (
+	"github.com/pingcap/tidb/pkg/parser"
 	"strings"
 	"sync"
 
@@ -91,6 +92,36 @@ func matchSQLBinding(sctx sessionctx.Context, stmtNode ast.StmtNode, info *Bindi
 		return binding, matched, metrics.ScopeGlobal
 	}
 
+	return
+}
+
+// bestMatchedBinding returns the best matched binding for this statement according to its noDBDigest and tableNames.
+func bestMatchedBinding(sctx sessionctx.Context, noDBDigest string, tableNames []*ast.TableName, bindings Bindings) (matchedBinding Binding, isMatched bool) {
+	p := parser.New()
+	leastWildcards := len(tableNames) + 1
+	enableCrossDBBinding := sctx.GetSessionVars().EnableFuzzyBinding
+	// session bindings in most cases is only used for test, so there should be many session bindings, so match
+	// them one by one is acceptable.
+	for _, binding := range bindings {
+		stmt, err := p.ParseOneStmt(binding.BindSQL, binding.Charset, binding.Collation)
+		if err != nil {
+			continue
+		}
+		_, bindingNoDBDigest := norm.NormalizeStmtForBinding(stmt, norm.WithoutDB(true))
+		if noDBDigest != bindingNoDBDigest {
+			continue
+		}
+		numWildcards, matched := crossDBMatchBindingTableName(sctx.GetSessionVars().CurrentDB, tableNames, binding.TableNames)
+		if matched && numWildcards > 0 && sctx != nil && !enableCrossDBBinding {
+			continue // cross-db binding is disabled, skip this binding
+		}
+		if matched && numWildcards < leastWildcards {
+			matchedBinding = binding
+			isMatched = true
+			leastWildcards = numWildcards
+			break
+		}
+	}
 	return
 }
 

@@ -102,9 +102,8 @@ func (h *sessionBindingHandle) DropSessionBinding(sqlDigests []string) error {
 func (h *sessionBindingHandle) MatchSessionBinding(sctx sessionctx.Context, noDBDigest string, tableNames []*ast.TableName) (matchedBinding Binding, isMatched bool) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
+	possibleBindings := make([]Binding, 0, 2)
 	p := parser.New()
-	leastWildcards := len(tableNames) + 1
-	enableCrossDBBinding := sctx.GetSessionVars().EnableFuzzyBinding
 	// session bindings in most cases is only used for test, so there should be many session bindings, so match
 	// them one by one is acceptable.
 	for _, bindings := range h.bindings {
@@ -117,19 +116,10 @@ func (h *sessionBindingHandle) MatchSessionBinding(sctx sessionctx.Context, noDB
 			if noDBDigest != bindingNoDBDigest {
 				continue
 			}
-			numWildcards, matched := crossDBMatchBindingTableName(sctx.GetSessionVars().CurrentDB, tableNames, binding.TableNames)
-			if matched && numWildcards > 0 && sctx != nil && !enableCrossDBBinding {
-				continue // cross-db binding is disabled, skip this binding
-			}
-			if matched && numWildcards < leastWildcards {
-				matchedBinding = binding
-				isMatched = true
-				leastWildcards = numWildcards
-				break
-			}
+			possibleBindings = append(possibleBindings, binding)
 		}
 	}
-	return
+	return bestMatchedBinding(sctx, noDBDigest, tableNames, possibleBindings)
 }
 
 // GetAllSessionBindings return all session bind info.
