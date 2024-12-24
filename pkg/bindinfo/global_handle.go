@@ -75,16 +75,13 @@ type GlobalBindingHandle interface {
 
 	// Methods for memory control.
 
-	// SetBindingCacheCapacity reset the capacity for the bindingCache.
-	SetBindingCacheCapacity(capacity int64)
-
 	// GetMemUsage returns the memory usage for the bind cache.
 	GetMemUsage() (memUsage int64)
 
 	// GetMemCapacity returns the memory capacity for the bind cache.
 	GetMemCapacity() (memCapacity int64)
 
-	// Close closes the binding cache.
+	// CloseCache closes the binding cache.
 	CloseCache()
 
 	variable.Statistics
@@ -400,12 +397,6 @@ func (h *globalBindingHandle) MatchGlobalBinding(sctx sessionctx.Context, noDBDi
 // GetAllGlobalBindings returns all bind records in cache.
 func (h *globalBindingHandle) GetAllGlobalBindings() (bindings Bindings) {
 	return h.bindingCache.GetAllBindings()
-}
-
-// SetBindingCacheCapacity reset the capacity for the bindingCache.
-// It will not affect already cached Bindings.
-func (h *globalBindingHandle) SetBindingCacheCapacity(capacity int64) {
-	h.bindingCache.SetMemCapacity(capacity)
 }
 
 // GetMemUsage returns the memory usage for the bind cache.
