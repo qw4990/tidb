@@ -219,8 +219,7 @@ func (c *bindingCache) getFromMemory(sctx sessionctx.Context, noDBDigest string,
 	if c.Size() == 0 {
 		return
 	}
-	leastWildcards := len(tableNames) + 1
-	enableCrossDBBinding := sctx.GetSessionVars().EnableFuzzyBinding
+	possibleBindings := make([]Binding, 0, 2)
 	for _, sqlDigest := range c.digestBiMap.NoDBDigest2SQLDigest(noDBDigest) {
 		bindings := c.GetBinding(sqlDigest)
 		if intest.InTest {
@@ -234,23 +233,16 @@ func (c *bindingCache) getFromMemory(sctx sessionctx.Context, noDBDigest string,
 			}
 		}
 		if bindings != nil {
-			for _, binding := range bindings {
-				numWildcards, matched := crossDBMatchBindingTableName(sctx.GetSessionVars().CurrentDB, tableNames, binding.TableNames)
-				if matched && numWildcards > 0 && sctx != nil && !enableCrossDBBinding {
-					continue // cross-db binding is disabled, skip this binding
-				}
-				if matched && numWildcards < leastWildcards {
-					matchedBinding = binding
-					isMatched = true
-					leastWildcards = numWildcards
-					break
-				}
-			}
+			possibleBindings = append(possibleBindings, bindings...)
 		} else {
 			missingSQLDigest = append(missingSQLDigest, sqlDigest)
 		}
 	}
-	return matchedBinding, isMatched, missingSQLDigest
+	if len(missingSQLDigest) != 0 {
+		return
+	}
+	matchedBinding, isMatched = bestMatchedBinding(sctx, noDBDigest, tableNames, possibleBindings)
+	return
 }
 
 func (c *bindingCache) loadFromStore(sctx sessionctx.Context, missingSQLDigest []string) {
