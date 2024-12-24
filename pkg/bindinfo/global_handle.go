@@ -67,9 +67,6 @@ type GlobalBindingHandle interface {
 
 	// Methods for load and clear global sql bindings.
 
-	// Reset is to reset the BindHandle and clean old info.
-	Reset()
-
 	// LoadFromStorageToCache loads global bindings from storage to the memory cache.
 	LoadFromStorageToCache(fullLoad bool) (err error)
 
@@ -132,16 +129,11 @@ const (
 
 // NewGlobalBindingHandle creates a new GlobalBindingHandle.
 func NewGlobalBindingHandle(sPool util.SessionPool) GlobalBindingHandle {
-	handle := &globalBindingHandle{sPool: sPool}
-	handle.Reset()
-	return handle
-}
-
-// Reset is to reset the BindHandle and clean old info.
-func (h *globalBindingHandle) Reset() {
+	h := &globalBindingHandle{sPool: sPool}
 	h.lastUpdateTime.Store(types.ZeroTimestamp)
 	h.bindingCache = newBindCache(h.LoadBindingsFromStorage)
 	variable.RegisterStatistics(h)
+	return h
 }
 
 func (h *globalBindingHandle) getLastUpdateTime() types.Time {
