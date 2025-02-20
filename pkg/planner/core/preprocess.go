@@ -17,11 +17,11 @@ package core
 import (
 	"context"
 	"fmt"
-	"github.com/pingcap/tidb/pkg/bindinfo"
 	"math"
 	"strings"
 
 	"github.com/pingcap/errors"
+	"github.com/pingcap/tidb/pkg/bindinfo"
 	"github.com/pingcap/tidb/pkg/domain"
 	"github.com/pingcap/tidb/pkg/expression"
 	"github.com/pingcap/tidb/pkg/infoschema"
