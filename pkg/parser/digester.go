@@ -130,9 +130,9 @@ func NormalizeDigest(sql string) (normalized string, digest *Digest) {
 }
 
 // NormalizeDigestForBinding combines Normalize and DigestNormalized into one method with additional binding rules.
-func NormalizeDigestForBinding(sql string) (normalized string, digest *Digest) {
+func NormalizeDigestForBinding(sql string, keepHint bool) (normalized string, digest *Digest) {
 	d := digesterPool.Get().(*sqlDigester)
-	normalized, digest = d.doNormalizeDigestForBinding(sql)
+	normalized, digest = d.doNormalizeDigestForBinding(sql, keepHint)
 	digesterPool.Put(d)
 	return
 }
@@ -200,8 +200,8 @@ func (d *sqlDigester) doNormalizeDigest(sql string) (normalized string, digest *
 	return
 }
 
-func (d *sqlDigester) doNormalizeDigestForBinding(sql string) (normalized string, digest *Digest) {
-	d.normalize(sql, errors.RedactLogEnable, false, true, false)
+func (d *sqlDigester) doNormalizeDigestForBinding(sql string, keepHint bool) (normalized string, digest *Digest) {
+	d.normalize(sql, errors.RedactLogEnable, keepHint, true, false)
 	normalized = d.buffer.String()
 	d.hasher.Write(d.buffer.Bytes())
 	d.buffer.Reset()

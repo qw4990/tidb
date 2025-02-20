@@ -17,6 +17,7 @@ package core
 import (
 	"context"
 	"fmt"
+	"github.com/pingcap/tidb/pkg/bindinfo"
 	"math"
 	"strings"
 
@@ -50,7 +51,6 @@ import (
 	"github.com/pingcap/tidb/pkg/util/dbterror/plannererrors"
 	"github.com/pingcap/tidb/pkg/util/domainutil"
 	"github.com/pingcap/tidb/pkg/util/logutil"
-	utilparser "github.com/pingcap/tidb/pkg/util/parser"
 	"github.com/pingcap/tidb/pkg/util/tracing"
 	"go.uber.org/zap"
 )
@@ -593,8 +593,8 @@ func (p *preprocessor) checkBindGrammar(originNode, hintedNode ast.StmtNode, def
 	aliasChecker := &aliasChecker{}
 	originNode.Accept(aliasChecker)
 	hintedNode.Accept(aliasChecker)
-	originSQL := parser.NormalizeForBinding(utilparser.RestoreWithDefaultDB(originNode, defaultDB, originNode.Text()), false)
-	hintedSQL := parser.NormalizeForBinding(utilparser.RestoreWithDefaultDB(hintedNode, defaultDB, hintedNode.Text()), false)
+	originSQL := bindinfo.NormalizeStmtForBinding(originNode, defaultDB, false)
+	hintedSQL := bindinfo.NormalizeStmtForBinding(hintedNode, defaultDB, false)
 	if originSQL != hintedSQL {
 		p.err = errors.Errorf("hinted sql and origin sql don't match when hinted sql erase the hint info, after erase hint info, originSQL:%s, hintedSQL:%s", originSQL, hintedSQL)
 	}

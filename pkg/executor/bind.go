@@ -94,7 +94,7 @@ func (e *SQLBindExec) setBindingStatus() error {
 	if len(e.details) != 1 {
 		return errors.New("SQLBindExec: setBindingStatus should only have one SQLBindOpDetail")
 	}
-	_, sqlDigest := parser.NormalizeDigestForBinding(e.details[0].NormdOrigSQL)
+	_, sqlDigest := parser.NormalizeDigestForBinding(e.details[0].NormdOrigSQL, false)
 	ok, err := domain.GetDomain(e.Ctx()).BindHandle().SetGlobalBindingStatus(e.details[0].NewStatus, sqlDigest.String())
 	if err == nil && !ok {
 		warningMess := errors.NewNoStackError("There are no bindings can be set the status. Please check the SQL text")

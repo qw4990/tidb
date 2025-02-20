@@ -741,7 +741,7 @@ func (b *PlanBuilder) buildSet(ctx context.Context, v *ast.SetStmt) (base.Plan, 
 func (b *PlanBuilder) buildDropBindPlan(v *ast.DropBindingStmt) (base.Plan, error) {
 	var p *SQLBindPlan
 	if v.OriginNode != nil {
-		normdOrigSQL, sqlDigestWithDB := bindinfo.NormalizeStmtForBinding(v.OriginNode, b.ctx.GetSessionVars().CurrentDB, false)
+		normdOrigSQL, sqlDigestWithDB := bindinfo.NormalizeDigestForBinding(v.OriginNode, b.ctx.GetSessionVars().CurrentDB, false)
 		p = &SQLBindPlan{
 			IsGlobal:  v.GlobalScope,
 			SQLBindOp: OpSQLBindDrop,
@@ -752,11 +752,7 @@ func (b *PlanBuilder) buildDropBindPlan(v *ast.DropBindingStmt) (base.Plan, erro
 			}},
 		}
 		if v.HintedNode != nil {
-			p.Details[0].BindSQL = utilparser.RestoreWithDefaultDB(
-				v.HintedNode,
-				b.ctx.GetSessionVars().CurrentDB,
-				v.HintedNode.Text(),
-			)
+			p.Details[0].BindSQL = bindinfo.NormalizeStmtForBinding(v.HintedNode, b.ctx.GetSessionVars().CurrentDB, true)
 		}
 	} else {
 		sqlDigests, err := collectStrOrUserVarList(b.ctx, v.SQLDigests)
@@ -786,11 +782,8 @@ func (b *PlanBuilder) buildSetBindingStatusPlan(v *ast.SetBindingStmt) (base.Pla
 		p = &SQLBindPlan{
 			SQLBindOp: OpSetBindingStatus,
 			Details: []*SQLBindOpDetail{{
-				NormdOrigSQL: parser.NormalizeForBinding(
-					utilparser.RestoreWithDefaultDB(v.OriginNode, b.ctx.GetSessionVars().CurrentDB, v.OriginNode.Text()),
-					false,
-				),
-				Db: utilparser.GetDefaultDB(v.OriginNode, b.ctx.GetSessionVars().CurrentDB),
+				NormdOrigSQL: bindinfo.NormalizeStmtForBinding(v.OriginNode, b.ctx.GetSessionVars().CurrentDB, false),
+				Db:           utilparser.GetDefaultDB(v.OriginNode, b.ctx.GetSessionVars().CurrentDB),
 			}},
 		}
 	} else if v.SQLDigest != "" {
@@ -810,7 +803,7 @@ func (b *PlanBuilder) buildSetBindingStatusPlan(v *ast.SetBindingStmt) (base.Pla
 		p.Details[0].NewStatus = bindinfo.StatusDisabled
 	}
 	if v.HintedNode != nil {
-		p.Details[0].BindSQL = utilparser.RestoreWithDefaultDB(v.HintedNode, b.ctx.GetSessionVars().CurrentDB, v.HintedNode.Text())
+		p.Details[0].BindSQL = bindinfo.NormalizeStmtForBinding(v.HintedNode, b.ctx.GetSessionVars().CurrentDB, true)
 	}
 	b.visitInfo = appendVisitInfo(b.visitInfo, mysql.SuperPriv, "", "", "", nil)
 	return p, nil
@@ -945,9 +938,9 @@ func constructSQLBindOPFromPlanDigest(
 		return nil, errors.NewNoStackErrorf("binding failed: %v. Plan Digest: %v", err, planDigest)
 	}
 	restoredSQL := utilparser.RestoreWithDefaultDB(originNode, schema, query)
-	bindSQL = utilparser.RestoreWithDefaultDB(hintNode, schema, hintNode.Text())
+	bindSQL = bindinfo.NormalizeStmtForBinding(hintNode, schema, true)
 	db := utilparser.GetDefaultDB(originNode, schema)
-	normdOrigSQL, sqlDigestWithDB := parser.NormalizeDigestForBinding(restoredSQL)
+	normdOrigSQL, sqlDigestWithDB := parser.NormalizeDigestForBinding(restoredSQL, false)
 	sqlDigestWithDBStr := sqlDigestWithDB.String()
 	if _, ok := handledSQLDigests[sqlDigestWithDBStr]; ok {
 		ctx.GetSessionVars().StmtCtx.AppendWarning(errors.NewNoStackError(
@@ -1020,10 +1013,9 @@ func (b *PlanBuilder) buildCreateBindPlan(v *ast.CreateBindingStmt) (base.Plan, 
 		return nil, err
 	}
 
-	restoredSQL := utilparser.RestoreWithDefaultDB(v.OriginNode, b.ctx.GetSessionVars().CurrentDB, v.OriginNode.Text())
-	bindSQL := utilparser.RestoreWithDefaultDB(v.HintedNode, b.ctx.GetSessionVars().CurrentDB, v.HintedNode.Text())
+	normdOrigSQL, sqlDigestWithDB := bindinfo.NormalizeDigestForBinding(v.OriginNode, b.ctx.GetSessionVars().CurrentDB, false)
+	bindSQL := bindinfo.NormalizeStmtForBinding(v.HintedNode, b.ctx.GetSessionVars().CurrentDB, true)
 	db := utilparser.GetDefaultDB(v.OriginNode, b.ctx.GetSessionVars().CurrentDB)
-	normdOrigSQL, sqlDigestWithDB := parser.NormalizeDigestForBinding(restoredSQL)
 	p := &SQLBindPlan{
 		IsGlobal:  v.GlobalScope,
 		SQLBindOp: OpSQLBindCreate,
@@ -1035,7 +1027,7 @@ func (b *PlanBuilder) buildCreateBindPlan(v *ast.CreateBindingStmt) (base.Plan, 
 			Charset:      charSet,
 			Collation:    collation,
 			Source:       bindinfo.SourceManual,
-			SQLDigest:    sqlDigestWithDB.String(),
+			SQLDigest:    sqlDigestWithDB,
 		}},
 	}
 	b.visitInfo = appendVisitInfo(b.visitInfo, mysql.SuperPriv, "", "", "", nil)

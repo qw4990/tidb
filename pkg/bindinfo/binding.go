@@ -132,7 +132,7 @@ func matchSQLBinding(sctx sessionctx.Context, stmtNode ast.StmtNode, info *Bindi
 	var noDBDigest string
 	var tableNames []*ast.TableName
 	if info == nil || info.TableNames == nil || info.NoDBDigest == "" {
-		_, noDBDigest = NormalizeStmtForBinding(stmtNode, "", true)
+		_, noDBDigest = NormalizeDigestForBinding(stmtNode, "", true)
 		tableNames = CollectTableNames(stmtNode)
 		if info != nil {
 			info.NoDBDigest = noDBDigest
@@ -165,7 +165,7 @@ func noDBDigestFromBinding(binding *Binding) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	_, bindingNoDBDigest := NormalizeStmtForBinding(stmt, "", true)
+	_, bindingNoDBDigest := NormalizeDigestForBinding(stmt, "", true)
 	return bindingNoDBDigest, nil
 }
 
@@ -368,13 +368,23 @@ func pickCachedBinding(cachedBinding *Binding, bindingsFromStorage ...*Binding) 
 }
 
 // NormalizeStmtForBinding normalizes a statement for binding.
+func NormalizeStmtForBinding(stmtNode ast.StmtNode, specifiedDB string, keepHint bool) (normalizedStmt string) {
+	normalizedStmt, _ = normalizeBinding(stmtNode, specifiedDB, false, keepHint)
+	return
+}
+
+// NormalizeDigestForBinding normalizes a statement for binding.
 // This function skips Explain automatically, and literals in in-lists will be normalized as '...'.
 // For normal bindings, DB name will be completed automatically:
 // when noDB is false, schema names will be completed automatically: `select * from t` --> `select * from db . t`.
 // when noDB is true, schema names will be eliminated automatically: `select * from db . t` --> `select * from t`.
 //
 //	e.g. `select * from t where a in (1, 2, 3)` --> `select * from test.t where a in (...)`
-func NormalizeStmtForBinding(stmtNode ast.StmtNode, specifiedDB string, noDB bool) (normalizedStmt, sqlDigest string) {
+func NormalizeDigestForBinding(stmtNode ast.StmtNode, specifiedDB string, noDB bool) (normalizedStmt, sqlDigest string) {
+	return normalizeBinding(stmtNode, specifiedDB, noDB, false)
+}
+
+func normalizeBinding(stmtNode ast.StmtNode, specifiedDB string, noDB, keepHint bool) (normalizedStmt, sqlDigest string) {
 	normalize := func(n ast.StmtNode) (normalizedStmt, sqlDigest string) {
 		eraseLastSemicolon(n)
 		var digest *parser.Digest
@@ -384,7 +394,7 @@ func NormalizeStmtForBinding(stmtNode ast.StmtNode, specifiedDB string, noDB boo
 		} else {
 			normalizedSQL = utilparser.RestoreWithoutDB(n)
 		}
-		normalizedStmt, digest = parser.NormalizeDigestForBinding(normalizedSQL)
+		normalizedStmt, digest = parser.NormalizeDigestForBinding(normalizedSQL, keepHint)
 		return normalizedStmt, digest.String()
 	}
 
