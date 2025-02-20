@@ -132,7 +132,7 @@ func matchSQLBinding(sctx sessionctx.Context, stmtNode ast.StmtNode, info *Bindi
 	var noDBDigest string
 	var tableNames []*ast.TableName
 	if info == nil || info.TableNames == nil || info.NoDBDigest == "" {
-		_, noDBDigest = NormalizeDigestForBinding(stmtNode, "", true)
+		noDBDigest = NormalizeDigestForBinding(stmtNode, "", true)
 		tableNames = CollectTableNames(stmtNode)
 		if info != nil {
 			info.NoDBDigest = noDBDigest
@@ -165,7 +165,7 @@ func noDBDigestFromBinding(binding *Binding) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	_, bindingNoDBDigest := NormalizeDigestForBinding(stmt, "", true)
+	bindingNoDBDigest := NormalizeDigestForBinding(stmt, "", true)
 	return bindingNoDBDigest, nil
 }
 
@@ -380,8 +380,9 @@ func NormalizeStmtForBinding(stmtNode ast.StmtNode, specifiedDB string, keepHint
 // when noDB is true, schema names will be eliminated automatically: `select * from db . t` --> `select * from t`.
 //
 //	e.g. `select * from t where a in (1, 2, 3)` --> `select * from test.t where a in (...)`
-func NormalizeDigestForBinding(stmtNode ast.StmtNode, specifiedDB string, noDB bool) (normalizedStmt, sqlDigest string) {
-	return normalizeBinding(stmtNode, specifiedDB, noDB, false)
+func NormalizeDigestForBinding(stmtNode ast.StmtNode, specifiedDB string, noDB bool) (sqlDigest string) {
+	_, sqlDigest = normalizeBinding(stmtNode, specifiedDB, noDB, false)
+	return
 }
 
 func normalizeBinding(stmtNode ast.StmtNode, specifiedDB string, noDB, keepHint bool) (normalizedStmt, sqlDigest string) {
