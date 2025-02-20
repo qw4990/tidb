@@ -28,7 +28,6 @@ import (
 	"github.com/pingcap/tidb/pkg/parser/terror"
 	sessiontypes "github.com/pingcap/tidb/pkg/session/types"
 	"github.com/pingcap/tidb/pkg/testkit"
-	utilparser "github.com/pingcap/tidb/pkg/util/parser"
 	"github.com/stretchr/testify/require"
 )
 
@@ -914,6 +913,7 @@ func utilNormalizeWithDefaultDB(t *testing.T, sql string) (stmt ast.StmtNode, no
 	testParser := parser.New()
 	stmt, err := testParser.ParseOneStmt(sql, "", "")
 	require.NoError(t, err)
-	normalized, digestResult := parser.NormalizeDigestForBinding(utilparser.RestoreWithDefaultDB(stmt, "test", ""), false)
-	return stmt, normalized, digestResult.String()
+	normalized = bindinfo.NormalizeStmtForBinding(stmt, "test", false)
+	digest = bindinfo.NormalizeDigestForBinding(stmt, "test", false)
+	return stmt, normalized, digest
 }
