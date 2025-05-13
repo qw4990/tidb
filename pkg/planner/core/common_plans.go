@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/pingcap/tidb/pkg/domain"
 	"strconv"
 	"strings"
 
@@ -912,6 +913,9 @@ func (e *Explain) prepareSchema() error {
 		fieldNames = []string{"binary plan"}
 	case format == types.ExplainFormatTiDBJSON:
 		fieldNames = []string{"TiDB_JSON"}
+	case format == types.ExplainFormatExplore:
+		fieldNames = []string{"statement", "binding_hint", "plan", "plan_digest", "avg_latency", "exec_times", "avg_scan_rows",
+			"avg_returned_rows", "latency_per_returned_row", "scan_rows_per_returned_row", "recommend", "reason"}
 	default:
 		return errors.Errorf("explain format '%s' is not supported now", e.Format)
 	}
@@ -1026,6 +1030,38 @@ func (e *Explain) RenderResult() error {
 			return err
 		}
 		e.Rows = append(e.Rows, []string{str})
+	case types.ExplainFormatExplore:
+		bindingHandle := domain.GetDomain(e.SCtx()).BindingHandle()
+		charset, collation := e.SCtx().GetSessionVars().GetCharsetInfo()
+		currentDB := e.SCtx().GetSessionVars().CurrentDB
+		// TODO: e.ExecStmt.Restore()
+		plans, err := bindingHandle.ShowPlansForSQL(currentDB, "select * from t", charset, collation)
+		if err != nil {
+			return err
+		}
+		for _, p := range plans {
+			hintStr, err := p.Binding.Hint.Restore()
+			if err != nil {
+				return err
+			}
+
+			e.Rows = append(e.Rows, []string{
+				p.Binding.OriginalSQL,
+				hintStr,
+				p.Plan,
+				p.PlanDigest,
+				strconv.FormatFloat(p.AvgLatency, 'f', -1, 64),
+				strconv.Itoa(int(p.ExecTimes)),
+				strconv.FormatFloat(p.AvgScanRows, 'f', -1, 64),
+				strconv.FormatFloat(p.AvgReturnedRows, 'f', -1, 64),
+				strconv.FormatFloat(p.LatencyPerReturnRow, 'f', -1, 64),
+				strconv.FormatFloat(p.ScanRowsPerReturnRow, 'f', -1, 64),
+				p.Recommend,
+				p.Reason})
+		}
+		return nil
+
+		// TODO
 	default:
 		return errors.Errorf("explain format '%s' is not supported now", e.Format)
 	}

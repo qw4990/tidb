@@ -39,6 +39,8 @@ var (
 	ExplainFormatCostTrace = "cost_trace"
 	// ExplainFormatPlanCache prints the reason why can't use non-prepared plan cache by warning
 	ExplainFormatPlanCache = "plan_cache"
+	// ExplainFormatExplore is used to explore new plans for a certain SQL.
+	ExplainFormatExplore = "explore"
 
 	// ExplainFormats stores the valid formats for explain statement, used by validator.
 	ExplainFormats = []string{
@@ -54,5 +56,6 @@ var (
 		ExplainFormatTiDBJSON,
 		ExplainFormatCostTrace,
 		ExplainFormatPlanCache,
+		ExplainFormatExplore,
 	}
 )
