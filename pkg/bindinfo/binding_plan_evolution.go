@@ -17,13 +17,13 @@ package bindinfo
 import (
 	"container/list"
 	"fmt"
-	"github.com/pingcap/tidb/pkg/sessionctx/vardef"
 	"sort"
 	"strings"
 
 	"github.com/pingcap/tidb/pkg/parser"
 	"github.com/pingcap/tidb/pkg/parser/ast"
 	"github.com/pingcap/tidb/pkg/sessionctx"
+	"github.com/pingcap/tidb/pkg/sessionctx/vardef"
 	"github.com/pingcap/tidb/pkg/util"
 )
 
@@ -109,6 +109,9 @@ func (g *knobBasedPlanGenerator) Generate(defaultSchema, sql, charset, collation
 		if err != nil {
 			return err
 		}
+
+		fmt.Println(">>>>>>>>> ", vars, fixes)
+
 		genedPlans, err := g.breadthFirstPlanSearch(sctx, stmt, vars, fixes)
 
 		fmt.Println("genedPlans: ", genedPlans)
@@ -132,7 +135,7 @@ func (g *knobBasedPlanGenerator) breadthFirstPlanSearch(sctx sessionctx.Context,
 	visitedStates[startState.Encode()] = struct{}{}
 	stateList.PushBack(startState)
 
-	maxPlans, maxExploreState := 30, 2000
+	maxPlans, maxExploreState := 30, 20000
 	for len(visitedPlans) < maxPlans && len(visitedStates) < maxExploreState && stateList.Len() > 0 {
 		currState := stateList.Remove(stateList.Front()).(*state)
 		plan, err := g.getPlanUnderState(sctx, stmt, startState)
@@ -149,6 +152,7 @@ func (g *knobBasedPlanGenerator) breadthFirstPlanSearch(sctx sessionctx.Context,
 				return nil, err
 			}
 			newState := newStateWithNewVar(currState, varName, newVarVal)
+			fmt.Println(">>>>>>> ", varName, newVarVal)
 			if _, ok := visitedStates[newState.Encode()]; !ok {
 				visitedStates[newState.Encode()] = struct{}{}
 				stateList.PushBack(newState)
@@ -167,6 +171,8 @@ func (g *knobBasedPlanGenerator) breadthFirstPlanSearch(sctx sessionctx.Context,
 			}
 		}
 	}
+
+	fmt.Println(">>>>> visited states >>> ", len(visitedStates))
 
 	plans = make([]*genedPlan, 0, len(visitedPlans))
 	for _, plan := range visitedPlans {

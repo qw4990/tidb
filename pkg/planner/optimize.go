@@ -16,6 +16,7 @@ package planner
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"math/rand"
 	"sort"
@@ -681,6 +682,8 @@ func recordRelevantOptVarsAndFixes(sctx sessionctx.Context, stmt ast.StmtNode) (
 	}
 	sort.Strings(varNames)
 
+	fmt.Println("????????>>>> ", sctx.GetSessionVars().CostModelVersion, varNames)
+
 	for fixID := range sctx.GetSessionVars().RelevantOptFixes {
 		fixIDs = append(fixIDs, fixID)
 	}
@@ -688,6 +691,29 @@ func recordRelevantOptVarsAndFixes(sctx sessionctx.Context, stmt ast.StmtNode) (
 		return fixIDs[i] < fixIDs[j]
 	})
 	return
+}
+
+func getPlanWithSCtx(sctx sessionctx.Context, stmt ast.StmtNode) (planDigest, planText, planHints string, err error) {
+	ret := &core.PreprocessorReturn{}
+	nodeW := resolve.NewNodeW(stmt)
+	err = core.Preprocess(
+		context.Background(),
+		sctx,
+		nodeW,
+		core.WithPreprocessorReturn(ret),
+		core.InitTxnContextProvider,
+	)
+	if err != nil {
+		return "", "", "", err
+	}
+
+	p, _, err := Optimize(context.Background(), sctx, nodeW, sctx.GetDomainInfoSchema().(infoschema.InfoSchema))
+	if err != nil {
+		return "", "", "", err
+	}
+	flat := core.FlattenPhysicalPlan(p, false)
+	_, digest := core.NormalizeFlatPlan(flat)
+	return digest.String(), core.ToString(p), "", nil
 }
 
 func init() {
@@ -699,4 +725,5 @@ func init() {
 	}
 	bindinfo.CalculatePlanDigest = calculatePlanDigestFunc
 	bindinfo.RecordRelevantOptVarsAndFixes = recordRelevantOptVarsAndFixes
+	bindinfo.GetPlanWithSCtx = getPlanWithSCtx
 }
