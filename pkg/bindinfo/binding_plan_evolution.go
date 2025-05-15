@@ -109,11 +109,11 @@ func (g *knobBasedPlanGenerator) Generate(defaultSchema, sql, charset, collation
 	return
 }
 
-func (g *knobBasedPlanGenerator) breadthFirstPlanSearch(sctx sessionctx.Context, stmt ast.StmtNode, vars []string, fixes []uint64) (plans []string, err error) {
+func (g *knobBasedPlanGenerator) breadthFirstPlanSearch(sctx sessionctx.Context, stmt ast.StmtNode, vars []string, fixes []uint64) (plans []*BindingPlanInfo, err error) {
 	// init BFS structures
-	visitedStates := make(map[string]struct{}) // map[encodedState]struct{}, all visited states
-	visitedPlans := make(map[string]string)    // map[planDigest]plan, all visited plans
-	stateList := list.New()                    // states in queue to explore
+	visitedStates := make(map[string]struct{})        // map[encodedState]struct{}, all visited states
+	visitedPlans := make(map[string]*BindingPlanInfo) // map[planDigest]plan, all visited plans
+	stateList := list.New()                           // states in queue to explore
 
 	// init the start state and push it into the BFS list
 	startState := g.getStartState(vars, fixes)
@@ -123,11 +123,11 @@ func (g *knobBasedPlanGenerator) breadthFirstPlanSearch(sctx sessionctx.Context,
 	maxPlans, maxExploreState := 30, 2000
 	for len(visitedPlans) < maxPlans && len(visitedStates) < maxExploreState && stateList.Len() > 0 {
 		currState := stateList.Remove(stateList.Front()).(*state)
-		planDigest, plan, err := g.getPlanUnderState(sctx, stmt, startState)
+		plan, err := g.getPlanUnderState(sctx, stmt, startState)
 		if err != nil {
 			return nil, err
 		}
-		visitedPlans[planDigest] = plan
+		visitedPlans[plan.PlanDigest] = plan
 
 		// in each step, adjust one variable or fix
 		for i := range vars {
@@ -175,7 +175,7 @@ func (g *knobBasedPlanGenerator) getStartState(vars []string, fixes []uint64) *s
 	return nil
 }
 
-func (g *knobBasedPlanGenerator) getPlanUnderState(sctx sessionctx.Context, stmt ast.StmtNode, state *state) (planDigest, plan string, err error) {
+func (g *knobBasedPlanGenerator) getPlanUnderState(sctx sessionctx.Context, stmt ast.StmtNode, state *state) (plan *BindingPlanInfo, err error) {
 	for i, varName := range state.varNames {
 		switch varName {
 		case vardef.TiDBOptIndexScanCostFactor:
@@ -215,7 +215,7 @@ func (g *knobBasedPlanGenerator) getPlanUnderState(sctx sessionctx.Context, stmt
 		}
 	}
 	// TODO
-	return "", "", err
+	return
 }
 
 // PlanPerfPredictor is used to score these plan candidates, returns their scores and gives some explanations.
