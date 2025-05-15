@@ -15,21 +15,163 @@
 package bindinfo
 
 import (
+	"container/list"
+	"fmt"
 	"sort"
+	"strings"
+
+	"github.com/pingcap/tidb/pkg/parser"
+	"github.com/pingcap/tidb/pkg/parser/ast"
+	"github.com/pingcap/tidb/pkg/sessionctx"
+	"github.com/pingcap/tidb/pkg/util"
 )
 
 // PlanGenerator is used to generate new Plan Candidates for this specified query.
 type PlanGenerator interface {
-	Generate(defaultSchema string, sql string) (plans []*BindingPlanInfo, err error)
+	Generate(defaultSchema, sql, charset, collation string) (plans []*BindingPlanInfo, err error)
 }
 
 // knobBasedPlanGenerator generates new plan candidates via adjusting knobs like cost factors, hints, etc.
 type knobBasedPlanGenerator struct {
+	sPool util.DestroyableSessionPool
 }
 
-func (*knobBasedPlanGenerator) Generate(string, string) (plans []*BindingPlanInfo, err error) {
-	// TODO: implement this
-	return nil, nil
+type state struct {
+	varNames []string // relevant variables and their values to generate a certain plan
+	varVals  []any
+	fixIDs   []uint64 // relevant fixes and their values to generate a certain plan
+	fixVals  []any
+}
+
+func (s *state) Encode() string {
+	sb := new(strings.Builder)
+	for _, v := range s.varVals {
+		// TODO: handle precision of float
+		sb.WriteString(fmt.Sprintf("%v", v))
+	}
+	for _, v := range s.fixVals {
+		// TODO: handle precision of float
+		sb.WriteString(fmt.Sprintf("%v", v))
+	}
+	return sb.String()
+}
+
+func newStateWithNewVar(old *state, varName string, varVal any) *state {
+	newState := &state{
+		varNames: old.varNames,
+		varVals:  make([]any, len(old.varVals)),
+		fixIDs:   old.fixIDs,
+		fixVals:  old.fixVals,
+	}
+	copy(newState.varVals, old.varVals)
+	for i := range newState.varNames {
+		if newState.varNames[i] == varName {
+			newState.varVals[i] = varVal
+			break
+		}
+	}
+	return newState
+}
+
+func newStateWithNewFix(old *state, fixID uint64, fixVal any) *state {
+	newState := &state{
+		varNames: old.varNames,
+		varVals:  old.varVals,
+		fixIDs:   old.fixIDs,
+		fixVals:  make([]any, len(old.fixVals)),
+	}
+	copy(newState.fixVals, old.fixVals)
+	for i := range newState.fixIDs {
+		if newState.fixIDs[i] == fixID {
+			newState.fixVals[i] = fixVal
+			break
+		}
+	}
+	return newState
+}
+
+func (g *knobBasedPlanGenerator) Generate(defaultSchema, sql, charset, collation string) (plans []*BindingPlanInfo, err error) {
+	p := parser.New()
+	stmt, err := p.ParseOneStmt(sql, charset, collation)
+	if err != nil {
+		return nil, err
+	}
+	err = callWithSCtx(g.sPool, false, func(sctx sessionctx.Context) error {
+		sctx.GetSessionVars().CurrentDB = defaultSchema
+		vars, fixes, err := RecordRelevantOptVarsAndFixes(sctx, stmt)
+		if err != nil {
+			return err
+		}
+		plans, err = g.BFS(sctx, stmt, vars, fixes)
+		return err
+	})
+	return
+}
+
+func (g *knobBasedPlanGenerator) BFS(sctx sessionctx.Context, stmt ast.StmtNode, vars []string, fixes []uint64) (plans []*BindingPlanInfo, err error) {
+	visitedStates := make(map[string]struct{})
+	visitedPlans := make(map[string]*BindingPlanInfo) // map[planDigest]plan
+	startState := g.getStateFromSCtx(sctx, vars, fixes)
+	visitedStates[startState.Encode()] = struct{}{}
+
+	stateList := list.New()
+	stateList.PushBack(startState)
+	maxPlans, maxExploreState := 30, 2000
+	for len(visitedPlans) < maxPlans && len(visitedStates) < maxExploreState && stateList.Len() > 0 {
+		currState := stateList.Remove(stateList.Front()).(*state)
+		startPlan := g.getPlanUnderState(sctx, stmt, startState)
+		visitedPlans[startPlan.PlanDigest] = startPlan
+
+		// in each step, adjust one variable of fix
+		for i := range vars {
+			varName, varVal := vars[i], currState.varVals[i]
+			newVarVal := g.adjustVar(varName, varVal)
+			newState := newStateWithNewVar(currState, varName, newVarVal)
+			if _, ok := visitedStates[newState.Encode()]; !ok {
+				visitedStates[newState.Encode()] = struct{}{}
+				stateList.PushBack(newState)
+			}
+		}
+
+		for i := range fixes {
+			fixID, fixVal := fixes[i], currState.fixVals[i]
+			newFixVal := g.adjustFix(fixID, fixVal)
+			newState := newStateWithNewFix(currState, fixID, newFixVal)
+			if _, ok := visitedStates[newState.Encode()]; !ok {
+				visitedStates[newState.Encode()] = struct{}{}
+				stateList.PushBack(newState)
+			}
+		}
+	}
+
+	plans = make([]*BindingPlanInfo, 0, len(visitedPlans))
+	for _, plan := range visitedPlans {
+		plans = append(plans, plan)
+	}
+	sort.Slice(plans, func(i, j int) bool { // to make the result stable
+		return plans[i].PlanDigest < plans[j].PlanDigest
+	})
+	return plans, nil
+}
+
+func (g *knobBasedPlanGenerator) adjustVar(varName string, varVal any) (newVarVal any) {
+	// TODO
+	return nil
+}
+
+func (g *knobBasedPlanGenerator) adjustFix(fixID uint64, fixVal any) (newFixVal any) {
+	// TODO
+	return nil
+}
+
+func (g *knobBasedPlanGenerator) getStateFromSCtx(sctx sessionctx.Context, vars []string, fixes []uint64) *state {
+	// TODO
+	return nil
+}
+
+func (g *knobBasedPlanGenerator) getPlanUnderState(sctx sessionctx.Context, stmt ast.StmtNode, state *state) *BindingPlanInfo {
+	// TODO
+	return nil
 }
 
 // PlanPerfPredictor is used to score these plan candidates, returns their scores and gives some explanations.
