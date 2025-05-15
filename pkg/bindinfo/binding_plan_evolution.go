@@ -125,7 +125,10 @@ func (g *knobBasedPlanGenerator) breadthFirstPlanSearch(sctx sessionctx.Context,
 	stateList := list.New()                     // states in queue to explore
 
 	// init the start state and push it into the BFS list
-	startState := g.getStartState(vars, fixes)
+	startState, err := g.getStartState(vars, fixes)
+	if err != nil {
+		return nil, err
+	}
 	visitedStates[startState.Encode()] = struct{}{}
 	stateList.PushBack(startState)
 
@@ -141,7 +144,10 @@ func (g *knobBasedPlanGenerator) breadthFirstPlanSearch(sctx sessionctx.Context,
 		// in each step, adjust one variable or fix
 		for i := range vars {
 			varName, varVal := vars[i], currState.varVals[i]
-			newVarVal := g.adjustVar(varName, varVal)
+			newVarVal, err := g.adjustVar(varName, varVal)
+			if err != nil {
+				return nil, err
+			}
 			newState := newStateWithNewVar(currState, varName, newVarVal)
 			if _, ok := visitedStates[newState.Encode()]; !ok {
 				visitedStates[newState.Encode()] = struct{}{}
@@ -150,7 +156,10 @@ func (g *knobBasedPlanGenerator) breadthFirstPlanSearch(sctx sessionctx.Context,
 		}
 		for i := range fixes {
 			fixID, fixVal := fixes[i], currState.fixVals[i]
-			newFixVal := g.adjustFix(fixID, fixVal)
+			newFixVal, err := g.adjustFix(fixID, fixVal)
+			if err != nil {
+				return nil, err
+			}
 			newState := newStateWithNewFix(currState, fixID, newFixVal)
 			if _, ok := visitedStates[newState.Encode()]; !ok {
 				visitedStates[newState.Encode()] = struct{}{}
@@ -169,19 +178,49 @@ func (g *knobBasedPlanGenerator) breadthFirstPlanSearch(sctx sessionctx.Context,
 	return plans, nil
 }
 
-func (g *knobBasedPlanGenerator) adjustVar(varName string, varVal any) (newVarVal any) {
-	// TODO
-	return nil
+func (g *knobBasedPlanGenerator) adjustVar(varName string, varVal any) (newVarVal any, err error) {
+	switch varName {
+	case vardef.TiDBOptIndexScanCostFactor, vardef.TiDBOptIndexReaderCostFactor, vardef.TiDBOptTableReaderCostFactor,
+		vardef.TiDBOptTableFullScanCostFactor, vardef.TiDBOptTableRangeScanCostFactor, vardef.TiDBOptTableRowIDScanCostFactor,
+		vardef.TiDBOptTableTiFlashScanCostFactor, vardef.TiDBOptIndexLookupCostFactor, vardef.TiDBOptIndexMergeCostFactor,
+		vardef.TiDBOptSortCostFactor, vardef.TiDBOptTopNCostFactor, vardef.TiDBOptLimitCostFactor,
+		vardef.TiDBOptStreamAggCostFactor, vardef.TiDBOptHashAggCostFactor, vardef.TiDBOptMergeJoinCostFactor,
+		vardef.TiDBOptHashJoinCostFactor, vardef.TiDBOptIndexJoinCostFactor:
+		v := varVal.(float64)
+		return v * 1.5, nil
+	}
+	return nil, fmt.Errorf("unknown variable %s", varName)
 }
 
-func (g *knobBasedPlanGenerator) adjustFix(fixID uint64, fixVal any) (newFixVal any) {
+func (g *knobBasedPlanGenerator) adjustFix(fixID uint64, fixVal any) (newFixVal any, err error) {
 	// TODO
-	return nil
+	return fixVal, nil
 }
 
-func (g *knobBasedPlanGenerator) getStartState(vars []string, fixes []uint64) *state {
+func (g *knobBasedPlanGenerator) getStartState(vars []string, fixes []uint64) (*state, error) {
+	s := &state{
+		varNames: vars,
+		fixIDs:   fixes,
+	}
+	for _, varName := range vars {
+		switch varName {
+		case vardef.TiDBOptIndexScanCostFactor, vardef.TiDBOptIndexReaderCostFactor, vardef.TiDBOptTableReaderCostFactor,
+			vardef.TiDBOptTableFullScanCostFactor, vardef.TiDBOptTableRangeScanCostFactor, vardef.TiDBOptTableRowIDScanCostFactor,
+			vardef.TiDBOptTableTiFlashScanCostFactor, vardef.TiDBOptIndexLookupCostFactor, vardef.TiDBOptIndexMergeCostFactor,
+			vardef.TiDBOptSortCostFactor, vardef.TiDBOptTopNCostFactor, vardef.TiDBOptLimitCostFactor,
+			vardef.TiDBOptStreamAggCostFactor, vardef.TiDBOptHashAggCostFactor, vardef.TiDBOptMergeJoinCostFactor,
+			vardef.TiDBOptHashJoinCostFactor, vardef.TiDBOptIndexJoinCostFactor:
+			s.varVals = append(s.varVals, 1.0)
+		default:
+			return nil, fmt.Errorf("unknown variable %s", varName)
+		}
+	}
+	for range fixes {
+		// TODO:
+		s.fixVals = append(s.fixVals, 1.0)
+	}
 	// TODO
-	return nil
+	return s, nil
 }
 
 func (g *knobBasedPlanGenerator) getPlanUnderState(sctx sessionctx.Context, stmt ast.StmtNode, state *state) (plan *genedPlan, err error) {
@@ -221,8 +260,11 @@ func (g *knobBasedPlanGenerator) getPlanUnderState(sctx sessionctx.Context, stmt
 			sctx.GetSessionVars().HashJoinCostFactor = state.varVals[i].(float64)
 		case vardef.TiDBOptIndexJoinCostFactor:
 			sctx.GetSessionVars().IndexJoinCostFactor = state.varVals[i].(float64)
+		default:
+
 		}
 	}
+	// TODO: fixes
 	//planDigest, planText, planHints string, err
 	planDigest, planText, planHints, err := GetPlanWithSCtx(sctx, stmt)
 	if err != nil {
