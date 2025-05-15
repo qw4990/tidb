@@ -17,6 +17,7 @@ package bindinfo
 import (
 	"container/list"
 	"fmt"
+	"github.com/pingcap/tidb/pkg/sessionctx/vardef"
 	"sort"
 	"strings"
 
@@ -102,27 +103,33 @@ func (g *knobBasedPlanGenerator) Generate(defaultSchema, sql, charset, collation
 		if err != nil {
 			return err
 		}
-		plans, err = g.BFS(sctx, stmt, vars, fixes)
+		plans, err = g.breadthFirstPlanSearch(sctx, stmt, vars, fixes)
 		return err
 	})
 	return
 }
 
-func (g *knobBasedPlanGenerator) BFS(sctx sessionctx.Context, stmt ast.StmtNode, vars []string, fixes []uint64) (plans []*BindingPlanInfo, err error) {
-	visitedStates := make(map[string]struct{})
-	visitedPlans := make(map[string]*BindingPlanInfo) // map[planDigest]plan
-	startState := g.getStateFromSCtx(sctx, vars, fixes)
-	visitedStates[startState.Encode()] = struct{}{}
+func (g *knobBasedPlanGenerator) breadthFirstPlanSearch(sctx sessionctx.Context, stmt ast.StmtNode, vars []string, fixes []uint64) (plans []string, err error) {
+	// init BFS structures
+	visitedStates := make(map[string]struct{}) // map[encodedState]struct{}, all visited states
+	visitedPlans := make(map[string]string)    // map[planDigest]plan, all visited plans
+	stateList := list.New()                    // states in queue to explore
 
-	stateList := list.New()
+	// init the start state and push it into the BFS list
+	startState := g.getStartState(vars, fixes)
+	visitedStates[startState.Encode()] = struct{}{}
 	stateList.PushBack(startState)
+
 	maxPlans, maxExploreState := 30, 2000
 	for len(visitedPlans) < maxPlans && len(visitedStates) < maxExploreState && stateList.Len() > 0 {
 		currState := stateList.Remove(stateList.Front()).(*state)
-		startPlan := g.getPlanUnderState(sctx, stmt, startState)
-		visitedPlans[startPlan.PlanDigest] = startPlan
+		planDigest, plan, err := g.getPlanUnderState(sctx, stmt, startState)
+		if err != nil {
+			return nil, err
+		}
+		visitedPlans[planDigest] = plan
 
-		// in each step, adjust one variable of fix
+		// in each step, adjust one variable or fix
 		for i := range vars {
 			varName, varVal := vars[i], currState.varVals[i]
 			newVarVal := g.adjustVar(varName, varVal)
@@ -132,7 +139,6 @@ func (g *knobBasedPlanGenerator) BFS(sctx sessionctx.Context, stmt ast.StmtNode,
 				stateList.PushBack(newState)
 			}
 		}
-
 		for i := range fixes {
 			fixID, fixVal := fixes[i], currState.fixVals[i]
 			newFixVal := g.adjustFix(fixID, fixVal)
@@ -164,14 +170,52 @@ func (g *knobBasedPlanGenerator) adjustFix(fixID uint64, fixVal any) (newFixVal 
 	return nil
 }
 
-func (g *knobBasedPlanGenerator) getStateFromSCtx(sctx sessionctx.Context, vars []string, fixes []uint64) *state {
+func (g *knobBasedPlanGenerator) getStartState(vars []string, fixes []uint64) *state {
 	// TODO
 	return nil
 }
 
-func (g *knobBasedPlanGenerator) getPlanUnderState(sctx sessionctx.Context, stmt ast.StmtNode, state *state) *BindingPlanInfo {
+func (g *knobBasedPlanGenerator) getPlanUnderState(sctx sessionctx.Context, stmt ast.StmtNode, state *state) (planDigest, plan string, err error) {
+	for i, varName := range state.varNames {
+		switch varName {
+		case vardef.TiDBOptIndexScanCostFactor:
+			sctx.GetSessionVars().IndexScanCostFactor = state.varVals[i].(float64)
+		case vardef.TiDBOptIndexReaderCostFactor:
+			sctx.GetSessionVars().IndexReaderCostFactor = state.varVals[i].(float64)
+		case vardef.TiDBOptTableReaderCostFactor:
+			sctx.GetSessionVars().TableReaderCostFactor = state.varVals[i].(float64)
+		case vardef.TiDBOptTableFullScanCostFactor:
+			sctx.GetSessionVars().TableFullScanCostFactor = state.varVals[i].(float64)
+		case vardef.TiDBOptTableRangeScanCostFactor:
+			sctx.GetSessionVars().TableRangeScanCostFactor = state.varVals[i].(float64)
+		case vardef.TiDBOptTableRowIDScanCostFactor:
+			sctx.GetSessionVars().TableRowIDScanCostFactor = state.varVals[i].(float64)
+		case vardef.TiDBOptTableTiFlashScanCostFactor:
+			sctx.GetSessionVars().TableTiFlashScanCostFactor = state.varVals[i].(float64)
+		case vardef.TiDBOptIndexLookupCostFactor:
+			sctx.GetSessionVars().IndexLookupCostFactor = state.varVals[i].(float64)
+		case vardef.TiDBOptIndexMergeCostFactor:
+			sctx.GetSessionVars().IndexMergeCostFactor = state.varVals[i].(float64)
+		case vardef.TiDBOptSortCostFactor:
+			sctx.GetSessionVars().SortCostFactor = state.varVals[i].(float64)
+		case vardef.TiDBOptTopNCostFactor:
+			sctx.GetSessionVars().TopNCostFactor = state.varVals[i].(float64)
+		case vardef.TiDBOptLimitCostFactor:
+			sctx.GetSessionVars().LimitCostFactor = state.varVals[i].(float64)
+		case vardef.TiDBOptStreamAggCostFactor:
+			sctx.GetSessionVars().StreamAggCostFactor = state.varVals[i].(float64)
+		case vardef.TiDBOptHashAggCostFactor:
+			sctx.GetSessionVars().HashAggCostFactor = state.varVals[i].(float64)
+		case vardef.TiDBOptMergeJoinCostFactor:
+			sctx.GetSessionVars().MergeJoinCostFactor = state.varVals[i].(float64)
+		case vardef.TiDBOptHashJoinCostFactor:
+			sctx.GetSessionVars().HashJoinCostFactor = state.varVals[i].(float64)
+		case vardef.TiDBOptIndexJoinCostFactor:
+			sctx.GetSessionVars().IndexJoinCostFactor = state.varVals[i].(float64)
+		}
+	}
 	// TODO
-	return nil
+	return "", "", err
 }
 
 // PlanPerfPredictor is used to score these plan candidates, returns their scores and gives some explanations.
