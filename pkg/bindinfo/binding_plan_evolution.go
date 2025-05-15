@@ -37,6 +37,12 @@ type knobBasedPlanGenerator struct {
 	sPool util.DestroyableSessionPool
 }
 
+type genedPlan struct {
+	planDigest string // digest of this plan
+	planText   string // human-readable plan text
+	planHints  string // a set of hints to reproduce this plan
+}
+
 type state struct {
 	varNames []string // relevant variables and their values to generate a certain plan
 	varVals  []any
@@ -103,17 +109,20 @@ func (g *knobBasedPlanGenerator) Generate(defaultSchema, sql, charset, collation
 		if err != nil {
 			return err
 		}
-		plans, err = g.breadthFirstPlanSearch(sctx, stmt, vars, fixes)
+		genedPlans, err := g.breadthFirstPlanSearch(sctx, stmt, vars, fixes)
+
+		fmt.Println("genedPlans: ", genedPlans)
+
 		return err
 	})
 	return
 }
 
-func (g *knobBasedPlanGenerator) breadthFirstPlanSearch(sctx sessionctx.Context, stmt ast.StmtNode, vars []string, fixes []uint64) (plans []*BindingPlanInfo, err error) {
+func (g *knobBasedPlanGenerator) breadthFirstPlanSearch(sctx sessionctx.Context, stmt ast.StmtNode, vars []string, fixes []uint64) (plans []*genedPlan, err error) {
 	// init BFS structures
-	visitedStates := make(map[string]struct{})        // map[encodedState]struct{}, all visited states
-	visitedPlans := make(map[string]*BindingPlanInfo) // map[planDigest]plan, all visited plans
-	stateList := list.New()                           // states in queue to explore
+	visitedStates := make(map[string]struct{})  // map[encodedState]struct{}, all visited states
+	visitedPlans := make(map[string]*genedPlan) // map[planDigest]plan, all visited plans
+	stateList := list.New()                     // states in queue to explore
 
 	// init the start state and push it into the BFS list
 	startState := g.getStartState(vars, fixes)
@@ -127,7 +136,7 @@ func (g *knobBasedPlanGenerator) breadthFirstPlanSearch(sctx sessionctx.Context,
 		if err != nil {
 			return nil, err
 		}
-		visitedPlans[plan.PlanDigest] = plan
+		visitedPlans[plan.planDigest] = plan
 
 		// in each step, adjust one variable or fix
 		for i := range vars {
@@ -150,12 +159,12 @@ func (g *knobBasedPlanGenerator) breadthFirstPlanSearch(sctx sessionctx.Context,
 		}
 	}
 
-	plans = make([]*BindingPlanInfo, 0, len(visitedPlans))
+	plans = make([]*genedPlan, 0, len(visitedPlans))
 	for _, plan := range visitedPlans {
 		plans = append(plans, plan)
 	}
 	sort.Slice(plans, func(i, j int) bool { // to make the result stable
-		return plans[i].PlanDigest < plans[j].PlanDigest
+		return plans[i].planDigest < plans[j].planDigest
 	})
 	return plans, nil
 }
@@ -175,7 +184,7 @@ func (g *knobBasedPlanGenerator) getStartState(vars []string, fixes []uint64) *s
 	return nil
 }
 
-func (g *knobBasedPlanGenerator) getPlanUnderState(sctx sessionctx.Context, stmt ast.StmtNode, state *state) (plan *BindingPlanInfo, err error) {
+func (g *knobBasedPlanGenerator) getPlanUnderState(sctx sessionctx.Context, stmt ast.StmtNode, state *state) (plan *genedPlan, err error) {
 	for i, varName := range state.varNames {
 		switch varName {
 		case vardef.TiDBOptIndexScanCostFactor:
@@ -214,8 +223,16 @@ func (g *knobBasedPlanGenerator) getPlanUnderState(sctx sessionctx.Context, stmt
 			sctx.GetSessionVars().IndexJoinCostFactor = state.varVals[i].(float64)
 		}
 	}
-	// TODO
-	return
+	//planDigest, planText, planHints string, err
+	planDigest, planText, planHints, err := GetPlanWithSCtx(sctx, stmt)
+	if err != nil {
+		return nil, err
+	}
+	return &genedPlan{
+		planDigest: planDigest,
+		planText:   planText,
+		planHints:  planHints,
+	}, nil
 }
 
 // PlanPerfPredictor is used to score these plan candidates, returns their scores and gives some explanations.

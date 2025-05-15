@@ -34,6 +34,8 @@ import (
 // This function will call the optimizer.
 var CalculatePlanDigest func(sctx sessionctx.Context, stmt ast.StmtNode) (planDigest string, err error)
 
+var GetPlanWithSCtx func(sctx sessionctx.Context, stmt ast.StmtNode) (planDigest, planText, planHints string, err error)
+
 // RecordRelevantOptVarsAndFixes is used to get the relevant optimizer variables for this SQL.
 // This function will call the optimizer.
 var RecordRelevantOptVarsAndFixes func(sctx sessionctx.Context, stmt ast.StmtNode) (varNames []string, fixIDs []uint64, err error)
