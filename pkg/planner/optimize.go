@@ -715,6 +715,7 @@ func getPlanWithSCtx(sctx sessionctx.Context, stmt ast.StmtNode) (planDigest, pl
 	flat := core.FlattenPhysicalPlan(p, false)
 	_, digest := core.NormalizeFlatPlan(flat)
 	plan := core.ExplainFlatPlan(flat)
+	hints := core.GenHintsFromFlatPlan(flat)
 
 	planTextBuilder := new(strings.Builder)
 	for _, row := range plan {
@@ -725,7 +726,7 @@ func getPlanWithSCtx(sctx sessionctx.Context, stmt ast.StmtNode) (planDigest, pl
 		planTextBuilder.WriteString("\n")
 	}
 
-	return digest.String(), planTextBuilder.String(), "", nil
+	return digest.String(), planTextBuilder.String(), hint.RestoreOptimizerHints(hints), nil
 }
 
 func init() {
