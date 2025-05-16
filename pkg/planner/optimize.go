@@ -20,6 +20,7 @@ import (
 	"math"
 	"math/rand"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -713,7 +714,18 @@ func getPlanWithSCtx(sctx sessionctx.Context, stmt ast.StmtNode) (planDigest, pl
 	}
 	flat := core.FlattenPhysicalPlan(p, false)
 	_, digest := core.NormalizeFlatPlan(flat)
-	return digest.String(), core.ToString(p), "", nil
+	plan := core.ExplainFlatPlan(flat)
+
+	planTextBuilder := new(strings.Builder)
+	for _, row := range plan {
+		for _, col := range row {
+			planTextBuilder.WriteString(col)
+			planTextBuilder.WriteString("\t")
+		}
+		planTextBuilder.WriteString("\n")
+	}
+
+	return digest.String(), planTextBuilder.String(), "", nil
 }
 
 func init() {
