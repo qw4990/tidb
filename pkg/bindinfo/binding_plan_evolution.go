@@ -111,13 +111,8 @@ func (g *knobBasedPlanGenerator) Generate(defaultSchema, sql, charset, collation
 			return err
 		}
 
-		vars = []string{"tidb_opt_index_lookup_cost_factor"}
-		fmt.Println(">>>>>>>>> ", vars, fixes)
-
 		genedPlans, err := g.breadthFirstPlanSearch(sctx, stmt, vars, fixes)
-
-		fmt.Println("genedPlans: ", genedPlans)
-
+		fmt.Println(">>>>> ", genedPlans)
 		return err
 	})
 	return
@@ -137,7 +132,7 @@ func (g *knobBasedPlanGenerator) breadthFirstPlanSearch(sctx sessionctx.Context,
 	visitedStates[startState.Encode()] = struct{}{}
 	stateList.PushBack(startState)
 
-	maxPlans, maxExploreState := 30, 50
+	maxPlans, maxExploreState := 30, 5000
 	for len(visitedPlans) < maxPlans && len(visitedStates) < maxExploreState && stateList.Len() > 0 {
 		currState := stateList.Remove(stateList.Front()).(*state)
 		plan, err := g.getPlanUnderState(sctx, stmt, currState)
@@ -149,9 +144,12 @@ func (g *knobBasedPlanGenerator) breadthFirstPlanSearch(sctx sessionctx.Context,
 		// in each step, adjust one variable or fix
 		for i := range vars {
 			varName, varVal := vars[i], currState.varVals[i]
-			newVarVal, err := g.adjustVar(varName, varVal)
+			newVarVal, ok, err := g.adjustVar(varName, varVal)
 			if err != nil {
 				return nil, err
+			}
+			if !ok {
+				continue
 			}
 			newState := newStateWithNewVar(currState, varName, newVarVal)
 			if _, ok := visitedStates[newState.Encode()]; !ok {
@@ -173,8 +171,6 @@ func (g *knobBasedPlanGenerator) breadthFirstPlanSearch(sctx sessionctx.Context,
 		}
 	}
 
-	fmt.Println(">>>>> visited states >>> ", len(visitedStates))
-
 	plans = make([]*genedPlan, 0, len(visitedPlans))
 	for _, plan := range visitedPlans {
 		plans = append(plans, plan)
@@ -185,7 +181,7 @@ func (g *knobBasedPlanGenerator) breadthFirstPlanSearch(sctx sessionctx.Context,
 	return plans, nil
 }
 
-func (g *knobBasedPlanGenerator) adjustVar(varName string, varVal any) (newVarVal any, err error) {
+func (g *knobBasedPlanGenerator) adjustVar(varName string, varVal any) (newVarVal any, ok bool, err error) {
 	switch varName {
 	case vardef.TiDBOptIndexScanCostFactor, vardef.TiDBOptIndexReaderCostFactor, vardef.TiDBOptTableReaderCostFactor,
 		vardef.TiDBOptTableFullScanCostFactor, vardef.TiDBOptTableRangeScanCostFactor, vardef.TiDBOptTableRowIDScanCostFactor,
@@ -194,9 +190,12 @@ func (g *knobBasedPlanGenerator) adjustVar(varName string, varVal any) (newVarVa
 		vardef.TiDBOptStreamAggCostFactor, vardef.TiDBOptHashAggCostFactor, vardef.TiDBOptMergeJoinCostFactor,
 		vardef.TiDBOptHashJoinCostFactor, vardef.TiDBOptIndexJoinCostFactor:
 		v := varVal.(float64)
-		return v * 10, nil
+		if v > 1e6 {
+			return v, false, nil
+		}
+		return v * 10, true, nil
 	}
-	return nil, fmt.Errorf("unknown variable %s", varName)
+	return nil, false, fmt.Errorf("unknown variable %s", varName)
 }
 
 func (g *knobBasedPlanGenerator) adjustFix(fixID uint64, fixVal any) (newFixVal any, err error) {
@@ -274,8 +273,6 @@ func (g *knobBasedPlanGenerator) getPlanUnderState(sctx sessionctx.Context, stmt
 	// TODO: fixes
 	//planDigest, planText, planHints string, err
 	planDigest, planText, planHints, err := GetPlanWithSCtx(sctx, stmt)
-
-	fmt.Println(">>>> ", sctx.GetSessionVars().IndexLookupCostFactor, planDigest)
 
 	if err != nil {
 		return nil, err
