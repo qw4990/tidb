@@ -105,11 +105,13 @@ func (g *knobBasedPlanGenerator) Generate(defaultSchema, sql, charset, collation
 	}
 	err = callWithSCtx(g.sPool, false, func(sctx sessionctx.Context) error {
 		sctx.GetSessionVars().CurrentDB = defaultSchema
+		sctx.GetSessionVars().CostModelVersion = 2
 		vars, fixes, err := RecordRelevantOptVarsAndFixes(sctx, stmt)
 		if err != nil {
 			return err
 		}
 
+		vars = []string{"tidb_opt_index_lookup_cost_factor"}
 		fmt.Println(">>>>>>>>> ", vars, fixes)
 
 		genedPlans, err := g.breadthFirstPlanSearch(sctx, stmt, vars, fixes)
@@ -135,10 +137,10 @@ func (g *knobBasedPlanGenerator) breadthFirstPlanSearch(sctx sessionctx.Context,
 	visitedStates[startState.Encode()] = struct{}{}
 	stateList.PushBack(startState)
 
-	maxPlans, maxExploreState := 30, 20000
+	maxPlans, maxExploreState := 30, 50
 	for len(visitedPlans) < maxPlans && len(visitedStates) < maxExploreState && stateList.Len() > 0 {
 		currState := stateList.Remove(stateList.Front()).(*state)
-		plan, err := g.getPlanUnderState(sctx, stmt, startState)
+		plan, err := g.getPlanUnderState(sctx, stmt, currState)
 		if err != nil {
 			return nil, err
 		}
@@ -152,7 +154,6 @@ func (g *knobBasedPlanGenerator) breadthFirstPlanSearch(sctx sessionctx.Context,
 				return nil, err
 			}
 			newState := newStateWithNewVar(currState, varName, newVarVal)
-			fmt.Println(">>>>>>> ", varName, newVarVal)
 			if _, ok := visitedStates[newState.Encode()]; !ok {
 				visitedStates[newState.Encode()] = struct{}{}
 				stateList.PushBack(newState)
@@ -193,7 +194,7 @@ func (g *knobBasedPlanGenerator) adjustVar(varName string, varVal any) (newVarVa
 		vardef.TiDBOptStreamAggCostFactor, vardef.TiDBOptHashAggCostFactor, vardef.TiDBOptMergeJoinCostFactor,
 		vardef.TiDBOptHashJoinCostFactor, vardef.TiDBOptIndexJoinCostFactor:
 		v := varVal.(float64)
-		return v * 1.5, nil
+		return v * 10, nil
 	}
 	return nil, fmt.Errorf("unknown variable %s", varName)
 }
@@ -273,6 +274,9 @@ func (g *knobBasedPlanGenerator) getPlanUnderState(sctx sessionctx.Context, stmt
 	// TODO: fixes
 	//planDigest, planText, planHints string, err
 	planDigest, planText, planHints, err := GetPlanWithSCtx(sctx, stmt)
+
+	fmt.Println(">>>> ", sctx.GetSessionVars().IndexLookupCostFactor, planDigest)
+
 	if err != nil {
 		return nil, err
 	}
