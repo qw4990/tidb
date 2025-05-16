@@ -110,9 +110,14 @@ func (g *knobBasedPlanGenerator) Generate(defaultSchema, sql, charset, collation
 		if err != nil {
 			return err
 		}
-
 		genedPlans, err := g.breadthFirstPlanSearch(sctx, stmt, vars, fixes)
-		fmt.Println(">>>>> ", genedPlans)
+		fmt.Println("===================================================================")
+		for _, p := range genedPlans {
+			fmt.Println(p.planDigest)
+			fmt.Println(p.planHints)
+			fmt.Println(p.planText)
+			fmt.Println("-----------------------------------------------------------------")
+		}
 		return err
 	})
 	return
