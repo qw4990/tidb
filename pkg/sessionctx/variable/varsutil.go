@@ -36,7 +36,7 @@ import (
 	"github.com/tikv/client-go/v2/oracle"
 )
 
-// secondsPerYear represents seconds in a normal year. Leap year is not considered here.
+// secondsPerYear represents seconds in a normal year. Leap year is not considered here..
 const secondsPerYear = 60 * 60 * 24 * 365
 
 // BoolToOnOff returns the string representation of a bool, i.e. "ON/OFF"
