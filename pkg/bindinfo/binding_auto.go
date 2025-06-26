@@ -141,11 +141,12 @@ func (ba *bindingAuto) recordIntoStmtStats(exploreStmtSCtx base.PlanContext,
 				vars.CurrentDB = db
 				vars.UsePlanBaselines = usePlanBaselines
 				vars.InExplainExplore = inExplainExplore
-				vars.User = exploreStmtSCtx.GetSessionVars().User
+				vars.User = user
 			}(vars.CurrentDB, vars.UsePlanBaselines, vars.InExplainExplore, vars.User)
 			vars.CurrentDB = plan.Binding.Db
 			vars.UsePlanBaselines = false
 			vars.InExplainExplore = true
+			vars.User = exploreStmtSCtx.GetSessionVars().User
 			_, _, err := execRows(sctx, plan.BindSQL)
 			if err != nil {
 				return err
