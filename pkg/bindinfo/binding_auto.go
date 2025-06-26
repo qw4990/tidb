@@ -16,6 +16,7 @@ package bindinfo
 
 import (
 	"fmt"
+	"github.com/pingcap/tidb/pkg/parser/auth"
 	"github.com/pingcap/tidb/pkg/planner/core/base"
 	"slices"
 	"strings"
@@ -136,11 +137,12 @@ func (ba *bindingAuto) recordIntoStmtStats(exploreStmtSCtx base.PlanContext,
 		// allocate another session to run internal queries instead of using exploreStmtSCtx for safety.
 		if err := callWithSCtx(ba.sPool, false, func(sctx sessionctx.Context) error {
 			vars := sctx.GetSessionVars()
-			defer func(db string, usePlanBaselines, inExplainExplore bool) {
+			defer func(db string, usePlanBaselines, inExplainExplore bool, user *auth.UserIdentity) {
 				vars.CurrentDB = db
 				vars.UsePlanBaselines = usePlanBaselines
 				vars.InExplainExplore = inExplainExplore
-			}(vars.CurrentDB, vars.UsePlanBaselines, vars.InExplainExplore)
+				vars.User = exploreStmtSCtx.GetSessionVars().User
+			}(vars.CurrentDB, vars.UsePlanBaselines, vars.InExplainExplore, vars.User)
 			vars.CurrentDB = plan.Binding.Db
 			vars.UsePlanBaselines = false
 			vars.InExplainExplore = true
