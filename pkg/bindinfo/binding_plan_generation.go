@@ -17,6 +17,7 @@ package bindinfo
 import (
 	"container/list"
 	"fmt"
+	"github.com/pingcap/tidb/pkg/planner/core/base"
 	"sort"
 	"strconv"
 	"strings"
@@ -32,7 +33,7 @@ import (
 
 // PlanGenerator is used to generate new Plan Candidates for this specified query.
 type PlanGenerator interface {
-	Generate(defaultSchema, sql, charset, collation string) (plans []*BindingPlanInfo, err error)
+	Generate(exploreStmtSCtx base.PlanContext, sql string) (plans []*BindingPlanInfo, err error)
 }
 
 // planGenerator implements PlanGenerator.
@@ -42,7 +43,7 @@ type planGenerator struct {
 }
 
 // Generate generates new plans for the given SQL statement.
-func (g *planGenerator) Generate(defaultSchema, sql, charset, collation string) (plans []*BindingPlanInfo, err error) {
+func (g *planGenerator) Generate(exploreStmtSCtx base.PlanContext, sql string) (plans []*BindingPlanInfo, err error) {
 	// TODO: only support SQL starting with SELECT for now, support other types of SQLs later.
 	// TODO: make this check more strict.
 	sql = strings.TrimSpace(sql)
@@ -50,6 +51,8 @@ func (g *planGenerator) Generate(defaultSchema, sql, charset, collation string) 
 	if len(sql) < len(prefix) || strings.ToUpper(sql[:len(prefix)]) != prefix {
 		return nil, nil // not a SELECT statement
 	}
+	defaultSchema := exploreStmtSCtx.GetSessionVars().CurrentDB
+	charset, collation := exploreStmtSCtx.GetSessionVars().GetCharsetInfo()
 
 	err = callWithSCtx(g.sPool, false, func(sctx sessionctx.Context) error {
 		genedPlans, err := generatePlanWithSCtx(sctx, defaultSchema, sql, charset, collation)

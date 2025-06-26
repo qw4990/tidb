@@ -16,6 +16,7 @@ package bindinfo
 
 import (
 	"fmt"
+	"github.com/pingcap/tidb/pkg/planner/core/base"
 	"slices"
 	"strings"
 
@@ -68,7 +69,7 @@ type BindingPlanEvolution interface {
 	// TODO: RecordHistPlansAsBindings records the history plans as bindings for qualified queries.
 
 	// ExplorePlansForSQL explores plans for this SQL.
-	ExplorePlansForSQL(currentDB, sqlOrDigest, charset, collation string, analyze bool) ([]*BindingPlanInfo, error)
+	ExplorePlansForSQL(exploreStmtSCtx base.PlanContext, sqlOrDigest string, analyze bool) ([]*BindingPlanInfo, error)
 }
 
 type bindingAuto struct {
@@ -91,13 +92,15 @@ func newBindingAuto(sPool util.DestroyableSessionPool) BindingPlanEvolution {
 // 1. get historical plan candidates.
 // 2. generate new plan candidates.
 // 3. score all historical and newly-generated plan candidates and recommend the best one.
-func (ba *bindingAuto) ExplorePlansForSQL(currentDB, sqlOrDigest, charset, collation string, analyze bool) ([]*BindingPlanInfo, error) {
-	historicalPlans, err := ba.getBindingPlanInfo(currentDB, sqlOrDigest, charset, collation)
+// exploreStmtSCtx is the sctx of the current `explain explore` statement, which is used to pass more information
+// and check whether the current statement is killed by the user.
+func (ba *bindingAuto) ExplorePlansForSQL(exploreStmtSCtx base.PlanContext, sqlOrDigest string, analyze bool) ([]*BindingPlanInfo, error) {
+	historicalPlans, err := ba.getBindingPlanInfo(exploreStmtSCtx, sqlOrDigest)
 	if err != nil {
 		return nil, err
 	}
 
-	generatedPlans, err := ba.planGenerator.Generate(currentDB, sqlOrDigest, charset, collation)
+	generatedPlans, err := ba.planGenerator.Generate(exploreStmtSCtx, sqlOrDigest)
 	if err != nil {
 		return nil, err
 	}
@@ -200,20 +203,22 @@ func (ba *bindingAuto) runToGetExecInfo(plans []*BindingPlanInfo) error {
 }
 
 // getBindingPlanInfo retrieves the binding plan info for the given SQL or digest.
-func (ba *bindingAuto) getBindingPlanInfo(currentDB, sqlOrDigest, charset, collation string) ([]*BindingPlanInfo, error) {
+func (ba *bindingAuto) getBindingPlanInfo(exploreStmtSCtx base.PlanContext, sqlOrDigest string) ([]*BindingPlanInfo, error) {
 	// parse and normalize sqlOrDigest
 	// if the length is 64 and it has no " ", treat it as a digest.
+	vars := exploreStmtSCtx.GetSessionVars()
 	var whereCond string
 	sqlOrDigest = strings.TrimSpace(sqlOrDigest)
 	if len(sqlOrDigest) == 64 && !strings.Contains(sqlOrDigest, " ") {
 		whereCond = "where sql_digest = %?"
 	} else {
 		p := parser.New()
+		charset, collation := vars.GetCharsetInfo()
 		stmtNode, err := p.ParseOneStmt(sqlOrDigest, charset, collation)
 		if err != nil {
 			return nil, errors.NewNoStackErrorf("failed to normalize the SQL: %v", err)
 		}
-		db := utilparser.GetDefaultDB(stmtNode, currentDB)
+		db := utilparser.GetDefaultDB(stmtNode, vars.CurrentDB)
 		sqlOrDigest, _ = NormalizeStmtForBinding(stmtNode, db, false)
 		whereCond = "where original_sql = %?"
 	}
