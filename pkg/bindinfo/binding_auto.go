@@ -104,13 +104,13 @@ func (ba *bindingAuto) ExplorePlansForSQL(exploreStmtSCtx base.PlanContext, sqlO
 	if err != nil {
 		return nil, err
 	}
-	generatedPlans, err = ba.recordIntoStmtStats(generatedPlans)
+	generatedPlans, err = ba.recordIntoStmtStats(exploreStmtSCtx, generatedPlans)
 	if err != nil {
 		return nil, err
 	}
 
 	if analyze {
-		if err := ba.runToGetExecInfo(generatedPlans); err != nil {
+		if err := ba.runToGetExecInfo(exploreStmtSCtx, generatedPlans); err != nil {
 			return nil, err
 		}
 	}
@@ -125,9 +125,15 @@ func (ba *bindingAuto) ExplorePlansForSQL(exploreStmtSCtx base.PlanContext, sqlO
 }
 
 // recordIntoStmtStats records these plans into information_schema.tidb_statements_stats table for later usage.
-func (ba *bindingAuto) recordIntoStmtStats(plans []*BindingPlanInfo) (reproduciblePlans []*BindingPlanInfo, err error) {
+func (ba *bindingAuto) recordIntoStmtStats(exploreStmtSCtx base.PlanContext,
+	plans []*BindingPlanInfo) (reproduciblePlans []*BindingPlanInfo, err error) {
 	reproduciblePlans = make([]*BindingPlanInfo, 0, len(plans))
 	for _, plan := range plans {
+		if err = exploreStmtSCtx.GetSessionVars().SQLKiller.HandleSignal(); err != nil {
+			return nil, err
+		}
+
+		// allocate another session to run internal queries instead of using exploreStmtSCtx for safety.
 		if err := callWithSCtx(ba.sPool, false, func(sctx sessionctx.Context) error {
 			vars := sctx.GetSessionVars()
 			defer func(db string, usePlanBaselines, inExplainExplore bool) {
@@ -162,9 +168,12 @@ func (ba *bindingAuto) recordIntoStmtStats(plans []*BindingPlanInfo) (reproducib
 }
 
 // runToGetExecInfo runs these plans to get their execution info.
-func (ba *bindingAuto) runToGetExecInfo(plans []*BindingPlanInfo) error {
+func (ba *bindingAuto) runToGetExecInfo(exploreStmtSCtx base.PlanContext, plans []*BindingPlanInfo) error {
 	// TODO: support setting timeout
 	for _, plan := range plans {
+		if err := exploreStmtSCtx.GetSessionVars().SQLKiller.HandleSignal(); err != nil {
+			return err
+		}
 		if plan.ExecTimes > 0 {
 			// already has execution info, no need to run again.
 			continue
@@ -230,6 +239,9 @@ func (ba *bindingAuto) getBindingPlanInfo(exploreStmtSCtx base.PlanContext, sqlO
 	// read plan info from information_schema.tidb_statements_stats
 	bindingPlans := make([]*BindingPlanInfo, 0, len(bindings))
 	for _, binding := range bindings {
+		if err := exploreStmtSCtx.GetSessionVars().SQLKiller.HandleSignal(); err != nil {
+			return nil, err
+		}
 		if binding.Status == StatusDeleted {
 			continue
 		}

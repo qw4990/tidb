@@ -54,8 +54,9 @@ func (g *planGenerator) Generate(exploreStmtSCtx base.PlanContext, sql string) (
 	defaultSchema := exploreStmtSCtx.GetSessionVars().CurrentDB
 	charset, collation := exploreStmtSCtx.GetSessionVars().GetCharsetInfo()
 
+	// use another session to run internal queries instead of using exploreStmtSCtx to avoid potential problems.
 	err = callWithSCtx(g.sPool, false, func(sctx sessionctx.Context) error {
-		genedPlans, err := generatePlanWithSCtx(sctx, defaultSchema, sql, charset, collation)
+		genedPlans, err := generatePlanWithSCtx(exploreStmtSCtx, sctx, defaultSchema, sql, charset, collation)
 		if err != nil {
 			return err
 		}
@@ -205,7 +206,8 @@ func newStateWithNewFix(old *state, fixID uint64, fixVal string) *state {
 	return newState
 }
 
-func generatePlanWithSCtx(sctx sessionctx.Context, defaultSchema, sql, charset, collation string) (plans []*genedPlan, err error) {
+func generatePlanWithSCtx(exploreStmtSCtx base.PlanContext, sctx sessionctx.Context,
+	defaultSchema, sql, charset, collation string) (plans []*genedPlan, err error) {
 	p := parser.New()
 	stmt, err := p.ParseOneStmt(sql, charset, collation)
 	if err != nil {
@@ -227,10 +229,10 @@ func generatePlanWithSCtx(sctx sessionctx.Context, defaultSchema, sql, charset, 
 			possibleLeading2 = append(possibleLeading2, [2]*tableName{tableNames[i], tableNames[j]})
 		}
 	}
-	return breadthFirstPlanSearch(sctx, stmt, vars, fixes, possibleLeading2)
+	return breadthFirstPlanSearch(exploreStmtSCtx, sctx, stmt, vars, fixes, possibleLeading2)
 }
 
-func breadthFirstPlanSearch(sctx sessionctx.Context, stmt ast.StmtNode,
+func breadthFirstPlanSearch(exploreStmtSCtx base.PlanContext, sctx sessionctx.Context, stmt ast.StmtNode,
 	vars []string, fixes []uint64, possibleLeading2 [][2]*tableName) (plans []*genedPlan, err error) {
 	// init BFS structures
 	visitedStates := make(map[string]struct{})  // map[encodedState]struct{}, all visited states
@@ -248,6 +250,9 @@ func breadthFirstPlanSearch(sctx sessionctx.Context, stmt ast.StmtNode,
 
 	maxPlans, maxExploreState := 30, 5000
 	for len(visitedPlans) < maxPlans && len(visitedStates) < maxExploreState && stateList.Len() > 0 {
+		if err := exploreStmtSCtx.GetSessionVars().SQLKiller.HandleSignal(); err != nil {
+			return nil, err
+		}
 		currState := stateList.Remove(stateList.Front()).(*state)
 		plan, err := genPlanUnderState(sctx, stmt, currState)
 		if err != nil {
