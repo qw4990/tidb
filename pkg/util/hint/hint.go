@@ -912,8 +912,11 @@ func ParsePlanHints(hints []*ast.TableOptimizerHint,
 				topLevelTables[0].QBName = hint.QBName
 			}
 
-			leadingJoinOrder = append(leadingJoinOrder,
-				tableNames2HintTableInfo(currentDB, hint.HintName.L, topLevelTables, hintProcessor, currentLevel, warnHandler)...)
+			ts := tableNames2HintTableInfo(currentDB, hint.HintName.L, topLevelTables, hintProcessor, currentLevel, warnHandler)
+			for i, tt := range ts {
+				fmt.Println(">>>> ", i, tt, topLevelTables[i])
+			}
+			leadingJoinOrder = append(leadingJoinOrder, ts...)
 
 		case HintSemiJoinRewrite:
 			if !handlingExistsSubquery && !handlingInSubquery {
