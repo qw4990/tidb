@@ -14,6 +14,7 @@
 package parser_test
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/pingcap/tidb/pkg/parser"
@@ -21,6 +22,15 @@ import (
 	"github.com/pingcap/tidb/pkg/parser/mysql"
 	"github.com/stretchr/testify/require"
 )
+
+func TestXXX(t *testing.T) {
+	hint := "/*+ qb_name(qb_v1, v1), leading(v@qb_v1, t2@qb_v1) */"
+	output, errs := parser.ParseHint(hint, 0, parser.Pos{Line: 1})
+	require.Len(t, errs, 0)
+	for _, x := range output {
+		fmt.Println(">>> ", x)
+	}
+}
 
 func TestParseHint(t *testing.T) {
 	testCases := []struct {
