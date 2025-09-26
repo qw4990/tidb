@@ -347,7 +347,7 @@
           "        └─TableFullScan cop[tikv] table:t2 keep order:false, stats:pseudo"
         ],
         "Warn": [
-          "[planner:1815]There are no matching table names for (v, t2) in optimizer hint /*+ LEADING(v, t2) */. Maybe you can use the table alias name"
+          "[planner:1815]leading hint is inapplicable, check if the leading hint table is valid"
         ]
       },
       {
@@ -388,9 +388,7 @@
           "      └─Selection cop[tikv]  not(isnull(test.t2.b))",
           "        └─TableFullScan cop[tikv] table:t2 keep order:false, stats:pseudo"
         ],
-        "Warn": [
-          "[planner:1815]There are no matching table names for (t3, t2) in optimizer hint /*+ LEADING(t3, t2) */. Maybe you can use the table alias name"
-        ]
+        "Warn": null
       },
       {
         "SQL": "explain format = 'plan_tree' select /*+ qb_name(qb_v1, v1), qb_name(qb_v, v1.v), leading(t2@qb_v1, t@qb_v) */ * from v1;",
@@ -411,7 +409,7 @@
           "        └─TableFullScan cop[tikv] table:t2 keep order:false, stats:pseudo"
         ],
         "Warn": [
-          "[planner:1815]There are no matching table names for (t2, t) in optimizer hint /*+ LEADING(t2, t) */. Maybe you can use the table alias name"
+          "[planner:1815]Only one query block name is allowed in a view hint, otherwise the hint will be invalid"
         ]
       },
       {
