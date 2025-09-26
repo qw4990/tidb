@@ -5058,6 +5058,8 @@ func (b *PlanBuilder) BuildDataSourceFromView(ctx context.Context, dbName ast.CI
 			currentQbHints[qbOffset] = viewHints[qbName]
 			currentQbNameMap[qbName] = qbOffset
 
+			fmt.Println(">>>>> set qb view >>> ", qbName, qbOffset)
+
 			delete(qbNameMap4View, qbName)
 			delete(viewHints, qbName)
 		}
