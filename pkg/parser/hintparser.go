@@ -1311,11 +1311,9 @@ yynewstate:
 				QBName:   ast.NewCIStr(yyS[yypt-2].ident),
 				HintData: yyS[yypt-1].leadingList,
 			}
-			for _, item := range h.HintData.(*ast.LeadingList).Items {
-				if hintTable, ok := item.(*ast.HintTable); ok {
-					// be compatible with the prior flatten writing style
-					h.Tables = append(h.Tables, *hintTable)
-				}
+			if leadingList, ok := h.HintData.(*ast.LeadingList); ok {
+				// be compatible with the prior flatten writing style
+				h.Tables = FlattenLeadingList(leadingList)
 			}
 			parser.yyVAL.hint = h
 		}

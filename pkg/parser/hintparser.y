@@ -257,11 +257,9 @@ TableOptimizerHintOpt:
 			QBName:   ast.NewCIStr($3),
 			HintData: $4,
 		}
-		for _, item := range h.HintData.(*ast.LeadingList).Items {
-			if hintTable, ok := item.(*ast.HintTable); ok {
-				// be compatible with the prior flatten writing style
-				h.Tables = append(h.Tables, *hintTable)
-			}
+		if leadingList, ok := h.HintData.(*ast.LeadingList); ok {
+			// be compatible with the prior flatten writing style
+			h.Tables = FlattenLeadingList(leadingList)
 		}
 		$$ = h
 	}

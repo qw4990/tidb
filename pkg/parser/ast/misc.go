@@ -3936,6 +3936,22 @@ type HintTimeRange struct {
 	To   string
 }
 
+func FlattenLeadingList(list *LeadingList) []HintTable {
+	if list == nil {
+		return nil
+	}
+	var result []HintTable
+	for _, item := range list.Items {
+		switch t := item.(type) {
+		case *HintTable:
+			result = append(result, *t)
+		case *LeadingList:
+			result = append(result, FlattenLeadingList(t)...)
+		}
+	}
+	return result
+}
+
 // LeadingList represents a nested structure in LEADING hints.
 // It could be *HintTable or LeadingList
 //
