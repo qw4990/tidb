@@ -28,7 +28,7 @@ func TestXXX(t *testing.T) {
 	output, errs := parser.ParseHint(hint, 0, parser.Pos{Line: 1})
 	require.Len(t, errs, 0)
 	for _, x := range output {
-		fmt.Println(">>> ", x)
+		fmt.Println(">>> ", x, x.Tables)
 	}
 }
 

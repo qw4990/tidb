@@ -1312,9 +1312,9 @@ yynewstate:
 				HintData: yyS[yypt-1].leadingList,
 			}
 			for _, item := range h.HintData.(*ast.LeadingList).Items {
-				if hintTable, ok := item.(ast.HintTable); ok {
+				if hintTable, ok := item.(*ast.HintTable); ok {
 					// be compatible with the prior flatten writing style
-					h.Tables = append(h.Tables, hintTable)
+					h.Tables = append(h.Tables, *hintTable)
 				}
 			}
 			parser.yyVAL.hint = h
