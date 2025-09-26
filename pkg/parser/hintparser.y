@@ -193,6 +193,7 @@ import (
 %type	<leadingElement>
 	LeadingTableElement "leading element (table or list)"
 
+
 %start	Start
 
 %%
@@ -249,14 +250,21 @@ TableOptimizerHintOpt:
 		h.HintName = ast.NewCIStr($1)
 		$$ = h
 	}
-|   "LEADING" '(' QueryBlockOpt LeadingTableList ')'
-{
-    $$ = &ast.TableOptimizerHint{
-        HintName: ast.NewCIStr($1),
-        QBName:   ast.NewCIStr($3),
-        HintData: $4,
-    }
-}
+|	"LEADING" '(' QueryBlockOpt LeadingTableList ')'
+	{
+		h := &ast.TableOptimizerHint{
+			HintName: ast.NewCIStr($1),
+			QBName:   ast.NewCIStr($3),
+			HintData: $4,
+		}
+		for _, item := range h.HintData.(*ast.LeadingList).Items {
+			if hintTable, ok := item.(ast.HintTable); ok {
+				// be compatible with the prior flatten writing style
+				h.Tables = append(h.Tables, hintTable)
+			}
+		}
+		$$ = h
+	}
 |	UnsupportedIndexLevelOptimizerHintName '(' HintIndexList ')'
 	{
 		parser.warnUnsupportedHint($1)
@@ -423,14 +431,14 @@ HintStorageTypeAndTable:
 
 LeadingTableList:
 	LeadingTableElement
-    {
-        $$ = &ast.LeadingList{Items: []interface{}{$1}}
-    }
-|   LeadingTableList ',' LeadingTableElement
+	{
+		$$ = &ast.LeadingList{Items: []interface{}{$1}}
+	}
+|	LeadingTableList ',' LeadingTableElement
 	{
 		$$ = $1
-        $$ .Items = append($$.Items, $3)
-    }
+		$$.Items = append($$.Items, $3)
+	}
 
 LeadingTableElement:
 	HintTable

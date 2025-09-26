@@ -6856,9 +6856,9 @@ IndexOption:
 	{
 		$$ = &ast.IndexOption{SecondaryEngineAttr: $3}
 	}
-| "WHERE" Expression
+|	"WHERE" Expression
 	{
-		$$ =  &ast.IndexOption{
+		$$ = &ast.IndexOption{
 			Condition: $2.(ast.ExprNode),
 		}
 	}
@@ -12291,11 +12291,11 @@ ShowTargetFilterable:
 	{
 		$$ = &ast.ShowStmt{Tp: ast.ShowPlacementLabels}
 	}
-| 	"IMPORT" "GROUPS"
+|	"IMPORT" "GROUPS"
 	{
 		$$ = &ast.ShowStmt{Tp: ast.ShowImportGroups}
 	}
-| 	"IMPORT" "GROUP" stringLit
+|	"IMPORT" "GROUP" stringLit
 	{
 		$$ = &ast.ShowStmt{Tp: ast.ShowImportGroups, ShowGroupKey: $3}
 	}
