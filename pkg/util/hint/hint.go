@@ -913,6 +913,7 @@ func ParsePlanHints(hints []*ast.TableOptimizerHint,
 			}
 
 			ts := tableNames2HintTableInfo(currentDB, hint.HintName.L, topLevelTables, hintProcessor, currentLevel, warnHandler)
+			fmt.Println(">>>>>>>> qb offset >>> ", hintProcessor.QBNameToSelOffset)
 			for i, tt := range ts {
 				fmt.Println(">>>> ", i, tt, topLevelTables[i])
 			}
