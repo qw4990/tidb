@@ -259,7 +259,7 @@ TableOptimizerHintOpt:
 		}
 		if leadingList, ok := h.HintData.(*ast.LeadingList); ok {
 			// be compatible with the prior flatten writing style
-			h.Tables = FlattenLeadingList(leadingList)
+			h.Tables = ast.FlattenLeadingList(leadingList)
 		}
 		$$ = h
 	}
