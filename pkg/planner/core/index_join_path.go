@@ -299,6 +299,11 @@ func indexJoinPathCompare(ds *logicalop.DataSource, best, current *indexJoinPath
 	// reuse Skyling pruning to compare the index join paths.
 	prop := &property.PhysicalProperty{ExpectedCnt: math.MaxFloat64} // default property without any requirement
 	preferRange := ds.SCtx().GetSessionVars().GetAllowPreferRangeScan()
+
+	if strings.Contains(ds.SCtx().GetSessionVars().StmtCtx.OriginalSQL, "where t1.a<10 and t1.a=t2.a and t") {
+		fmt.Println(">>>>>>>>>> ")
+	}
+
 	cmpResult, _ := compareCandidates(ds.SCtx(), ds.StatisticTable, prop, current.candidate, best.candidate, preferRange)
 	if cmpResult == 1 {
 		return true

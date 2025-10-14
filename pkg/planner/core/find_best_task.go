@@ -770,6 +770,7 @@ func tryToGetDualTask(ds *logicalop.DataSource) (base.Task, error) {
 
 // candidatePath is used to maintain required info for skyline pruning.
 type candidatePath struct {
+	forIndexJoin      bool
 	path              *util.AccessPath
 	accessCondsColMap util.Col2Len // accessCondsColMap maps Column.UniqueID to column length for the columns in AccessConds.
 	indexCondsColMap  util.Col2Len // indexCondsColMap maps Column.UniqueID to column length for the columns in AccessConds and indexFilters.
@@ -1388,6 +1389,10 @@ func getIndexCandidate(sctx planctx.PlanContext, ds *logicalop.DataSource, path 
 	candidate.accessCondsColMap = util.ExtractCol2Len(sctx.GetExprCtx().GetEvalCtx(), path.AccessConds, path.IdxCols, path.IdxColLens)
 	candidate.indexCondsColMap = util.ExtractCol2Len(sctx.GetExprCtx().GetEvalCtx(), append(path.AccessConds, path.IndexFilters...), path.FullIdxCols, path.FullIdxColLens)
 	return candidate
+}
+
+func getIndexCandidateForIndexJoin() {
+
 }
 
 func convergeIndexMergeCandidate(ds *logicalop.DataSource, path *util.AccessPath, prop *property.PhysicalProperty) *candidatePath {
