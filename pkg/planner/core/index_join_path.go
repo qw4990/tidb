@@ -697,7 +697,7 @@ func getBestIndexJoinPathResultByProp(
 				logutil.BgLogger().Warn("build index join failed", zap.Error(err))
 				continue
 			}
-			if indexJoinPathCompare(bestResult, result) {
+			if indexJoinPathCompare(innerDS, bestResult, result) {
 				bestResult = result
 			}
 		}
@@ -744,7 +744,7 @@ func getBestIndexJoinPathResult(
 				logutil.BgLogger().Warn("build index join failed", zap.Error(err))
 				continue
 			}
-			if indexJoinPathCompare(bestResult, result) {
+			if indexJoinPathCompare(innerChild, bestResult, result) {
 				bestResult = result
 			}
 		}
