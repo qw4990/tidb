@@ -15,6 +15,7 @@
 package indexusage
 
 import (
+	"github.com/pingcap/tidb/pkg/metrics"
 	"sync"
 	"time"
 
@@ -58,7 +59,7 @@ func getIndexUsageAccessBucket(percentage float64) int {
 			break
 		}
 	}
-	if percentage == 1.0 {
+	if percentage == 1.0 { // is 1.0 too strict for checking FullScan?
 		bucket = len(bucketBound)
 	}
 
@@ -258,7 +259,7 @@ func NewStmtIndexUsageCollector(sessionCollector *SessionIndexUsageCollector) *S
 
 // Update updates the index usage in the internal session collector. The `sample.QueryTotal` will be modified according
 // to whether this index has been recorded in this statement usage collector.
-func (s *StmtIndexUsageCollector) Update(tableID int64, indexID int64, sample Sample) {
+func (s *StmtIndexUsageCollector) Update(tableID int64, indexID int64, sample Sample, forHandle bool) {
 	// The session index usage collector and the map inside cannot be updated concurrently. However, for executors with
 	// multiple workers, it's possible for them to be closed (and update stats) at the same time, so a lock is needed
 	// here.
@@ -275,6 +276,7 @@ func (s *StmtIndexUsageCollector) Update(tableID int64, indexID int64, sample Sa
 		sample.QueryTotal = 0
 	}
 
+	scanMetrics(forHandle, sample)
 	s.sessionCollector.Update(tableID, indexID, sample)
 }
 
@@ -284,4 +286,65 @@ func (s *StmtIndexUsageCollector) Reset() {
 	defer s.Unlock()
 
 	clear(s.recordedIndex)
+}
+
+func scanMetrics(forHandle bool, sample Sample) {
+	scanCountLabel := getScanCountLabel(sample.RowAccessTotal)
+	scanSelectivityLabel := getScanSelectivityLabel(sample)
+	if scanSelectivityLabel == "100%" { // full scan metrics
+		if forHandle {
+			metrics.PlanFullScanCounter.WithLabelValues("table-full-scan:" + scanCountLabel).Inc()
+		} else {
+			metrics.PlanFullScanCounter.WithLabelValues("index-full-scan:" + scanCountLabel).Inc()
+		}
+	} else { // range scan metrics
+		if forHandle {
+			metrics.PlanScanRowsCounter.WithLabelValues("table-range-scan:" + scanCountLabel).Inc()
+			metrics.PlanScanSelectivityCounter.WithLabelValues("table-select-scan:" + scanSelectivityLabel).Inc()
+		} else {
+			metrics.PlanScanRowsCounter.WithLabelValues("index-range-scan:" + scanCountLabel).Inc()
+			metrics.PlanScanSelectivityCounter.WithLabelValues("table-range-scan:" + scanSelectivityLabel).Inc()
+		}
+	}
+	metrics.PlanKVReqCounter.WithLabelValues(getKVReqLabel(sample.KvReqTotal)).Inc()
+}
+
+func getKVReqLabel(kvReq uint64) string {
+	if kvReq < 100 {
+		return "0-100"
+	} else if kvReq < 1000 {
+		return "100-1000"
+	} else if kvReq < 10000 {
+		return "1000-10000"
+	} else {
+		return "10000+"
+	}
+}
+
+func getScanSelectivityLabel(sample Sample) string {
+	if sample.PercentageAccess[0] > 0 || sample.PercentageAccess[1] > 0 {
+		return "0-1%"
+	} else if sample.PercentageAccess[2] > 0 {
+		return "1-10%"
+	} else if sample.PercentageAccess[3] > 0 || sample.PercentageAccess[4] > 0 {
+		return "10-50%"
+	} else if sample.PercentageAccess[5] > 0 {
+		return "50-100%"
+	} else {
+		return "100%"
+	}
+}
+
+func getScanCountLabel(scanRows uint64) string {
+	if scanRows < 1000 {
+		return "0-1000"
+	} else if scanRows < 10000 {
+		return "1000-10000"
+	} else if scanRows < 100000 {
+		return "10000-100000"
+	} else if scanRows < 1000000 {
+		return "100000-1000000"
+	} else {
+		return "1000000+"
+	}
 }

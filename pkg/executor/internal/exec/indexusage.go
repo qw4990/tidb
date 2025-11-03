@@ -50,26 +50,25 @@ func (e *IndexUsageReporter) ReportCopIndexUsageForHandle(tbl table.Table, planI
 	if !ok {
 		return
 	}
-
-	e.ReportCopIndexUsageForTable(tbl, idxID, planID)
+	e.reportCopIndexUsage(tbl, idxID, planID, true)
 }
 
 // ReportCopIndexUsageForTable wraps around `ReportCopIndexUsage` to get `tableID` and `physicalTableID` from the
 // `table.Table`. If it's expected to calculate the percentage according to the size of partition, the `tbl` argument
 // should be a `table.PhysicalTable`, or the percentage will be calculated using the size of whole table.
 func (e *IndexUsageReporter) ReportCopIndexUsageForTable(tbl table.Table, indexID int64, planID int) {
+	e.reportCopIndexUsage(tbl, indexID, planID, false)
+}
+
+// reportCopIndexUsage reports the index usage to the inside collector. The index usage will be recorded in the
+// `tableID+indexID`, but the percentage is calculated using the size of the table specified by `physicalTableID`.
+func (e *IndexUsageReporter) reportCopIndexUsage(tbl table.Table, indexID int64, planID int, forHandle bool) {
 	tableID := tbl.Meta().ID
 	physicalTableID := tableID
 	if physicalTable, ok := tbl.(table.PhysicalTable); ok {
 		physicalTableID = physicalTable.GetPhysicalID()
 	}
 
-	e.ReportCopIndexUsage(tableID, physicalTableID, indexID, planID)
-}
-
-// ReportCopIndexUsage reports the index usage to the inside collector. The index usage will be recorded in the
-// `tableID+indexID`, but the percentage is calculated using the size of the table specified by `physicalTableID`.
-func (e *IndexUsageReporter) ReportCopIndexUsage(tableID int64, physicalTableID int64, indexID int64, planID int) {
 	tableRowCount, ok := e.getTableRowCount(physicalTableID)
 	if !ok {
 		return
@@ -81,7 +80,7 @@ func (e *IndexUsageReporter) ReportCopIndexUsage(tableID int64, physicalTableID 
 	}
 
 	sample := indexusage.NewSample(0, uint64(kvReq), uint64(accessRows), uint64(tableRowCount))
-	e.reporter.Update(tableID, indexID, sample)
+	e.reporter.Update(tableID, indexID, sample, forHandle)
 }
 
 // ReportPointGetIndexUsageForHandle wraps around `ReportPointGetIndexUsage` to get the `indexID` automatically
@@ -92,11 +91,15 @@ func (e *IndexUsageReporter) ReportPointGetIndexUsageForHandle(tblInfo *model.Ta
 		return
 	}
 
-	e.ReportPointGetIndexUsage(tblInfo.ID, physicalTableID, idxID, kvRequestTotal, rows)
+	e.reportPointGetIndexUsage(tblInfo.ID, physicalTableID, idxID, kvRequestTotal, rows, true)
 }
 
 // ReportPointGetIndexUsage reports the index usage of a point get or batch point get
 func (e *IndexUsageReporter) ReportPointGetIndexUsage(tableID int64, physicalTableID int64, indexID int64, kvRequestTotal, rows int64) {
+	e.reportPointGetIndexUsage(tableID, physicalTableID, indexID, kvRequestTotal, rows, false)
+}
+
+func (e *IndexUsageReporter) reportPointGetIndexUsage(tableID int64, physicalTableID int64, indexID int64, kvRequestTotal, rows int64, forHandle bool) {
 	tableRowCount, ok := e.getTableRowCount(physicalTableID)
 	if !ok {
 		// it's possible that the point get doesn't have the table stats. In this case, we always
@@ -106,7 +109,7 @@ func (e *IndexUsageReporter) ReportPointGetIndexUsage(tableID int64, physicalTab
 	}
 
 	sample := indexusage.NewSample(0, uint64(kvRequestTotal), uint64(rows), uint64(tableRowCount))
-	e.reporter.Update(tableID, indexID, sample)
+	e.reporter.Update(tableID, indexID, sample, forHandle)
 }
 
 // getTableRowCount returns the `RealtimeCount` of a table
