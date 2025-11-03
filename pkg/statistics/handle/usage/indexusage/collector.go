@@ -299,14 +299,14 @@ func scanMetrics(forHandle bool, sample Sample) {
 		} else {
 			metrics.PlanFullScanCounter.WithLabelValues("index-full-scan:" + scanCountLabel).Inc()
 		}
-	} else { // range scan metrics
-		if forHandle {
-			metrics.PlanScanRowsCounter.WithLabelValues("table-range-scan:" + scanCountLabel).Inc()
-			metrics.PlanScanSelectivityCounter.WithLabelValues("table-select-scan:" + scanSelectivityLabel).Inc()
-		} else {
-			metrics.PlanScanRowsCounter.WithLabelValues("index-range-scan:" + scanCountLabel).Inc()
-			metrics.PlanScanSelectivityCounter.WithLabelValues("table-range-scan:" + scanSelectivityLabel).Inc()
-		}
+	}
+	// also include full-scan metrics
+	if forHandle {
+		metrics.PlanScanRowsCounter.WithLabelValues("table:" + scanCountLabel).Inc()
+		metrics.PlanScanSelectivityCounter.WithLabelValues("table:" + scanSelectivityLabel).Inc()
+	} else {
+		metrics.PlanScanRowsCounter.WithLabelValues("index:" + scanCountLabel).Inc()
+		metrics.PlanScanSelectivityCounter.WithLabelValues("index:" + scanSelectivityLabel).Inc()
 	}
 	metrics.PlanKVReqCounter.WithLabelValues(getKVReqLabel(sample.KvReqTotal)).Inc()
 }
