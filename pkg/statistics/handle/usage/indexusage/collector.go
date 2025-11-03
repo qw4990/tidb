@@ -15,11 +15,11 @@
 package indexusage
 
 import (
-	"github.com/pingcap/tidb/pkg/metrics"
 	"sync"
 	"time"
 
 	"github.com/pingcap/tidb/pkg/meta/model"
+	"github.com/pingcap/tidb/pkg/metrics"
 	"github.com/pingcap/tidb/pkg/statistics/handle/usage/collector"
 )
 
@@ -59,7 +59,7 @@ func getIndexUsageAccessBucket(percentage float64) int {
 			break
 		}
 	}
-	if percentage == 1.0 { // is 1.0 too strict for checking FullScan?
+	if percentage == 1.0 {
 		bucket = len(bucketBound)
 	}
 
@@ -291,6 +291,8 @@ func (s *StmtIndexUsageCollector) Reset() {
 func scanMetrics(forHandle bool, sample Sample) {
 	scanCountLabel := getScanCountLabel(sample.RowAccessTotal)
 	scanSelectivityLabel := getScanSelectivityLabel(sample)
+	// TODO: using "sel=100%" to judge full-scan might be inaccurate since the table size is changing dynamically.
+	// TODO: judge full-scan according to plan directly.
 	if scanSelectivityLabel == "100%" { // full scan metrics
 		if forHandle {
 			metrics.PlanFullScanCounter.WithLabelValues("table-full-scan:" + scanCountLabel).Inc()
