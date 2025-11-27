@@ -1209,13 +1209,10 @@ func outOfRangeFullNDV(ndv, origRowCount, notNullCount, realtimeRowCount, increa
 		newRows = min(notNullCount, realtimeRowCount)
 	}
 	// if no NDV - derive an NDV using sqrt, this could happen for unanalyzed tables
-	if ndv <= 0 {
-		ndv = math.Sqrt(max(notNullCount, realtimeRowCount))
-	} else {
-		// We need to increase the ndv by increaseFactor because the estimate will be increased by
-		// the caller of the function
-		ndv *= increaseFactor
-	}
+	ndv = math.Sqrt(max(notNullCount, realtimeRowCount))
+	// We need to increase the ndv by increaseFactor because the estimate will be increased by
+	// the caller of the function
+	ndv *= increaseFactor
 	// If topN represents all NDV values, the NDV should be relatively small.
 	// Small NDV could cause extremely inaccurate result, use `outOfRangeBetweenRate` to smooth the result.
 	// For example, TopN = {(value:1, rows: 10000), (2, 10000), (3, 10000)} and newRows = 15000, we should assume most
