@@ -643,6 +643,7 @@ import (
 	statsAutoRecalc            "STATS_AUTO_RECALC"
 	statsColChoice             "STATS_COL_CHOICE"
 	statsColList               "STATS_COL_LIST"
+	statsDelta                 "STATS_DELTA"
 	statsOptions               "STATS_OPTIONS"
 	statsPersistent            "STATS_PERSISTENT"
 	statsSamplePages           "STATS_SAMPLE_PAGES"
@@ -6979,6 +6980,7 @@ UnReservedKeyword:
 |	"STATS_SAMPLE_RATE"
 |	"STATS_COL_CHOICE"
 |	"STATS_COL_LIST"
+|	"STATS_DELTA"
 |	"AUTO_ID_CACHE"
 |	"AUTO_INCREMENT"
 |	"AFFINITY"
@@ -12475,6 +12477,12 @@ FlushOption:
 	{
 		$$ = &ast.FlushStmt{
 			Tp: ast.FlushClientErrorsSummary,
+		}
+	}
+|	"STATS_DELTA"
+	{
+		$$ = &ast.FlushStmt{
+			Tp: ast.FlushStatsDelta,
 		}
 	}
 

@@ -590,6 +590,7 @@ var Keywords = []KeywordsType{
 	{"STATS_AUTO_RECALC", false, "unreserved"},
 	{"STATS_COL_CHOICE", false, "unreserved"},
 	{"STATS_COL_LIST", false, "unreserved"},
+	{"STATS_DELTA", false, "unreserved"},
 	{"STATS_OPTIONS", false, "unreserved"},
 	{"STATS_PERSISTENT", false, "unreserved"},
 	{"STATS_SAMPLE_PAGES", false, "unreserved"},
