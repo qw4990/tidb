@@ -2922,6 +2922,9 @@ func (e *SimpleExec) executeFlush(s *ast.FlushStmt) error {
 	case ast.FlushPrivileges:
 		dom := domain.GetDomain(e.Ctx())
 		return dom.NotifyUpdateAllUsersPrivilege()
+	case ast.FlushStatsDelta:
+		dom := domain.GetDomain(e.Ctx())
+		dom.StatsHandle().FlushStats()
 	case ast.FlushTiDBPlugin:
 		dom := domain.GetDomain(e.Ctx())
 		for _, pluginName := range s.Plugins {

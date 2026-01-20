@@ -16,6 +16,7 @@ package executor_test
 
 import (
 	"context"
+	"strconv"
 	"sync"
 	"testing"
 
@@ -136,6 +137,35 @@ func TestRefreshStatsRequiresDefaultDB(t *testing.T) {
 
 	tk := testkit.NewTestKit(t, store)
 	tk.MustGetDBError("refresh stats t1", plannererrors.ErrNoDB)
+}
+
+func TestFlushStatsDelta(t *testing.T) {
+	store := testkit.CreateMockStore(t)
+	tk := testkit.NewTestKit(t, store)
+	tk.MustExec("use test")
+	tk.MustExec("drop table if exists t_flush_stats_delta")
+	tk.MustExec("create table t_flush_stats_delta(a int)")
+	tk.MustExec("insert into t_flush_stats_delta values (1)")
+	tk.MustExec("analyze table t_flush_stats_delta all columns")
+
+	modifyCntSQL := `
+select modify_count from mysql.stats_meta
+where table_id = (
+  select tidb_table_id
+  from information_schema.tables
+  where table_schema = 'test' and table_name = 't_flush_stats_delta'
+)`
+	tk.MustQuery(modifyCntSQL).Check(testkit.Rows("0"))
+
+	// DML updates modify_count delta in memory; FLUSH STATS_DELTA should persist it immediately.
+	tk.MustExec("insert into t_flush_stats_delta values (2)")
+	tk.MustExec("flush stats_delta")
+
+	rows := tk.MustQuery(modifyCntSQL).Rows()
+	require.Len(t, rows, 1)
+	got, err := strconv.ParseInt(rows[0][0].(string), 10, 64)
+	require.NoError(t, err)
+	require.Greater(t, got, int64(0))
 }
 
 func TestRefreshStatsWhenDatabaseIsEmpty(t *testing.T) {
