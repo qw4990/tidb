@@ -264,6 +264,9 @@ func (s *JoinReOrderSolver) optimizeRecursive(ctx base.PlanContext, p base.Logic
 			}
 		}
 
+		var conflictDetector ConflictDetector
+		conflictDetector.Build(p)
+
 		baseGroupSolver := &baseSingleGroupJoinOrderSolver{
 			ctx:                ctx,
 			basicJoinGroupInfo: result.basicJoinGroupInfo,
@@ -400,6 +403,7 @@ type baseSingleGroupJoinOrderSolver struct {
 	ctx              base.PlanContext
 	curJoinGroup     []*jrNode
 	leadingJoinGroup base.LogicalPlan
+	conflictDetector ConflictDetector
 	*basicJoinGroupInfo
 }
 

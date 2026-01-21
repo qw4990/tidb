@@ -105,7 +105,8 @@ func (s *joinReorderGreedySolver) constructConnectedJoinTree() (*jrNode, error) 
 		var finalRemainOthers, remainOthersOfWhateverValidOne []expression.Expression
 		var bestJoin, whateverValidOne base.LogicalPlan
 		for i, node := range s.curJoinGroup {
-			newJoin, remainOthers, isCartesian := s.checkConnectionAndMakeJoin(curJoinTree.p, node.p)
+			newJoin, isCartesian, err := s.conflictDetector.CheckAndMakeJoin(curJoinTree.p, node.p)
+			// newJoin, remainOthers, isCartesian := s.checkConnectionAndMakeJoin(curJoinTree.p, node.p)
 			if isCartesian {
 				s.ctx.GetSessionVars().RecordRelevantOptVar(vardef.TiDBOptCartesianJoinOrderThreshold)
 			}
@@ -113,7 +114,7 @@ func (s *joinReorderGreedySolver) constructConnectedJoinTree() (*jrNode, error) 
 				(cartesianThreshold <= 0 && isCartesian) { // disable cartesian join
 				continue
 			}
-			_, _, err := newJoin.RecursiveDeriveStats(nil)
+			_, _, err = newJoin.RecursiveDeriveStats(nil)
 			if err != nil {
 				return nil, err
 			}
