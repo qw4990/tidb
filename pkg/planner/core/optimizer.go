@@ -20,6 +20,7 @@ import (
 	"math"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/pingcap/errors"
@@ -983,10 +984,81 @@ func normalizeOptimize(ctx context.Context, flag uint64, logic base.LogicalPlan)
 	return logic, err
 }
 
+func DebugLogicalPlan(prefix string, logic base.LogicalPlan) {
+	if logic == nil {
+		return
+	}
+	schema := logic.Schema()
+	schemaStr := "<nil>"
+	if schema != nil {
+		schemaStr = schema.String()
+	}
+
+	switch x := logic.(type) {
+	case *logicalop.LogicalAggregation:
+		var aggFuncsStr string
+		ectx := x.SCtx().GetExprCtx().GetEvalCtx()
+		for _, aggFun := range x.AggFuncs {
+			aggFuncsStr += aggFun.StringWithCtx(ectx, errors.RedactLogDisable) + ", "
+		}
+		var groupByItemsStr string
+		for _, groupByItem := range x.GroupByItems {
+			groupByItemsStr += groupByItem.StringWithCtx(ectx, errors.RedactLogDisable) + ", "
+		}
+
+		fmt.Println(">>> ", prefix, logic.TP(), schemaStr, " || ", aggFuncsStr, " || ", groupByItemsStr)
+	default:
+		fmt.Println(">>> ", prefix, logic.TP(), schemaStr)
+	}
+
+	for _, child := range logic.Children() {
+		DebugLogicalPlan(prefix+"  ", child)
+	}
+}
+
+func ResolveIndices4LogicalPlan(logic base.LogicalPlan) (err error) {
+	if logic == nil {
+		return nil
+	}
+
+	switch x := logic.(type) {
+	// case *logicalop.LogicalJoin:
+	case *logicalop.LogicalAggregation:
+		for _, aggFun := range x.AggFuncs {
+			for i, arg := range aggFun.Args {
+				aggFun.Args[i], err = arg.ResolveIndices(x.Children()[0].Schema())
+				if err != nil {
+					return err
+				}
+			}
+			for _, byItem := range aggFun.OrderByItems {
+				byItem.Expr, err = byItem.Expr.ResolveIndices(x.Children()[0].Schema())
+				if err != nil {
+					return err
+				}
+			}
+		}
+		for i, item := range x.GroupByItems {
+			x.GroupByItems[i], err = item.ResolveIndices(x.Children()[0].Schema())
+			if err != nil {
+				return err
+			}
+		}
+	case *logicalop.DataSource:
+		return nil
+	}
+
+	return nil
+}
+
 func logicalOptimize(ctx context.Context, flag uint64, logic base.LogicalPlan) (base.LogicalPlan, error) {
 	defer func(begin time.Time) {
 		logic.SCtx().GetSessionVars().DurationOptimizer.LogicalOpt = time.Since(begin)
 	}(time.Now())
+
+	if strings.Contains(logic.SCtx().GetSessionVars().StmtCtx.OriginalSQL, "COUNT(t3.user_id)") {
+		DebugLogicalPlan("Original ", logic)
+	}
 
 	var err error
 	var againRuleList []base.LogicalOptRule
@@ -1002,6 +1074,11 @@ func logicalOptimize(ctx context.Context, flag uint64, logic base.LogicalPlan) (
 		if err != nil {
 			return nil, err
 		}
+
+		if strings.Contains(logic.SCtx().GetSessionVars().StmtCtx.OriginalSQL, "COUNT(t3.user_id)") {
+			DebugLogicalPlan("After "+rule.Name(), logic)
+		}
+
 		// Compute interaction rules that should be optimized again
 		interactionRule, ok := optInteractionRuleList[rule]
 		if planChanged && ok && isLogicalRuleDisabled(interactionRule) {

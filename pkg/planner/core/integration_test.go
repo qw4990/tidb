@@ -2090,6 +2090,8 @@ func TestCorrelatedScalarSubquery(t *testing.T) {
 	store := testkit.CreateMockStore(t)
 	tk := testkit.NewTestKit(t, store)
 
+	// Can't find column Column#17 in schema Column: [test.t3.user_id] PKOrUK: [] NullableUK: []
+
 	tk.MustExec("use test")
 	tk.MustExec("DROP TABLE IF EXISTS t1")
 	tk.MustExec("DROP TABLE IF EXISTS t2")
