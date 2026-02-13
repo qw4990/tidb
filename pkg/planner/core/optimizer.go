@@ -1006,9 +1006,9 @@ func DebugLogicalPlan(prefix string, logic base.LogicalPlan) {
 			groupByItemsStr += groupByItem.StringWithCtx(ectx, errors.RedactLogDisable) + ", "
 		}
 
-		fmt.Println(">>> ", prefix, logic.TP(), schemaStr, " || ", aggFuncsStr, " || ", groupByItemsStr)
+		fmt.Println(">>> ", prefix, logic.ExplainID().String(), schemaStr, " || ", aggFuncsStr, " || ", groupByItemsStr)
 	default:
-		fmt.Println(">>> ", prefix, logic.TP(), schemaStr)
+		fmt.Println(">>> ", prefix, logic.ExplainID().String(), schemaStr)
 	}
 
 	for _, child := range logic.Children() {
