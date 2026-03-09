@@ -401,8 +401,32 @@ func (s *DecorrelateSolver) optimize(ctx context.Context, p base.LogicalPlan, gr
 						appendedGroupByCols := expression.NewSchema()
 						var appendedAggFuncs []*aggregation.AggFuncDesc
 
-						join := &apply.LogicalJoin
-						join.EqualConditions = append(join.EqualConditions, eqCondWithCorCol...)
+					join := &apply.LogicalJoin
+					defaultValueMap := s.aggDefaultValueMap(agg)
+					// `defaultValueMap` means this scalar aggregation subquery should return a non-NULL
+					// default value (e.g. COUNT -> 0) when the subquery's input is empty.
+					//
+					// If there are conditions pulled up from above the aggregation (typically HAVING),
+					// attaching them to the join will make the "no matching group" cases ambiguous:
+					//   1) empty input group (should apply default values), and
+					//   2) existing group filtered out by HAVING (should return NULL).
+					// Preserve correctness by removing those join conditions and applying them in a
+					// projection that NULL-ifies the inner columns when the condition is false.
+					var havingConds []expression.Expression
+					if len(defaultValueMap) > 0 && (len(join.EqualConditions)+len(join.LeftConditions)+len(join.RightConditions)+len(join.OtherConditions) > 0) {
+						havingConds = make([]expression.Expression, 0, len(join.EqualConditions)+len(join.LeftConditions)+len(join.RightConditions)+len(join.OtherConditions))
+						for _, cond := range join.EqualConditions {
+							havingConds = append(havingConds, cond)
+						}
+						havingConds = append(havingConds, join.LeftConditions...)
+						havingConds = append(havingConds, join.RightConditions...)
+						havingConds = append(havingConds, join.OtherConditions...)
+						join.EqualConditions = nil
+						join.LeftConditions = nil
+						join.RightConditions = nil
+						join.OtherConditions = nil
+					}
+					join.EqualConditions = append(join.EqualConditions, eqCondWithCorCol...)
 						for _, eqCond := range eqCondWithCorCol {
 							clonedCol := eqCond.GetArgs()[1].(*expression.Column)
 							// If the join key is not in the aggregation's schema, add first row function.
@@ -423,13 +447,12 @@ func (s *DecorrelateSolver) optimize(ctx context.Context, p base.LogicalPlan, gr
 								appendedGroupByCols.Append(clonedCol)
 							}
 						}
-						// The selection may be useless, check and remove it.
-						if len(sel.Conditions) == 0 {
-							agg.SetChildren(sel.Children()[0])
-						}
-						defaultValueMap := s.aggDefaultValueMap(agg)
-						// We should use it directly, rather than building a projection.
-						if len(defaultValueMap) > 0 {
+					// The selection may be useless, check and remove it.
+					if len(sel.Conditions) == 0 {
+						agg.SetChildren(sel.Children()[0])
+					}
+					if len(defaultValueMap) > 0 {
+						if len(havingConds) == 0 {
 							proj := logicalop.LogicalProjection{}.Init(agg.SCtx(), agg.QueryBlockOffset())
 							proj.SetSchema(apply.Schema())
 							proj.Exprs = expression.Column2Exprs(apply.Schema().Columns)
@@ -440,7 +463,49 @@ func (s *DecorrelateSolver) optimize(ctx context.Context, p base.LogicalPlan, gr
 							}
 							proj.SetChildren(apply)
 							p = proj
+						} else {
+							// Materialize HAVING conditions once to avoid evaluating it multiple times
+							// when NULL-ifying every inner column.
+							defaultProj := logicalop.LogicalProjection{}.Init(agg.SCtx(), agg.QueryBlockOffset())
+							defaultProj.SetSchema(apply.Schema().Clone())
+							defaultProj.Exprs = expression.Column2Exprs(apply.Schema().Columns)
+							defaultValueSchema := expression.NewSchema()
+							defaultValueExprs := make([]expression.Expression, 0, len(defaultValueMap))
+							for i, val := range defaultValueMap {
+								pos := defaultProj.Schema().ColumnIndex(agg.Schema().Columns[i])
+								ifNullFunc := expression.NewFunctionInternal(agg.SCtx().GetExprCtx(), ast.Ifnull, types.NewFieldType(mysql.TypeLonglong), agg.Schema().Columns[i], val)
+								defaultProj.Exprs[pos] = ifNullFunc
+								defaultValueSchema.Append(agg.Schema().Columns[i])
+								defaultValueExprs = append(defaultValueExprs, ifNullFunc)
+							}
+							havingItems := make([]expression.Expression, 0, len(havingConds))
+							for _, cond := range havingConds {
+								havingItems = append(havingItems, expression.ColumnSubstitute(agg.SCtx().GetExprCtx(), cond, defaultValueSchema, defaultValueExprs))
+							}
+							havingExpr := expression.ComposeCNFCondition(agg.SCtx().GetExprCtx(), havingItems...)
+							havingCol := &expression.Column{
+								UniqueID: agg.SCtx().GetSessionVars().AllocPlanColumnID(),
+								RetType:  havingExpr.GetType(agg.SCtx().GetExprCtx().GetEvalCtx()),
+							}
+							defaultProj.Exprs = append(defaultProj.Exprs, havingExpr)
+							defaultProj.Schema().Append(havingCol)
+							defaultProj.SetChildren(apply)
+
+							proj := logicalop.LogicalProjection{}.Init(agg.SCtx(), agg.QueryBlockOffset())
+							proj.SetSchema(apply.Schema())
+							proj.Exprs = expression.Column2Exprs(defaultProj.Schema().Columns[:apply.Schema().Len()])
+							outerLen := outerPlan.Schema().Len()
+							havingVal := defaultProj.Schema().Columns[defaultProj.Schema().Len()-1]
+							for i := outerLen; i < proj.Schema().Len(); i++ {
+								retType := proj.Schema().Columns[i].RetType.Clone()
+								retType.DelFlag(mysql.NotNullFlag)
+								nullVal := expression.NewNullWithFieldType(retType)
+								proj.Exprs[i] = expression.NewFunctionInternal(agg.SCtx().GetExprCtx(), ast.If, retType, havingVal, proj.Exprs[i], nullVal)
+							}
+							proj.SetChildren(defaultProj)
+							p = proj
 						}
+					}
 						return s.optimize(ctx, p, groupByColumn)
 					}
 					sel.Conditions = originalExpr
