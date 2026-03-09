@@ -71,6 +71,41 @@ WHERE NOT (tlc07c2a51.col_1>=
 	})
 }
 
+func TestCorrelatedExistsWithWindowFunction(t *testing.T) {
+	store := testkit.CreateMockStore(t)
+	tk := testkit.NewTestKit(t, store)
+	tk.MustExec("use test")
+	tk.MustExec("create table t1 (c1 int)")
+
+	// Empty table should return no rows.
+	tk.MustQuery("select case when (EXISTS (select 1 where ref_0.c1)) then count(*) over () else 1 end from t1 as ref_0").Check(testkit.Rows())
+
+	tk.MustExec("insert into t1 values (1), (null), (0), (2)")
+	// c1=1 → EXISTS true → count(*) over () = 4
+	// c1=null → EXISTS false → 1
+	// c1=0 → EXISTS false → 1
+	// c1=2 → EXISTS true → count(*) over () = 4
+	tk.MustQuery("select c1, case when (EXISTS (select 1 where ref_0.c1)) then count(*) over () else 1 end as res from t1 as ref_0 order by c1").Check(testkit.Rows(
+		"<nil> 1",
+		"0 1",
+		"1 4",
+		"2 4",
+	))
+
+	// Correlated EXISTS with window function using PARTITION BY.
+	tk.MustQuery("select c1, case when (EXISTS (select 1 where ref_0.c1 > 0)) then sum(c1) over () else 0 end as res from t1 as ref_0 order by c1").Check(testkit.Rows(
+		"<nil> 0",
+		"0 0",
+		"1 3",
+		"2 3",
+	))
+
+	// Correlated EXISTS with a text column (original bug reproduction from issue).
+	tk.MustExec("drop table t1")
+	tk.MustExec("create table t1 (c1 text)")
+	tk.MustQuery("select case when (EXISTS (select 1 where ref_0.c1)) then count(*) over (partition by 1) else 1 end from t1 as ref_0").Check(testkit.Rows())
+}
+
 func TestWrongDecorrelate(t *testing.T) {
 	store := testkit.CreateMockStore(t)
 	tk := testkit.NewTestKit(t, store)

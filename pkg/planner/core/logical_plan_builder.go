@@ -1319,6 +1319,7 @@ func (b *PlanBuilder) buildProjection(ctx context.Context, p base.LogicalPlan, f
 	schema := expression.NewSchema(make([]*expression.Column, 0, len(fields))...)
 	oldLen := 0
 	newNames := make([]*types.FieldName, 0, len(fields))
+	hasWindowField := false
 	for i, field := range fields {
 		if !field.Auxiliary {
 			oldLen++
@@ -1337,6 +1338,7 @@ func (b *PlanBuilder) buildProjection(ctx context.Context, p base.LogicalPlan, f
 			newNames = append(newNames, p.OutputNames()[i])
 			continue
 		} else if !considerWindow && isWindowFuncField {
+			hasWindowField = true
 			expr := expression.NewZero()
 			proj.Exprs = append(proj.Exprs, expr)
 			col, name, err := b.buildProjectionField(ctx, p, field, expr)
@@ -1374,6 +1376,21 @@ func (b *PlanBuilder) buildProjection(ctx context.Context, p base.LogicalPlan, f
 		}
 		schema.Append(col)
 		newNames = append(newNames, name)
+	}
+	// When the first buildProjection (considerWindow=false) defers window-containing
+	// fields, also carry through the child plan's columns. This ensures they remain
+	// visible in the schema when the second buildProjection (considerWindow=true)
+	// processes those fields, so correlated subqueries inside them can still resolve
+	// references to the outer query's columns. Column pruning removes any that end
+	// up unused.
+	if !considerWindow && hasWindowField {
+		for i, col := range p.Schema().Columns {
+			if !schema.Contains(col) {
+				proj.Exprs = append(proj.Exprs, col)
+				schema.Append(col)
+				newNames = append(newNames, p.OutputNames()[i])
+			}
+		}
 	}
 	// implicitly project expand grouping set cols, if not used later, it will being pruned out in logical column pruner.
 	schema, newNames, proj.Exprs = b.implicitProjectGroupingSetCols(schema, newNames, proj.Exprs)
