@@ -126,7 +126,9 @@ func (*DecorrelateSolver) aggDefaultValueMap(agg *logicalop.LogicalAggregation) 
 		case ast.AggFuncBitOr, ast.AggFuncBitXor, ast.AggFuncCount:
 			defaultValueMap[i] = expression.NewZero()
 		case ast.AggFuncBitAnd:
-			defaultValueMap[i] = &expression.Constant{Value: types.NewUintDatum(math.MaxUint64), RetType: types.NewFieldType(mysql.TypeLonglong)}
+			tp := types.NewFieldType(mysql.TypeLonglong)
+			tp.AddFlag(mysql.UnsignedFlag)
+			defaultValueMap[i] = &expression.Constant{Value: types.NewUintDatum(math.MaxUint64), RetType: tp}
 		}
 	}
 	return defaultValueMap
@@ -413,15 +415,19 @@ func (s *DecorrelateSolver) optimize(ctx context.Context, p base.LogicalPlan, gr
 						// Preserve correctness by removing those join conditions and applying them in a
 						// projection that NULL-ifies the inner columns when the condition is false.
 						var havingConds []expression.Expression
-						if len(defaultValueMap) > 0 && (len(join.EqualConditions)+len(join.LeftConditions)+len(join.RightConditions)+len(join.OtherConditions) > 0) {
-							havingConds = make([]expression.Expression, 0, len(join.EqualConditions)+len(join.LeftConditions)+len(join.RightConditions)+len(join.OtherConditions))
+						if len(defaultValueMap) > 0 && (len(join.EqualConditions)+len(join.LeftConditions)+len(join.RightConditions)+len(join.OtherConditions)+len(join.NAEQConditions) > 0) {
+							havingConds = make([]expression.Expression, 0, len(join.EqualConditions)+len(join.LeftConditions)+len(join.RightConditions)+len(join.OtherConditions)+len(join.NAEQConditions))
 							for _, cond := range join.EqualConditions {
+								havingConds = append(havingConds, cond)
+							}
+							for _, cond := range join.NAEQConditions {
 								havingConds = append(havingConds, cond)
 							}
 							havingConds = append(havingConds, join.LeftConditions...)
 							havingConds = append(havingConds, join.RightConditions...)
 							havingConds = append(havingConds, join.OtherConditions...)
 							join.EqualConditions = nil
+							join.NAEQConditions = nil
 							join.LeftConditions = nil
 							join.RightConditions = nil
 							join.OtherConditions = nil
@@ -458,7 +464,8 @@ func (s *DecorrelateSolver) optimize(ctx context.Context, p base.LogicalPlan, gr
 								proj.Exprs = expression.Column2Exprs(apply.Schema().Columns)
 								for i, val := range defaultValueMap {
 									pos := proj.Schema().ColumnIndex(agg.Schema().Columns[i])
-									ifNullFunc := expression.NewFunctionInternal(agg.SCtx().GetExprCtx(), ast.Ifnull, types.NewFieldType(mysql.TypeLonglong), agg.Schema().Columns[i], val)
+									aggColRetTp := agg.Schema().Columns[i].RetType.Clone()
+									ifNullFunc := expression.NewFunctionInternal(agg.SCtx().GetExprCtx(), ast.Ifnull, aggColRetTp, agg.Schema().Columns[i], val)
 									proj.Exprs[pos] = ifNullFunc
 								}
 								proj.SetChildren(apply)
@@ -473,7 +480,8 @@ func (s *DecorrelateSolver) optimize(ctx context.Context, p base.LogicalPlan, gr
 								defaultValueExprs := make([]expression.Expression, 0, len(defaultValueMap))
 								for i, val := range defaultValueMap {
 									pos := defaultProj.Schema().ColumnIndex(agg.Schema().Columns[i])
-									ifNullFunc := expression.NewFunctionInternal(agg.SCtx().GetExprCtx(), ast.Ifnull, types.NewFieldType(mysql.TypeLonglong), agg.Schema().Columns[i], val)
+									aggColRetTp := agg.Schema().Columns[i].RetType.Clone()
+									ifNullFunc := expression.NewFunctionInternal(agg.SCtx().GetExprCtx(), ast.Ifnull, aggColRetTp, agg.Schema().Columns[i], val)
 									defaultProj.Exprs[pos] = ifNullFunc
 									defaultValueSchema.Append(agg.Schema().Columns[i])
 									defaultValueExprs = append(defaultValueExprs, ifNullFunc)
