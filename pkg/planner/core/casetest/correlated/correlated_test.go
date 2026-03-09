@@ -71,6 +71,23 @@ WHERE NOT (tlc07c2a51.col_1>=
 	})
 }
 
+func TestNaturalJoinWithCorrelatedSubquery(t *testing.T) {
+	store := testkit.CreateMockStore(t)
+	tk := testkit.NewTestKit(t, store)
+	tk.MustExec("use test")
+	tk.MustExec("drop table if exists t")
+	tk.MustExec("create table t (a int)")
+	tk.MustExec("insert into t values (1), (2)")
+
+	// NATURAL JOIN wraps the join inside a LogicalApply when there's a
+	// correlated scalar subquery; findFieldNameFromNaturalUsingJoin must
+	// recurse through the Apply to resolve the right-side qualified column.
+	tk.MustQuery("select 0 from t t1 where exists (select a2.a from t a1 natural join t a2 where t1.a = (select min(t1.a)))").Check(
+		testkit.Rows("0", "0"))
+	tk.MustQuery("select 0 from t t1 where exists (select a1.a from t a1 natural join t a2 where t1.a = (select min(t1.a)))").Check(
+		testkit.Rows("0", "0"))
+}
+
 func TestWrongDecorrelate(t *testing.T) {
 	store := testkit.CreateMockStore(t)
 	tk := testkit.NewTestKit(t, store)
