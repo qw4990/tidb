@@ -189,9 +189,6 @@ func (*RuntimeFilterGenerator) matchEQPredicate(ctx expression.EvalContext, eqPr
 	}
 	var targetColumn, srcColumn *expression.Column
 	l, r := expression.ExtractColumnsFromColOpCol(eqPredicate)
-	if l == nil || r == nil {
-		return false
-	}
 	if rightIsBuildSide {
 		targetColumn = l
 		srcColumn = r

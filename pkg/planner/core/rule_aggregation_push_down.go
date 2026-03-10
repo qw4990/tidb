@@ -159,9 +159,6 @@ func (a *AggregationPushDownSolver) collectGbyCols(agg *logicalop.LogicalAggrega
 	// extract equal conditions
 	for _, eqFunc := range join.EqualConditions {
 		l, r := expression.ExtractColumnsFromColOpCol(eqFunc)
-		if l == nil || r == nil {
-			continue
-		}
 		leftGbyCols = a.addGbyCol(ctx, leftGbyCols, l)
 		rightGbyCols = a.addGbyCol(ctx, rightGbyCols, r)
 	}

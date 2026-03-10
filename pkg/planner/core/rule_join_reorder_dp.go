@@ -66,10 +66,8 @@ func (s *joinReorderDPSolver) solve(joinGroup []base.LogicalPlan) (base.LogicalP
 	// Build Graph for join group
 	for _, cond := range eqConds {
 		sf := cond.(*expression.ScalarFunction)
-		lCol, rCol := expression.ExtractColumnsFromColOpCol(sf)
-		if lCol == nil || rCol == nil {
-			continue
-		}
+		lCol := sf.GetArgs()[0].(*expression.Column)
+		rCol := sf.GetArgs()[1].(*expression.Column)
 		lIdx, err := findNodeIndexInGroup(joinGroup, lCol)
 		if err != nil {
 			return nil, err
@@ -251,9 +249,6 @@ func (s *joinReorderDPSolver) newJoinWithEdge(leftPlan, rightPlan base.LogicalPl
 	var eqConds []*expression.ScalarFunction
 	for _, edge := range edges {
 		lCol, rCol := expression.ExtractColumnsFromColOpCol(edge.edge)
-		if lCol == nil || rCol == nil {
-			continue
-		}
 		if leftPlan.Schema().Contains(lCol) {
 			eqConds = append(eqConds, edge.edge)
 		} else {

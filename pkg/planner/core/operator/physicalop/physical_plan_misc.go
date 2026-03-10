@@ -213,9 +213,6 @@ func NewRuntimeFilter(rfIDGenerator *util.IDGenerator, eqPredicate *expression.S
 	var srcExprList []*expression.Column
 	var targetExprUniqueID int64
 	l, r := expression.ExtractColumnsFromColOpCol(eqPredicate)
-	if l == nil || r == nil {
-		return nil, 0
-	}
 	if rightSideIsBuild {
 		srcExprList = append(srcExprList, r)
 		targetExprUniqueID = l.UniqueID

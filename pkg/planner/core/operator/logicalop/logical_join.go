@@ -435,9 +435,6 @@ func (p *LogicalJoin) BuildKeyInfo(selfSchema *expression.Schema, childSchema []
 		rightCols := make([]*expression.Column, 0, len(p.EqualConditions))
 		for _, expr := range p.EqualConditions {
 			l, r := expression.ExtractColumnsFromColOpCol(expr)
-			if l == nil || r == nil {
-				continue
-			}
 			leftCols = append(leftCols, l)
 			rightCols = append(rightCols, r)
 		}
@@ -1021,9 +1018,6 @@ func (p *LogicalJoin) ExtractFDForOuterJoin(equivFromApply [][]intset.FastIntSet
 func (p *LogicalJoin) GetJoinKeys() (leftKeys, rightKeys []*expression.Column, isNullEQ []bool, hasNullEQ bool) {
 	for _, expr := range p.EqualConditions {
 		l, r := expression.ExtractColumnsFromColOpCol(expr)
-		if l == nil || r == nil {
-			continue
-		}
 		leftKeys = append(leftKeys, l)
 		rightKeys = append(rightKeys, r)
 		isNullEQ = append(isNullEQ, expr.FuncName.L == ast.NullEQ)
@@ -1036,9 +1030,6 @@ func (p *LogicalJoin) GetJoinKeys() (leftKeys, rightKeys []*expression.Column, i
 func (p *LogicalJoin) GetNAJoinKeys() (leftKeys, rightKeys []*expression.Column) {
 	for _, expr := range p.NAEQConditions {
 		l, r := expression.ExtractColumnsFromColOpCol(expr)
-		if l == nil || r == nil {
-			continue
-		}
 		leftKeys = append(leftKeys, l)
 		rightKeys = append(rightKeys, r)
 	}
@@ -1050,9 +1041,6 @@ func (p *LogicalJoin) GetNAJoinKeys() (leftKeys, rightKeys []*expression.Column)
 func (p *LogicalJoin) GetPotentialPartitionKeys() (leftKeys, rightKeys []*property.MPPPartitionColumn) {
 	for _, expr := range p.EqualConditions {
 		l, r := expression.ExtractColumnsFromColOpCol(expr)
-		if l == nil || r == nil {
-			continue
-		}
 		_, coll := expr.CharsetAndCollation()
 		collateID := property.GetCollateIDByNameForPartition(coll)
 		leftKeys = append(leftKeys, &property.MPPPartitionColumn{Col: l, CollateID: collateID})
