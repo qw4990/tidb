@@ -71,6 +71,26 @@ WHERE NOT (tlc07c2a51.col_1>=
 	})
 }
 
+// TestViewCorrelatedSubqueryMOD regression test for https://github.com/pingcap/tidb/issues/63289.
+// A view containing a correlated scalar subquery with MOD must preserve
+// operator precedence when the view definition is stored and re-parsed.
+func TestViewCorrelatedSubqueryMOD(t *testing.T) {
+	store := testkit.CreateMockStore(t)
+	tk := testkit.NewTestKit(t, store)
+	tk.MustExec("use test")
+	tk.MustExec("drop view if exists vtable0")
+	tk.MustExec("drop table if exists t1, t3")
+	tk.MustExec("create table t1 (c1 int)")
+	tk.MustExec("create table t3 (c0 int)")
+	tk.MustExec("insert into t1 values (10)")
+	tk.MustExec("insert into t3 values (9)")
+	tk.MustExec(`create view vtable0 as (
+		select (select t1.c1 from t1 where mod(t1.c1, t3.c0 + 1) = 0) as c1
+		from t3 join t1 on true
+	)`)
+	tk.MustQuery("select vtable0.c1 from vtable0").Check(testkit.Rows("10"))
+}
+
 func TestWrongDecorrelate(t *testing.T) {
 	store := testkit.CreateMockStore(t)
 	tk := testkit.NewTestKit(t, store)

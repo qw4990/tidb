@@ -1754,7 +1754,10 @@ func ShouldBuildClusteredIndex(mode vardef.ClusteredIndexDefMode, opt *ast.Index
 // BuildViewInfo builds a ViewInfo structure from an ast.CreateViewStmt.
 func BuildViewInfo(s *ast.CreateViewStmt) (*model.ViewInfo, error) {
 	// Always Use `format.RestoreNameBackQuotes` to restore `SELECT` statement despite the `ANSI_QUOTES` SQL Mode is enabled or not.
-	restoreFlag := format.RestoreStringSingleQuotes | format.RestoreKeyWordUppercase | format.RestoreNameBackQuotes
+	// RestoreBracketAroundBinaryOperation is needed to preserve operator precedence
+	// when the restored SQL is re-parsed (e.g. MOD(a, b+1) must not become a%b+1).
+	restoreFlag := format.RestoreStringSingleQuotes | format.RestoreKeyWordUppercase | format.RestoreNameBackQuotes |
+		format.RestoreBracketAroundBinaryOperation
 	var sb strings.Builder
 	if err := s.Select.Restore(format.NewRestoreCtx(restoreFlag, &sb)); err != nil {
 		return nil, err
