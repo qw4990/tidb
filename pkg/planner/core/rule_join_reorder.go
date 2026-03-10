@@ -235,13 +235,18 @@ func extractJoinGroup(p base.LogicalPlan) *joinGroupResult {
 		appendNullExtendedCols(join.Children()[0].Schema())
 	}
 
-	eqEdges = append(eqEdges, join.EqualConditions...)
-	tmpOtherConds := make(expression.CNFExprs, 0, len(join.OtherConditions)+len(join.LeftConditions)+len(join.RightConditions))
+	// Only treat col = col predicates as join edges used in reordering.
+	// All other equal conditions are treated as residual filters and put
+	// into otherConds so that they are still enforced.
+	filteredEqConds, nonEdgeEqConds := splitJoinEqualConditions(join.EqualConditions)
+	eqEdges = append(eqEdges, filteredEqConds...)
+	tmpOtherConds := make(expression.CNFExprs, 0, len(join.OtherConditions)+len(join.LeftConditions)+len(join.RightConditions)+len(nonEdgeEqConds))
 	tmpOtherConds = append(tmpOtherConds, join.OtherConditions...)
 	tmpOtherConds = append(tmpOtherConds, join.LeftConditions...)
 	tmpOtherConds = append(tmpOtherConds, join.RightConditions...)
+	tmpOtherConds = append(tmpOtherConds, expression.ScalarFuncs2Exprs(nonEdgeEqConds)...)
 	if join.JoinType == base.LeftOuterJoin || join.JoinType == base.RightOuterJoin || join.JoinType == base.LeftOuterSemiJoin || join.JoinType == base.AntiLeftOuterSemiJoin {
-		for range join.EqualConditions {
+		for range filteredEqConds {
 			abType := &joinTypeWithExtMsg{JoinType: join.JoinType}
 			// outer join's other condition should be bound with the connecting edge.
 			// although we bind the outer condition to **anyone** of the join type, it will be extracted **only once** when make a new join.
@@ -249,7 +254,7 @@ func extractJoinGroup(p base.LogicalPlan) *joinGroupResult {
 			joinTypes = append(joinTypes, abType)
 		}
 	} else {
-		for range join.EqualConditions {
+		for range filteredEqConds {
 			abType := &joinTypeWithExtMsg{JoinType: join.JoinType}
 			joinTypes = append(joinTypes, abType)
 		}
@@ -271,6 +276,28 @@ func extractJoinGroup(p base.LogicalPlan) *joinGroupResult {
 			joinMethodHintInfo: joinMethodHintInfo,
 		},
 	}
+}
+
+// splitJoinEqualConditions splits join equal conditions into:
+//   - eqColCol: predicates of the form col = col, which are valid join edges.
+//   - others: all remaining predicates, which should be treated as residual filters.
+func splitJoinEqualConditions(equalConds []*expression.ScalarFunction) (eqColCol, others []*expression.ScalarFunction) {
+	for _, sf := range equalConds {
+		if sf == nil {
+			continue
+		}
+		if sf.FuncName.L != ast.EQ {
+			others = append(others, sf)
+			continue
+		}
+		_, _, ok := expression.IsColOpCol(sf)
+		if !ok {
+			others = append(others, sf)
+			continue
+		}
+		eqColCol = append(eqColCol, sf)
+	}
+	return
 }
 
 // JoinReOrderSolver is used to reorder the join nodes in a logical plan.
@@ -541,9 +568,6 @@ func (s *baseSingleGroupJoinOrderSolver) checkConnection(leftPlan, rightPlan bas
 	leftNode, rightNode = leftPlan, rightPlan
 	for idx, edge := range s.eqEdges {
 		lCol, rCol := expression.ExtractColumnsFromColOpCol(edge)
-		if lCol == nil || rCol == nil {
-			continue
-		}
 		if leftPlan.Schema().Contains(lCol) && rightPlan.Schema().Contains(rCol) {
 			joinType = s.joinTypes[idx]
 			usedEdges = append(usedEdges, edge)
