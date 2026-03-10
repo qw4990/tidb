@@ -505,7 +505,7 @@ func (s *DecorrelateSolver) optimize(ctx context.Context, p base.LogicalPlan, gr
 								outerLen := outerPlan.Schema().Len()
 								havingVal := defaultProj.Schema().Columns[defaultProj.Schema().Len()-1]
 								for i := outerLen; i < proj.Schema().Len(); i++ {
-									retType := proj.Schema().Columns[i].RetType.Clone()
+									retType := proj.Schema().Columns[i].RetType.DeepCopy()
 									retType.DelFlag(mysql.NotNullFlag)
 									nullVal := expression.NewNullWithFieldType(retType)
 									proj.Exprs[i] = expression.NewFunctionInternal(agg.SCtx().GetExprCtx(), ast.If, retType, havingVal, proj.Exprs[i], nullVal)
