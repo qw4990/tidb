@@ -1040,9 +1040,9 @@ func (p *LogicalJoin) GetNAJoinKeys() (leftKeys, rightKeys []*expression.Column)
 // the join keys of EqualConditions
 func (p *LogicalJoin) GetPotentialPartitionKeys() (leftKeys, rightKeys []*property.MPPPartitionColumn) {
 	for _, expr := range p.EqualConditions {
-		l, r := expression.ExtractColumnsFromColOpCol(expr)
 		_, coll := expr.CharsetAndCollation()
 		collateID := property.GetCollateIDByNameForPartition(coll)
+		l, r := expression.ExtractColumnsFromColOpCol(expr)
 		leftKeys = append(leftKeys, &property.MPPPartitionColumn{Col: l, CollateID: collateID})
 		rightKeys = append(rightKeys, &property.MPPPartitionColumn{Col: r, CollateID: collateID})
 	}
