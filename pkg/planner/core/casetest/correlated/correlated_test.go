@@ -77,7 +77,9 @@ func TestNaturalJoinWithCorrelatedSubquery(tt *testing.T) {
 		tk.MustExec("use test")
 		tk.MustExec("drop table if exists t")
 		tk.MustExec("create table t (a int)")
-		tk.MustExec("insert into t values (1), (2)")
+		// Keep duplicate and NULL rows so the regression also pins multiplicity
+		// and NULL-handling for the correlated EXISTS predicate.
+		tk.MustExec("insert into t values (1), (1), (2), (null)")
 
 		var input []string
 		var output []struct {
