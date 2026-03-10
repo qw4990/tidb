@@ -2362,13 +2362,16 @@ func IsColOpCol(sf *ScalarFunction) (_, _ *Column, _ bool) {
 	return nil, nil, false
 }
 
-// ExtractColumnsFromColOpCol is to extract columns from col op col condition.
+// ExtractColumnsFromColOpCol extracts columns from a col op col condition.
+// Returns (nil, nil) if either side is not a *Column.
 func ExtractColumnsFromColOpCol(sf *ScalarFunction) (_, _ *Column) {
 	args := sf.GetArgs()
 	if len(args) == 2 {
-		col2 := args[1].(*Column)
-		col1 := args[0].(*Column)
-		return col1, col2
+		col1, ok1 := args[0].(*Column)
+		col2, ok2 := args[1].(*Column)
+		if ok1 && ok2 {
+			return col1, col2
+		}
 	}
 	return nil, nil
 }

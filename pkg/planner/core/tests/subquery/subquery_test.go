@@ -20,6 +20,20 @@ import (
 	"github.com/pingcap/tidb/pkg/testkit"
 )
 
+// TestViewWithScalarFuncInJoinPredicate regression test for https://github.com/pingcap/tidb/issues/58999.
+// A view column that expands to a scalar function in a join predicate must not
+// panic during plan optimization.
+func TestViewWithScalarFuncInJoinPredicate(t *testing.T) {
+	store := testkit.CreateMockStore(t)
+	tk := testkit.NewTestKit(t, store)
+	tk.MustExec("use test")
+	tk.MustExec("drop table if exists t0")
+	tk.MustExec("drop view if exists v0")
+	tk.MustExec("create table t0(c2 tinyint)")
+	tk.MustExec("create view v0(c0) as select false from t0")
+	tk.MustQuery("select v0.c0 from t0, v0 where ((t0.c2)=((- (((-1)|(v0.c0))))))")
+}
+
 func TestCollateSubQuery(t *testing.T) {
 	store := testkit.CreateMockStore(t)
 	tk := testkit.NewTestKit(t, store)

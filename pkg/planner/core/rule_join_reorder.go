@@ -541,6 +541,9 @@ func (s *baseSingleGroupJoinOrderSolver) checkConnection(leftPlan, rightPlan bas
 	leftNode, rightNode = leftPlan, rightPlan
 	for idx, edge := range s.eqEdges {
 		lCol, rCol := expression.ExtractColumnsFromColOpCol(edge)
+		if lCol == nil || rCol == nil {
+			continue
+		}
 		if leftPlan.Schema().Contains(lCol) && rightPlan.Schema().Contains(rCol) {
 			joinType = s.joinTypes[idx]
 			usedEdges = append(usedEdges, edge)
