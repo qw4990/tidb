@@ -1297,13 +1297,12 @@ func (er *expressionRewriter) handleInSubquery(ctx context.Context, planCtx *exp
 			er.err = err
 			return v, true
 		}
-		// Build inner join above the aggregation.
-		join := logicalop.LogicalJoin{JoinType: base.InnerJoin}.Init(planCtx.builder.ctx, planCtx.builder.getSelectOffset())
+		// Build semi join above the aggregation.
+		join := logicalop.LogicalJoin{JoinType: base.SemiJoin}.Init(planCtx.builder.ctx, planCtx.builder.getSelectOffset())
 		join.SetChildren(planCtx.plan, agg)
-		join.SetSchema(expression.MergeSchema(planCtx.plan.Schema(), agg.Schema()))
-		join.SetOutputNames(make([]*types.FieldName, planCtx.plan.Schema().Len()+agg.Schema().Len()))
+		join.SetSchema(planCtx.plan.Schema().Clone())
+		join.SetOutputNames(make([]*types.FieldName, planCtx.plan.Schema().Len()))
 		copy(join.OutputNames(), planCtx.plan.OutputNames())
-		copy(join.OutputNames()[planCtx.plan.Schema().Len():], agg.OutputNames())
 		join.AttachOnConds(expression.SplitCNFItems(checkCondition))
 		// set FullSchema and FullNames for this join
 		if left, ok := planCtx.plan.(*logicalop.LogicalJoin); ok && left.FullSchema != nil {

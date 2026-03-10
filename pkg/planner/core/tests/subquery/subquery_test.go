@@ -20,6 +20,19 @@ import (
 	"github.com/pingcap/tidb/pkg/testkit"
 )
 
+// TestINSubqueryBlobNoDuplicateRows regression test for https://github.com/pingcap/tidb/issues/64230.
+// IN subquery over BLOB columns should not produce duplicate rows.
+func TestINSubqueryBlobNoDuplicateRows(t *testing.T) {
+	store := testkit.CreateMockStore(t)
+	tk := testkit.NewTestKit(t, store)
+	tk.MustExec("use test")
+	tk.MustExec("drop table if exists t0")
+	tk.MustExec("create table t0 (c1 blob)")
+	tk.MustExec("insert into t0 (c1) values ('gO')")
+	tk.MustExec("insert into t0 (c1) values ('W')")
+	tk.MustQuery("select t0.c1 from t0 where ((((0) in (select t0.c1 as ca5 from t0))))").Sort().Check(testkit.Rows("W", "gO"))
+}
+
 func TestCollateSubQuery(t *testing.T) {
 	store := testkit.CreateMockStore(t)
 	tk := testkit.NewTestKit(t, store)
