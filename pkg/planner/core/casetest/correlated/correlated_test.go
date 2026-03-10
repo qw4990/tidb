@@ -68,24 +68,36 @@ WHERE NOT (tlc07c2a51.col_1>=
               WHERE ISNULL(tc4cf4a6b.col_3)
               group by tlc07c2a51.col_6
               HAVING tlc07c2a51.col_6>0)) ;`).Check(testkit.Rows("1", "1", "1", "1", "1", "1", "1", "1", "1", "1"))
+
+		testKit.MustExec("drop table if exists t")
+		testKit.MustExec("create table t (a int)")
+		testKit.MustExec("insert into t values (1), (2)")
+
+		// NATURAL JOIN wraps the join inside a LogicalApply when there's a
+		// correlated scalar subquery; findFieldNameFromNaturalUsingJoin must
+		// recurse through the Apply to resolve qualified columns from either side.
+		naturalJoinQueries := []struct {
+			sql              string
+			expectedJoinType string
+		}{
+			{
+				sql:              "select 0 from t t1 where exists (select a2.a from t a1 natural join t a2 where t1.a = (select min(t1.a)))",
+				expectedJoinType: "inner join",
+			},
+			{
+				sql:              "select 0 from t t1 where exists (select a1.a from t a1 natural join t a2 where t1.a = (select min(t1.a)))",
+				expectedJoinType: "inner join",
+			},
+			{
+				sql:              "select 0 from t t1 where exists (select a2.a from t a1 natural left join t a2 where t1.a = (select min(t1.a)))",
+				expectedJoinType: "left outer join",
+			},
+		}
+		for _, tt := range naturalJoinQueries {
+			testKit.MustQuery("explain format='brief' " + tt.sql).MultiCheckContain([]string{"Apply", tt.expectedJoinType})
+			testKit.MustQuery(tt.sql).Check(testkit.Rows("0", "0"))
+		}
 	})
-}
-
-func TestNaturalJoinWithCorrelatedSubquery(t *testing.T) {
-	store := testkit.CreateMockStore(t)
-	tk := testkit.NewTestKit(t, store)
-	tk.MustExec("use test")
-	tk.MustExec("drop table if exists t")
-	tk.MustExec("create table t (a int)")
-	tk.MustExec("insert into t values (1), (2)")
-
-	// NATURAL JOIN wraps the join inside a LogicalApply when there's a
-	// correlated scalar subquery; findFieldNameFromNaturalUsingJoin must
-	// recurse through the Apply to resolve the right-side qualified column.
-	tk.MustQuery("select 0 from t t1 where exists (select a2.a from t a1 natural join t a2 where t1.a = (select min(t1.a)))").Check(
-		testkit.Rows("0", "0"))
-	tk.MustQuery("select 0 from t t1 where exists (select a1.a from t a1 natural join t a2 where t1.a = (select min(t1.a)))").Check(
-		testkit.Rows("0", "0"))
 }
 
 func TestWrongDecorrelate(t *testing.T) {
