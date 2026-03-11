@@ -1857,10 +1857,33 @@ func (p *LogicalJoin) updateEQCond() {
 					rKey = rProj.AppendExpr(rKey)
 				}
 				eqCond := expression.NewFunctionInternal(p.SCtx().GetExprCtx(), ast.EQ, types.NewFieldType(mysql.TypeTiny), lKey, rKey)
+				eqSf := eqCond.(*expression.ScalarFunction)
+				if _, _, isColOpCol := expression.IsColOpCol(eqSf); !isColOpCol {
+					// Preserve the `col = col` invariant for EqualConditions even when
+					// implicit casts are injected during function construction.
+					if _, isCol := eqSf.GetArgs()[0].(*expression.Column); !isCol {
+						if lProj == nil {
+							lProj = p.getProj(0)
+						}
+						lKey = lProj.AppendExpr(eqSf.GetArgs()[0])
+					} else {
+						lKey = eqSf.GetArgs()[0]
+					}
+					if _, isCol := eqSf.GetArgs()[1].(*expression.Column); !isCol {
+						if rProj == nil {
+							rProj = p.getProj(1)
+						}
+						rKey = rProj.AppendExpr(eqSf.GetArgs()[1])
+					} else {
+						rKey = eqSf.GetArgs()[1]
+					}
+					eqCond = expression.NewFunctionInternal(p.SCtx().GetExprCtx(), ast.EQ, types.NewFieldType(mysql.TypeTiny), lKey, rKey)
+					eqSf = eqCond.(*expression.ScalarFunction)
+				}
 				if isNA {
-					p.NAEQConditions = append(p.NAEQConditions, eqCond.(*expression.ScalarFunction))
+					p.NAEQConditions = append(p.NAEQConditions, eqSf)
 				} else {
-					p.EqualConditions = append(p.EqualConditions, eqCond.(*expression.ScalarFunction))
+					p.EqualConditions = append(p.EqualConditions, eqSf)
 				}
 			}
 		}
