@@ -1859,8 +1859,14 @@ func (p *LogicalJoin) updateEQCond() {
 				eqCond := expression.NewFunctionInternal(p.SCtx().GetExprCtx(), ast.EQ, types.NewFieldType(mysql.TypeTiny), lKey, rKey)
 				eqSf := eqCond.(*expression.ScalarFunction)
 				if _, _, isColOpCol := expression.IsColOpCol(eqSf); !isColOpCol {
-					// Preserve the `col = col` invariant for EqualConditions even when
-					// implicit casts are injected during function construction.
+					// Join reorder and several join implementations assume each EqualCondition
+					// is strictly `col = col`. However, NewFunctionInternal may inject implicit
+					// casts (for example tinyint = bit/bool from a view), turning one side into
+					// a scalar expression (e.g. cast(col)) instead of a plain column.
+					//
+					// To preserve optimizer behavior while keeping that invariant true, we
+					// materialize non-column sides via child projections and then rebuild
+					// the equality with the projection output columns.
 					if _, isCol := eqSf.GetArgs()[0].(*expression.Column); !isCol {
 						if lProj == nil {
 							lProj = p.getProj(0)
