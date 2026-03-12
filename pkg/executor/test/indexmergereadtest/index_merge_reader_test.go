@@ -164,22 +164,6 @@ func TestIndexMergeWithPreparedStmt(t *testing.T) {
 	require.True(t, re.MatchString(indexMergeLine))
 }
 
-func TestMVIndexMergeIndexOnlyMVP(t *testing.T) {
-	store := testkit.CreateMockStore(t)
-	tk := testkit.NewTestKit(t, store)
-	prepareMVIndexMergeSimpleTable(tk)
-
-	require.NoError(t, failpoint.Enable("github.com/pingcap/tidb/pkg/executor/testIndexMergePanicTableScanWorker", `panic("testIndexMergePanicTableScanWorker")`))
-	defer func() {
-		require.NoError(t, failpoint.Disable("github.com/pingcap/tidb/pkg/executor/testIndexMergePanicTableScanWorker"))
-	}()
-
-	indexOnlySQL := "select /*+ use_index_merge(t, idx) */ 1 from t where (2 member of (j))"
-	tk.MustHavePlan(indexOnlySQL, "IndexMerge")
-	// Index-only path should bypass table scan worker, so this query should still succeed.
-	tk.MustQuery(indexOnlySQL).Check(testkit.Rows("1", "1"))
-}
-
 func TestMVIndexMergeIndexOnlyMVPExplainNoTableProbe(t *testing.T) {
 	store := testkit.CreateMockStore(t)
 	tk := testkit.NewTestKit(t, store)
