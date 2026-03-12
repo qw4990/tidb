@@ -890,8 +890,14 @@ func (e *IndexMergeReaderExecutor) getResultTask(ctx context.Context) (*indexMer
 		time.Sleep(time.Second * 20)
 		failpoint.Return(nil, errors.New("failpoint testIndexMergeMainReturnEarly"))
 	})
-	if e.resultCurr != nil && e.resultCurr.cursor < len(e.resultCurr.rows) {
-		return e.resultCurr, nil
+	if e.resultCurr != nil {
+		totalRows := len(e.resultCurr.rows)
+		if e.indexOnly {
+			totalRows = len(e.resultCurr.handles)
+		}
+		if e.resultCurr.cursor < totalRows {
+			return e.resultCurr, nil
+		}
 	}
 	task, ok := <-e.resultCh
 	if !ok {
