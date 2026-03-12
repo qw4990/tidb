@@ -390,17 +390,18 @@ func (f *FlatPhysicalPlan) flattenRecursively(p base.Plan, info *operatorCtx, ta
 		childCtx.isRoot = false
 		childCtx.reqType = physicalop.Cop
 		childCtx.storeType = kv.TiKV
-		for _, pchild := range plan.PartialPlansRaw {
-			childCtx.label = BuildSide
-			childCtx.isLastChild = false
-			target, childIdx = f.flattenRecursively(pchild, childCtx, target)
-			childIdxs = append(childIdxs, childIdx)
-		}
 		// Runtime index-only path is restricted to empty-schema plans (SELECT 1 style). Explain
 		// may expose a synthetic output column for constant projections, so keep probe hidden when
 		// the parent projection has no column dependency.
 		explainIndexOnly := plan.IsMVIndexMergeIndexOnlyEnabled() || (plan.IndexMergeIndexOnly && info.parentProjAllConst)
-		if !explainIndexOnly && plan.TablePlan != nil {
+		hasProbeChild := !explainIndexOnly && plan.TablePlan != nil
+		for i, pchild := range plan.PartialPlansRaw {
+			childCtx.label = BuildSide
+			childCtx.isLastChild = !hasProbeChild && i == len(plan.PartialPlansRaw)-1
+			target, childIdx = f.flattenRecursively(pchild, childCtx, target)
+			childIdxs = append(childIdxs, childIdx)
+		}
+		if hasProbeChild {
 			childCtx.label = ProbeSide
 			childCtx.isLastChild = true
 			// set the index merge child signal.

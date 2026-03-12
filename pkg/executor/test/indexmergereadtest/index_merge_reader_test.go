@@ -190,6 +190,19 @@ func TestMVIndexMergeIndexOnlyMVPExplainNoTableProbe(t *testing.T) {
 	tk.MustNotHavePlan(sql, "TableRowIDScan")
 }
 
+func TestMVIndexMergeIndexOnlyMVPExplainTreeShape(t *testing.T) {
+	store := testkit.CreateMockStore(t)
+	tk := testkit.NewTestKit(t, store)
+	prepareMVIndexMergeSimpleTable(tk)
+
+	sql := "explain format='plan_tree' select /*+ use_index_merge(t, idx) */ 1 from t where (2 member of (j))"
+	tk.MustQuery(sql).Check(testkit.Rows(
+		"Projection root  1->Column",
+		"└─IndexMerge root  type: union",
+		"  └─IndexRangeScan(Build) cop[tikv] table:t, index:idx(cast(`j` as signed array), a) range:[2,2], keep order:false, stats:pseudo",
+	))
+}
+
 func TestMVIndexMergeSelectStarStillUsesTableProbe(t *testing.T) {
 	store := testkit.CreateMockStore(t)
 	tk := testkit.NewTestKit(t, store)
