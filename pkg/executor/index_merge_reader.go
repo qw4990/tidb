@@ -1325,6 +1325,12 @@ func (w *indexMergeProcessWorker) fetchLoopUnion(ctx context.Context, fetchCh <-
 			})
 			if w.indexMerge.indexOnly {
 				// Index-only fast path: no probe task is sent to workCh, so mark done immediately.
+				// Keep task memory bookkeeping consistent with table-scan worker path.
+				task.memTracker = w.indexMerge.memTracker
+				task.memUsage = int64(cap(task.handles)) * 8
+				if task.memTracker != nil {
+					task.memTracker.Consume(task.memUsage)
+				}
 				task.doneCh <- nil
 				continue
 			}
