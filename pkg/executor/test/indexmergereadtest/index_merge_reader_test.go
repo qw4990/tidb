@@ -206,6 +206,47 @@ func TestMVIndexMergeIndexOnlyMVPExplainNoTableProbe(t *testing.T) {
 	tk.MustNotHavePlan(sql, "TableRowIDScan")
 }
 
+func TestMVIndexMergeSelectStarStillUsesTableProbe(t *testing.T) {
+	store := testkit.CreateMockStore(t)
+	tk := testkit.NewTestKit(t, store)
+	tk.MustExec("use test")
+	tk.MustExec("set @@tidb_enable_index_merge=1")
+	tk.MustExec("drop table if exists t")
+	tk.MustExec("create table t (a int, j json, index idx((cast(j as signed array)), a))")
+	tk.MustExec(`insert into t values
+		(1, '[1,2]'),
+		(2, '[2,3]'),
+		(3, '[3,4]'),
+		(4, '[4,5]')`)
+
+	sql := "select /*+ use_index_merge(t, idx) */ * from t where (2 member of (j)) order by a"
+	// `select *` needs table columns, so it must keep probe-side table scan.
+	tk.MustHavePlan(sql, "IndexMerge")
+	tk.MustHavePlan(sql, "TableRowIDScan")
+	tk.MustQuery(sql).Check(testkit.Rows(
+		"1 [1, 2]",
+		"2 [2, 3]",
+	))
+}
+
+func TestMVIndexMergeSelectStarExplainHasTableProbe(t *testing.T) {
+	store := testkit.CreateMockStore(t)
+	tk := testkit.NewTestKit(t, store)
+	tk.MustExec("use test")
+	tk.MustExec("set @@tidb_enable_index_merge=1")
+	tk.MustExec("drop table if exists t")
+	tk.MustExec("create table t (a int, j json, index idx((cast(j as signed array)), a))")
+	tk.MustExec(`insert into t values
+		(1, '[1,2]'),
+		(2, '[2,3]'),
+		(3, '[3,4]'),
+		(4, '[4,5]')`)
+
+	sql := "select /*+ use_index_merge(t, idx) */ * from t where (2 member of (j))"
+	tk.MustHavePlan(sql, "IndexMerge")
+	tk.MustHavePlan(sql, "TableRowIDScan")
+}
+
 func TestIndexMergeReaderMemTracker(t *testing.T) {
 	store := testkit.CreateMockStore(t)
 	tk := testkit.NewTestKit(t, store)

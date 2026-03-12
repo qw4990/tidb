@@ -19,6 +19,7 @@ import (
 	"strings"
 
 	"github.com/pingcap/tidb/pkg/expression"
+	"github.com/pingcap/tidb/pkg/meta/model"
 	"github.com/pingcap/tidb/pkg/planner/cardinality"
 	"github.com/pingcap/tidb/pkg/planner/core/access"
 	"github.com/pingcap/tidb/pkg/planner/core/base"
@@ -118,6 +119,25 @@ func (p *PhysicalIndexMergeReader) GetAvgTableRowSize() float64 {
 func (p *PhysicalIndexMergeReader) GetPartialReaderNetDataSize(plan base.PhysicalPlan) float64 {
 	_, isIdxScan := plan.(*PhysicalIndexScan)
 	return plan.StatsCount() * cardinality.GetAvgRowSize(p.SCtx(), GetTblStats(plan), plan.Schema().Columns, isIdxScan, false)
+}
+
+// IsMVIndexMergeIndexOnlyEnabled returns whether index-only mode can be used safely for this plan.
+// The planner flag is an optimistic signal. Runtime/explain should use this helper to ensure the output
+// schema can be satisfied without table probe:
+// 1. Empty schema: query only needs row existence (e.g. SELECT 1).
+// 2. Single ExtraHandle column: query only needs _tidb_rowid.
+func (p *PhysicalIndexMergeReader) IsMVIndexMergeIndexOnlyEnabled() bool {
+	if !p.IndexMergeIndexOnly {
+		return false
+	}
+	switch p.Schema().Len() {
+	case 0:
+		return true
+	case 1:
+		return p.Schema().Columns[0].ID == model.ExtraHandleID
+	default:
+		return false
+	}
 }
 
 // ExtractCorrelatedCols implements op.PhysicalPlan interface.

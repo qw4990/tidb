@@ -4767,16 +4767,7 @@ func buildNoRangeIndexMergeReader(b *executorBuilder, v *physicalop.PhysicalInde
 	}
 
 	b.ctx.GetSessionVars().StmtCtx.IsTiKV.Store(true)
-	indexOnly := v.IndexMergeIndexOnly
-	if indexOnly {
-		switch v.Schema().Len() {
-		case 0:
-		case 1:
-			indexOnly = v.Schema().Columns[0].ID == model.ExtraHandleID
-		default:
-			indexOnly = false
-		}
-	}
+	indexOnly := v.IsMVIndexMergeIndexOnlyEnabled()
 
 	e := &IndexMergeReaderExecutor{
 		BaseExecutor:             exec.NewBaseExecutor(b.ctx, v.Schema(), v.ID()),
@@ -4839,7 +4830,7 @@ func (b *executorBuilder) buildIndexUsageReporter(plan tableStatsPreloader, load
 func (b *executorBuilder) buildIndexMergeReader(v *physicalop.PhysicalIndexMergeReader) exec.Executor {
 	if b.Ti != nil {
 		b.Ti.UseIndexMerge = true
-		b.Ti.UseTableLookUp.Store(!v.IndexMergeIndexOnly)
+		b.Ti.UseTableLookUp.Store(!v.IsMVIndexMergeIndexOnlyEnabled())
 	}
 	ts := v.TablePlans[0].(*physicalop.PhysicalTableScan)
 	assertByItemsAreColumns(ts.ByItems)

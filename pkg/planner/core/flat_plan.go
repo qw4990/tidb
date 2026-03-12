@@ -382,7 +382,11 @@ func (f *FlatPhysicalPlan) flattenRecursively(p base.Plan, info *operatorCtx, ta
 			target, childIdx = f.flattenRecursively(pchild, childCtx, target)
 			childIdxs = append(childIdxs, childIdx)
 		}
-		if !plan.IndexMergeIndexOnly && plan.TablePlan != nil {
+		// Explain output uses plan-time schema, which can be a single synthetic column for
+		// projection-only queries like `SELECT 1`. Keep probe hidden for that case to match
+		// existing index-only explain behavior, but show probe for wide outputs such as `SELECT *`.
+		explainIndexOnly := plan.IndexMergeIndexOnly && plan.Schema().Len() <= 1
+		if !explainIndexOnly && plan.TablePlan != nil {
 			childCtx.label = ProbeSide
 			childCtx.isLastChild = true
 			// set the index merge child signal.
