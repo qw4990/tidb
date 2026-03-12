@@ -382,12 +382,14 @@ func (f *FlatPhysicalPlan) flattenRecursively(p base.Plan, info *operatorCtx, ta
 			target, childIdx = f.flattenRecursively(pchild, childCtx, target)
 			childIdxs = append(childIdxs, childIdx)
 		}
-		childCtx.label = ProbeSide
-		childCtx.isLastChild = true
-		// set the index merge child signal.
-		childCtx.isINLProbeChild = true
-		target, childIdx = f.flattenRecursively(plan.TablePlan, childCtx, target)
-		childIdxs = append(childIdxs, childIdx)
+		if !plan.IndexMergeIndexOnly && plan.TablePlan != nil {
+			childCtx.label = ProbeSide
+			childCtx.isLastChild = true
+			// set the index merge child signal.
+			childCtx.isINLProbeChild = true
+			target, childIdx = f.flattenRecursively(plan.TablePlan, childCtx, target)
+			childIdxs = append(childIdxs, childIdx)
+		}
 	case *physicalop.PhysicalShuffleReceiverStub:
 		childCtx.isRoot = true
 		childCtx.label = Empty

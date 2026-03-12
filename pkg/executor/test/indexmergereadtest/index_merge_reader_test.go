@@ -188,6 +188,24 @@ func TestMVIndexMergeIndexOnlyMVP(t *testing.T) {
 	tk.MustQuery(indexOnlySQL).Check(testkit.Rows("1", "1"))
 }
 
+func TestMVIndexMergeIndexOnlyMVPExplainNoTableProbe(t *testing.T) {
+	store := testkit.CreateMockStore(t)
+	tk := testkit.NewTestKit(t, store)
+	tk.MustExec("use test")
+	tk.MustExec("set @@tidb_enable_index_merge=1")
+	tk.MustExec("drop table if exists t")
+	tk.MustExec("create table t (a int, j json, index idx((cast(j as signed array)), a))")
+	tk.MustExec(`insert into t values
+		(1, '[1,2]'),
+		(2, '[2,3]'),
+		(3, '[3,4]'),
+		(4, '[4,5]')`)
+
+	sql := "select /*+ use_index_merge(t, idx) */ 1 from t where (2 member of (j))"
+	tk.MustHavePlan(sql, "IndexMerge")
+	tk.MustNotHavePlan(sql, "TableRowIDScan")
+}
+
 func TestIndexMergeReaderMemTracker(t *testing.T) {
 	store := testkit.CreateMockStore(t)
 	tk := testkit.NewTestKit(t, store)
