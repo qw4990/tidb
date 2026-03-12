@@ -247,6 +247,24 @@ func TestMVIndexMergeSelectStarExplainHasTableProbe(t *testing.T) {
 	tk.MustHavePlan(sql, "TableRowIDScan")
 }
 
+func TestMVIndexMergeSelectExprExplainHasTableProbe(t *testing.T) {
+	store := testkit.CreateMockStore(t)
+	tk := testkit.NewTestKit(t, store)
+	tk.MustExec("use test")
+	tk.MustExec("set @@tidb_enable_index_merge=1")
+	tk.MustExec("drop table if exists t")
+	tk.MustExec("create table t (j json, index idx((cast(j->'$.int' as signed array))))")
+	tk.MustExec(`insert into t values
+		('{"int":[1,2],"x":10}'),
+		('{"int":[2,4],"x":20}'),
+		('{"int":[6,7],"x":30}')`)
+
+	sql := "select (j->'$.int') from t where json_overlaps((j->'$.int'), '[1, 2, 3]')"
+	tk.MustHavePlan(sql, "IndexMerge")
+	tk.MustHavePlan(sql, "TableRowIDScan")
+	tk.MustQuery(sql).Check(testkit.Rows("[1, 2]", "[2, 4]"))
+}
+
 func TestIndexMergeReaderMemTracker(t *testing.T) {
 	store := testkit.CreateMockStore(t)
 	tk := testkit.NewTestKit(t, store)

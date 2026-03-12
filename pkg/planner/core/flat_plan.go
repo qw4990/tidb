@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/pingcap/tidb/pkg/expression"
 	"github.com/pingcap/tidb/pkg/kv"
 	"github.com/pingcap/tidb/pkg/planner/core/base"
 	"github.com/pingcap/tidb/pkg/planner/core/operator/physicalop"
@@ -181,6 +182,8 @@ type operatorCtx struct {
 	isLastChild bool
 	// IsINLProbeChild indicates whether this operator is in indexLookupReader / indexMergeReader / indexLookUp inner side.
 	isINLProbeChild bool
+	// parentProjAllConst marks whether parent is a projection with no column dependency.
+	parentProjAllConst bool
 }
 
 // FlattenPhysicalPlan generates a FlatPhysicalPlan from a PhysicalPlan, Insert, Delete, Update, Explain or Execute.
@@ -317,6 +320,16 @@ func (f *FlatPhysicalPlan) flattenRecursively(p base.Plan, info *operatorCtx, ta
 
 		children := make([]base.PhysicalPlan, len(physPlan.Children()))
 		copy(children, physPlan.Children())
+		parentProjAllConst := false
+		if proj, ok := physPlan.(*physicalop.PhysicalProjection); ok {
+			parentProjAllConst = true
+			for _, expr := range proj.Exprs {
+				if len(expression.ExtractColumns(expr)) > 0 {
+					parentProjAllConst = false
+					break
+				}
+			}
+		}
 		if len(label) == 2 &&
 			label[0] == ProbeSide &&
 			label[1] == BuildSide {
@@ -334,6 +347,7 @@ func (f *FlatPhysicalPlan) flattenRecursively(p base.Plan, info *operatorCtx, ta
 			childCtx.label = label[i]
 			childCtx.isLastChild = i == len(children)-1
 			childCtx.isINLProbeChild = childCtx.isINLProbeChild || indexOfINLProbeChild == i
+			childCtx.parentProjAllConst = parentProjAllConst
 			target, childIdx = f.flattenRecursively(children[i], childCtx, target)
 			childIdxs = append(childIdxs, childIdx)
 		}
@@ -382,10 +396,10 @@ func (f *FlatPhysicalPlan) flattenRecursively(p base.Plan, info *operatorCtx, ta
 			target, childIdx = f.flattenRecursively(pchild, childCtx, target)
 			childIdxs = append(childIdxs, childIdx)
 		}
-		// Explain output uses plan-time schema, which can be a single synthetic column for
-		// projection-only queries like `SELECT 1`. Keep probe hidden for that case to match
-		// existing index-only explain behavior, but show probe for wide outputs such as `SELECT *`.
-		explainIndexOnly := plan.IndexMergeIndexOnly && plan.Schema().Len() <= 1
+		// Runtime index-only path is restricted to empty-schema plans (SELECT 1 style). Explain
+		// may expose a synthetic output column for constant projections, so keep probe hidden when
+		// the parent projection has no column dependency.
+		explainIndexOnly := plan.IsMVIndexMergeIndexOnlyEnabled() || (plan.IndexMergeIndexOnly && info.parentProjAllConst)
 		if !explainIndexOnly && plan.TablePlan != nil {
 			childCtx.label = ProbeSide
 			childCtx.isLastChild = true
