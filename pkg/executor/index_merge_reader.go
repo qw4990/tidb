@@ -153,8 +153,6 @@ type IndexMergeReaderExecutor struct {
 
 type indexMergeTableTask struct {
 	lookupTableTask
-	// virtualRows is used by index-only index-merge, where rows are not materialized from table.
-	virtualRows int
 
 	// parTblIdx are only used in indexMergeProcessWorker.fetchLoopIntersection.
 	parTblIdx int
@@ -292,6 +290,8 @@ func (e *IndexMergeReaderExecutor) startWorkers(ctx context.Context) error {
 		close(exitCh)
 		return err
 	}
+	// In index-only mode, merged handles are turned into final output directly in process worker,
+	// so the probe-side table scan workers are intentionally skipped.
 	if !e.indexOnly {
 		e.startIndexMergeTableScanWorker(ctx, workCh)
 	}
@@ -850,6 +850,7 @@ func (e *IndexMergeReaderExecutor) Next(ctx context.Context, req *chunk.Chunk) e
 		}
 		totalRows := len(resultTask.rows)
 		if e.indexOnly {
+			// For index-only mode, handles themselves represent result cardinality.
 			totalRows = len(resultTask.handles)
 		}
 		if resultTask.cursor < totalRows {
@@ -857,8 +858,10 @@ func (e *IndexMergeReaderExecutor) Next(ctx context.Context, req *chunk.Chunk) e
 			if e.indexOnly {
 				switch e.Schema().Len() {
 				case 0:
+					// Constant projection like `select 1 ...`: produce virtual rows only.
 					req.SetNumVirtualRows(req.NumRows() + numToAppend)
 				case 1:
+					// MVP supports one int handle column output (extra handle).
 					for i := 0; i < numToAppend; i++ {
 						handle := resultTask.handles[resultTask.cursor+i]
 						if !handle.IsInt() {
@@ -1315,6 +1318,7 @@ func (w *indexMergeProcessWorker) fetchLoopUnion(ctx context.Context, fetchCh <-
 				IndexMergeCancelFuncForTest()
 			})
 			if w.indexMerge.indexOnly {
+				// Index-only fast path: no probe task is sent to workCh, so mark done immediately.
 				task.doneCh <- nil
 				continue
 			}
