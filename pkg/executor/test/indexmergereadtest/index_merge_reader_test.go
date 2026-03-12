@@ -167,15 +167,7 @@ func TestIndexMergeWithPreparedStmt(t *testing.T) {
 func TestMVIndexMergeIndexOnlyMVP(t *testing.T) {
 	store := testkit.CreateMockStore(t)
 	tk := testkit.NewTestKit(t, store)
-	tk.MustExec("use test")
-	tk.MustExec("set @@tidb_enable_index_merge=1")
-	tk.MustExec("drop table if exists t")
-	tk.MustExec("create table t (a int, j json, index idx((cast(j as signed array)), a))")
-	tk.MustExec(`insert into t values
-		(1, '[1,2]'),
-		(2, '[2,3]'),
-		(3, '[3,4]'),
-		(4, '[4,5]')`)
+	prepareMVIndexMergeSimpleTable(tk)
 
 	require.NoError(t, failpoint.Enable("github.com/pingcap/tidb/pkg/executor/testIndexMergePanicTableScanWorker", `panic("testIndexMergePanicTableScanWorker")`))
 	defer func() {
@@ -191,15 +183,7 @@ func TestMVIndexMergeIndexOnlyMVP(t *testing.T) {
 func TestMVIndexMergeIndexOnlyMVPExplainNoTableProbe(t *testing.T) {
 	store := testkit.CreateMockStore(t)
 	tk := testkit.NewTestKit(t, store)
-	tk.MustExec("use test")
-	tk.MustExec("set @@tidb_enable_index_merge=1")
-	tk.MustExec("drop table if exists t")
-	tk.MustExec("create table t (a int, j json, index idx((cast(j as signed array)), a))")
-	tk.MustExec(`insert into t values
-		(1, '[1,2]'),
-		(2, '[2,3]'),
-		(3, '[3,4]'),
-		(4, '[4,5]')`)
+	prepareMVIndexMergeSimpleTable(tk)
 
 	sql := "select /*+ use_index_merge(t, idx) */ 1 from t where (2 member of (j))"
 	tk.MustHavePlan(sql, "IndexMerge")
@@ -209,15 +193,7 @@ func TestMVIndexMergeIndexOnlyMVPExplainNoTableProbe(t *testing.T) {
 func TestMVIndexMergeSelectStarStillUsesTableProbe(t *testing.T) {
 	store := testkit.CreateMockStore(t)
 	tk := testkit.NewTestKit(t, store)
-	tk.MustExec("use test")
-	tk.MustExec("set @@tidb_enable_index_merge=1")
-	tk.MustExec("drop table if exists t")
-	tk.MustExec("create table t (a int, j json, index idx((cast(j as signed array)), a))")
-	tk.MustExec(`insert into t values
-		(1, '[1,2]'),
-		(2, '[2,3]'),
-		(3, '[3,4]'),
-		(4, '[4,5]')`)
+	prepareMVIndexMergeSimpleTable(tk)
 
 	sql := "select /*+ use_index_merge(t, idx) */ * from t where (2 member of (j)) order by a"
 	// `select *` needs table columns, so it must keep probe-side table scan.
@@ -232,15 +208,7 @@ func TestMVIndexMergeSelectStarStillUsesTableProbe(t *testing.T) {
 func TestMVIndexMergeSelectStarExplainHasTableProbe(t *testing.T) {
 	store := testkit.CreateMockStore(t)
 	tk := testkit.NewTestKit(t, store)
-	tk.MustExec("use test")
-	tk.MustExec("set @@tidb_enable_index_merge=1")
-	tk.MustExec("drop table if exists t")
-	tk.MustExec("create table t (a int, j json, index idx((cast(j as signed array)), a))")
-	tk.MustExec(`insert into t values
-		(1, '[1,2]'),
-		(2, '[2,3]'),
-		(3, '[3,4]'),
-		(4, '[4,5]')`)
+	prepareMVIndexMergeSimpleTable(tk)
 
 	sql := "select /*+ use_index_merge(t, idx) */ * from t where (2 member of (j))"
 	tk.MustHavePlan(sql, "IndexMerge")
@@ -250,6 +218,27 @@ func TestMVIndexMergeSelectStarExplainHasTableProbe(t *testing.T) {
 func TestMVIndexMergeSelectExprExplainHasTableProbe(t *testing.T) {
 	store := testkit.CreateMockStore(t)
 	tk := testkit.NewTestKit(t, store)
+	prepareMVIndexMergeExprTable(tk)
+
+	sql := "select (j->'$.int') from t where json_overlaps((j->'$.int'), '[1, 2, 3]')"
+	tk.MustHavePlan(sql, "IndexMerge")
+	tk.MustHavePlan(sql, "TableRowIDScan")
+	tk.MustQuery(sql).Check(testkit.Rows("[1, 2]", "[2, 4]"))
+}
+
+func prepareMVIndexMergeSimpleTable(tk *testkit.TestKit) {
+	tk.MustExec("use test")
+	tk.MustExec("set @@tidb_enable_index_merge=1")
+	tk.MustExec("drop table if exists t")
+	tk.MustExec("create table t (a int, j json, index idx((cast(j as signed array)), a))")
+	tk.MustExec(`insert into t values
+		(1, '[1,2]'),
+		(2, '[2,3]'),
+		(3, '[3,4]'),
+		(4, '[4,5]')`)
+}
+
+func prepareMVIndexMergeExprTable(tk *testkit.TestKit) {
 	tk.MustExec("use test")
 	tk.MustExec("set @@tidb_enable_index_merge=1")
 	tk.MustExec("drop table if exists t")
@@ -258,11 +247,6 @@ func TestMVIndexMergeSelectExprExplainHasTableProbe(t *testing.T) {
 		('{"int":[1,2],"x":10}'),
 		('{"int":[2,4],"x":20}'),
 		('{"int":[6,7],"x":30}')`)
-
-	sql := "select (j->'$.int') from t where json_overlaps((j->'$.int'), '[1, 2, 3]')"
-	tk.MustHavePlan(sql, "IndexMerge")
-	tk.MustHavePlan(sql, "TableRowIDScan")
-	tk.MustQuery(sql).Check(testkit.Rows("[1, 2]", "[2, 4]"))
 }
 
 func TestIndexMergeReaderMemTracker(t *testing.T) {
