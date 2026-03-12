@@ -862,7 +862,7 @@ func (e *IndexMergeReaderExecutor) Next(ctx context.Context, req *chunk.Chunk) e
 					req.SetNumVirtualRows(req.NumRows() + numToAppend)
 				case 1:
 					// MVP supports one int handle column output (extra handle).
-					for i := 0; i < numToAppend; i++ {
+					for i := range numToAppend {
 						handle := resultTask.handles[resultTask.cursor+i]
 						if !handle.IsInt() {
 							return errors.New("index-only index merge only supports int handle output")
