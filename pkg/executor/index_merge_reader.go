@@ -144,12 +144,17 @@ type IndexMergeReaderExecutor struct {
 
 	// Whether it's intersection or union.
 	isIntersection bool
+	// indexOnly means we can return rows directly after merging handles without table probe.
+	// MVP scope: only supports zero-column output.
+	indexOnly bool
 
 	hasGlobalIndex bool
 }
 
 type indexMergeTableTask struct {
 	lookupTableTask
+	// virtualRows is used by index-only index-merge, where rows are not materialized from table.
+	virtualRows int
 
 	// parTblIdx are only used in indexMergeProcessWorker.fetchLoopIntersection.
 	parTblIdx int
@@ -287,7 +292,9 @@ func (e *IndexMergeReaderExecutor) startWorkers(ctx context.Context) error {
 		close(exitCh)
 		return err
 	}
-	e.startIndexMergeTableScanWorker(ctx, workCh)
+	if !e.indexOnly {
+		e.startIndexMergeTableScanWorker(ctx, workCh)
+	}
 	e.workerStarted = true
 	return nil
 }
@@ -841,9 +848,17 @@ func (e *IndexMergeReaderExecutor) Next(ctx context.Context, req *chunk.Chunk) e
 		if resultTask == nil {
 			return nil
 		}
-		if resultTask.cursor < len(resultTask.rows) {
-			numToAppend := min(len(resultTask.rows)-resultTask.cursor, e.MaxChunkSize()-req.NumRows())
-			req.AppendRows(resultTask.rows[resultTask.cursor : resultTask.cursor+numToAppend])
+		totalRows := len(resultTask.rows)
+		if e.indexOnly {
+			totalRows = resultTask.virtualRows
+		}
+		if resultTask.cursor < totalRows {
+			numToAppend := min(totalRows-resultTask.cursor, e.MaxChunkSize()-req.NumRows())
+			if e.indexOnly {
+				req.SetNumVirtualRows(req.NumRows() + numToAppend)
+			} else {
+				req.AppendRows(resultTask.rows[resultTask.cursor : resultTask.cursor+numToAppend])
+			}
 			resultTask.cursor += numToAppend
 			if req.NumRows() >= e.MaxChunkSize() {
 				return nil
@@ -1286,6 +1301,11 @@ func (w *indexMergeProcessWorker) fetchLoopUnion(ctx context.Context, fetchCh <-
 			failpoint.Inject("testCancelContext", func() {
 				IndexMergeCancelFuncForTest()
 			})
+			if w.indexMerge.indexOnly {
+				task.virtualRows = len(task.handles)
+				task.doneCh <- nil
+				continue
+			}
 			select {
 			case <-ctx.Done():
 				return

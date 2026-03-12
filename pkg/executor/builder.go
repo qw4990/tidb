@@ -4788,6 +4788,7 @@ func buildNoRangeIndexMergeReader(b *executorBuilder, v *physicalop.PhysicalInde
 		isCorColInTableFilter:    isCorColInTableFilter,
 		isCorColInPartialAccess:  isCorColInPartialAccess,
 		isIntersection:           v.IsIntersectionType,
+		indexOnly:                v.IndexMergeIndexOnly,
 		byItems:                  v.ByItems,
 		pushedLimit:              v.PushedLimit,
 		keepOrder:                v.KeepOrder,
@@ -4828,7 +4829,7 @@ func (b *executorBuilder) buildIndexUsageReporter(plan tableStatsPreloader, load
 func (b *executorBuilder) buildIndexMergeReader(v *physicalop.PhysicalIndexMergeReader) exec.Executor {
 	if b.Ti != nil {
 		b.Ti.UseIndexMerge = true
-		b.Ti.UseTableLookUp.Store(true)
+		b.Ti.UseTableLookUp.Store(!v.IndexMergeIndexOnly)
 	}
 	ts := v.TablePlans[0].(*physicalop.PhysicalTableScan)
 	assertByItemsAreColumns(ts.ByItems)

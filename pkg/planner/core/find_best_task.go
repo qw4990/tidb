@@ -2241,6 +2241,13 @@ func convertToIndexMergeScan(ds *logicalop.DataSource, prop *property.PhysicalPr
 	cop.IdxMergePartPlans = scans
 	cop.IdxMergeIsIntersection = path.IndexMergeIsIntersection
 	cop.IdxMergeAccessMVIndex = path.IndexMergeAccessMVIndex
+	cop.IdxMergeIndexOnly = prop.TaskTp == property.RootTaskType &&
+		path.IndexMergeAccessMVIndex &&
+		!path.IndexMergeIsIntersection &&
+		prop.IsSortItemEmpty() &&
+		len(ds.Schema().Columns) == 0 &&
+		len(path.TableFilters) == 0 &&
+		len(globalRemainingFilters) == 0
 	if moreColumn {
 		cop.NeedExtraProj = true
 		cop.OriginSchema = ds.Schema()

@@ -384,6 +384,7 @@ type CopTask struct {
 	IdxMergePartPlans      []base.PhysicalPlan
 	IdxMergeIsIntersection bool
 	IdxMergeAccessMVIndex  bool
+	IdxMergeIndexOnly      bool
 
 	// RootTaskConds stores select conditions containing virtual columns.
 	// These conditions can't push to TiKV, so we have to add a selection for rootTask
@@ -521,11 +522,12 @@ func (t *CopTask) convertToRootTaskImpl(ctx base.PlanContext) (rt *RootTask) {
 	newTask := &RootTask{}
 	if t.IdxMergePartPlans != nil {
 		p := PhysicalIndexMergeReader{
-			PartialPlansRaw:    t.IdxMergePartPlans,
-			TablePlan:          t.TablePlan,
-			IsIntersectionType: t.IdxMergeIsIntersection,
-			AccessMVIndex:      t.IdxMergeAccessMVIndex,
-			KeepOrder:          t.KeepOrder,
+			PartialPlansRaw:     t.IdxMergePartPlans,
+			TablePlan:           t.TablePlan,
+			IsIntersectionType:  t.IdxMergeIsIntersection,
+			AccessMVIndex:       t.IdxMergeAccessMVIndex,
+			IndexMergeIndexOnly: t.IdxMergeIndexOnly,
+			KeepOrder:           t.KeepOrder,
 		}.Init(ctx, t.IdxMergePartPlans[0].QueryBlockOffset())
 		p.PlanPartInfo = t.PhysPlanPartInfo
 		newTask.SetPlan(p)

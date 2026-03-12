@@ -41,6 +41,9 @@ type PhysicalIndexMergeReader struct {
 	IsIntersectionType bool
 	// AccessMVIndex indicates whether this IndexMergeReader access a MVIndex.
 	AccessMVIndex bool
+	// IndexMergeIndexOnly means this index merge reader can return rows without table probe.
+	// MVP scope: only used for zero-column output queries.
+	IndexMergeIndexOnly bool
 
 	// PushedLimit is used to avoid unnecessary table scan tasks of IndexMergeReader.
 	PushedLimit *PushedDownLimit
