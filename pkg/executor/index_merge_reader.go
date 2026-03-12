@@ -850,12 +850,25 @@ func (e *IndexMergeReaderExecutor) Next(ctx context.Context, req *chunk.Chunk) e
 		}
 		totalRows := len(resultTask.rows)
 		if e.indexOnly {
-			totalRows = resultTask.virtualRows
+			totalRows = len(resultTask.handles)
 		}
 		if resultTask.cursor < totalRows {
 			numToAppend := min(totalRows-resultTask.cursor, e.MaxChunkSize()-req.NumRows())
 			if e.indexOnly {
-				req.SetNumVirtualRows(req.NumRows() + numToAppend)
+				switch e.Schema().Len() {
+				case 0:
+					req.SetNumVirtualRows(req.NumRows() + numToAppend)
+				case 1:
+					for i := 0; i < numToAppend; i++ {
+						handle := resultTask.handles[resultTask.cursor+i]
+						if !handle.IsInt() {
+							return errors.New("index-only index merge only supports int handle output")
+						}
+						req.AppendInt64(0, handle.IntValue())
+					}
+				default:
+					return errors.New("unexpected schema for index-only index merge")
+				}
 			} else {
 				req.AppendRows(resultTask.rows[resultTask.cursor : resultTask.cursor+numToAppend])
 			}
@@ -1302,7 +1315,6 @@ func (w *indexMergeProcessWorker) fetchLoopUnion(ctx context.Context, fetchCh <-
 				IndexMergeCancelFuncForTest()
 			})
 			if w.indexMerge.indexOnly {
-				task.virtualRows = len(task.handles)
 				task.doneCh <- nil
 				continue
 			}

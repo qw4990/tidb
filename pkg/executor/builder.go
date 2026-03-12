@@ -4767,6 +4767,16 @@ func buildNoRangeIndexMergeReader(b *executorBuilder, v *physicalop.PhysicalInde
 	}
 
 	b.ctx.GetSessionVars().StmtCtx.IsTiKV.Store(true)
+	indexOnly := v.IndexMergeIndexOnly
+	if indexOnly {
+		switch v.Schema().Len() {
+		case 0:
+		case 1:
+			indexOnly = v.Schema().Columns[0].ID == model.ExtraHandleID
+		default:
+			indexOnly = false
+		}
+	}
 
 	e := &IndexMergeReaderExecutor{
 		BaseExecutor:             exec.NewBaseExecutor(b.ctx, v.Schema(), v.ID()),
@@ -4788,7 +4798,7 @@ func buildNoRangeIndexMergeReader(b *executorBuilder, v *physicalop.PhysicalInde
 		isCorColInTableFilter:    isCorColInTableFilter,
 		isCorColInPartialAccess:  isCorColInPartialAccess,
 		isIntersection:           v.IsIntersectionType,
-		indexOnly:                v.IndexMergeIndexOnly,
+		indexOnly:                indexOnly,
 		byItems:                  v.ByItems,
 		pushedLimit:              v.PushedLimit,
 		keepOrder:                v.KeepOrder,

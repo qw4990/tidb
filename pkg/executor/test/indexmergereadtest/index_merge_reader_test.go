@@ -164,6 +164,30 @@ func TestIndexMergeWithPreparedStmt(t *testing.T) {
 	require.True(t, re.MatchString(indexMergeLine))
 }
 
+func TestMVIndexMergeIndexOnlyMVP(t *testing.T) {
+	store := testkit.CreateMockStore(t)
+	tk := testkit.NewTestKit(t, store)
+	tk.MustExec("use test")
+	tk.MustExec("set @@tidb_enable_index_merge=1")
+	tk.MustExec("drop table if exists t")
+	tk.MustExec("create table t (a int, j json, index idx((cast(j as signed array)), a))")
+	tk.MustExec(`insert into t values
+		(1, '[1,2]'),
+		(2, '[2,3]'),
+		(3, '[3,4]'),
+		(4, '[4,5]')`)
+
+	require.NoError(t, failpoint.Enable("github.com/pingcap/tidb/pkg/executor/testIndexMergePanicTableScanWorker", `panic("testIndexMergePanicTableScanWorker")`))
+	defer func() {
+		require.NoError(t, failpoint.Disable("github.com/pingcap/tidb/pkg/executor/testIndexMergePanicTableScanWorker"))
+	}()
+
+	indexOnlySQL := "select /*+ use_index_merge(t, idx) */ 1 from t where (2 member of (j))"
+	tk.MustHavePlan(indexOnlySQL, "IndexMerge")
+	// Index-only path should bypass table scan worker, so this query should still succeed.
+	tk.MustQuery(indexOnlySQL).Check(testkit.Rows("1", "1"))
+}
+
 func TestIndexMergeReaderMemTracker(t *testing.T) {
 	store := testkit.CreateMockStore(t)
 	tk := testkit.NewTestKit(t, store)

@@ -2245,7 +2245,6 @@ func convertToIndexMergeScan(ds *logicalop.DataSource, prop *property.PhysicalPr
 		path.IndexMergeAccessMVIndex &&
 		!path.IndexMergeIsIntersection &&
 		prop.IsSortItemEmpty() &&
-		len(ds.Schema().Columns) == 0 &&
 		len(path.TableFilters) == 0 &&
 		len(globalRemainingFilters) == 0
 	if moreColumn {
