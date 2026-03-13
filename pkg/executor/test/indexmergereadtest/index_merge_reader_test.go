@@ -164,6 +164,19 @@ func TestIndexMergeWithPreparedStmt(t *testing.T) {
 	require.True(t, re.MatchString(indexMergeLine))
 }
 
+func TestMVIndexMergeIndexOnlyPlannerAndExecutorGuard(t *testing.T) {
+	store := testkit.CreateMockStore(t)
+	tk := testkit.NewTestKit(t, store)
+	tk.MustExec("use test")
+	tk.MustExec("set @@tidb_enable_index_merge=1")
+	tk.MustExec("drop table if exists t_mv_idx_only")
+	tk.MustExec("create table t_mv_idx_only (a int, j json, index idx((cast(j as signed array)), a))")
+	tk.MustExec("insert into t_mv_idx_only values (1, '[1, 1, 1]'), (2, '[1, 2, 3]'), (3, '[2, 3, 4]')")
+
+	err := tk.ExecToErr("select /*+ use_index_merge(t_mv_idx_only, idx) */ a from t_mv_idx_only where 1 member of (j)")
+	require.ErrorContains(t, err, "IndexMerge executor requires a table scan under IndexMerge")
+}
+
 func TestIndexMergeReaderMemTracker(t *testing.T) {
 	store := testkit.CreateMockStore(t)
 	tk := testkit.NewTestKit(t, store)

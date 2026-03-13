@@ -4830,6 +4830,10 @@ func (b *executorBuilder) buildIndexMergeReader(v *physicalop.PhysicalIndexMerge
 		b.Ti.UseIndexMerge = true
 		b.Ti.UseTableLookUp.Store(true)
 	}
+	if len(v.TablePlans) == 0 {
+		b.err = errors.New("IndexMerge executor requires a table scan under IndexMerge")
+		return nil
+	}
 	ts := v.TablePlans[0].(*physicalop.PhysicalTableScan)
 	assertByItemsAreColumns(ts.ByItems)
 	if err := b.validCanReadTemporaryOrCacheTable(ts.Table); err != nil {

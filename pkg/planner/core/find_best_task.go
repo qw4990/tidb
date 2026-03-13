@@ -2228,23 +2228,32 @@ func convertToIndexMergeScan(ds *logicalop.DataSource, prop *property.PhysicalPr
 	if (prop.ExpectedCnt + cost.ToleranceFactor) < ds.StatsInfo().RowCount {
 		totalRowCount *= prop.ExpectedCnt / ds.StatsInfo().RowCount
 	}
-	ts, remainingFilters2, moreColumn, err := physicalop.BuildIndexMergeTableScan(ds, path.TableFilters, totalRowCount, candidate.matchPropResult == property.PropMatched)
-	if err != nil {
-		return base.InvalidTask, err
+	needTableScan := !canBuildSingleMVIndexOnlyIndexMerge(path)
+	var ts base.PhysicalPlan
+	if needTableScan {
+		var remainingFilters2 []expression.Expression
+		var moreColumn bool
+		ts, remainingFilters2, moreColumn, err = physicalop.BuildIndexMergeTableScan(ds, path.TableFilters, totalRowCount, candidate.matchPropResult == property.PropMatched)
+		if err != nil {
+			return base.InvalidTask, err
+		}
+		if prop.TaskTp != property.RootTaskType && len(remainingFilters2) > 0 {
+			return base.InvalidTask, nil
+		}
+		globalRemainingFilters = append(globalRemainingFilters, remainingFilters2...)
+		if moreColumn {
+			cop.NeedExtraProj = true
+			cop.OriginSchema = ds.Schema()
+		}
+	} else if len(path.TableFilters) > 0 {
+		// For index-only index-merge path, table filters can only be evaluated at root.
+		globalRemainingFilters = append(globalRemainingFilters, path.TableFilters...)
 	}
-	if prop.TaskTp != property.RootTaskType && len(remainingFilters2) > 0 {
-		return base.InvalidTask, nil
-	}
-	globalRemainingFilters = append(globalRemainingFilters, remainingFilters2...)
 	cop.KeepOrder = candidate.matchPropResult == property.PropMatched
 	cop.TablePlan = ts
 	cop.IdxMergePartPlans = scans
 	cop.IdxMergeIsIntersection = path.IndexMergeIsIntersection
 	cop.IdxMergeAccessMVIndex = path.IndexMergeAccessMVIndex
-	if moreColumn {
-		cop.NeedExtraProj = true
-		cop.OriginSchema = ds.Schema()
-	}
 	if len(globalRemainingFilters) != 0 {
 		cop.RootTaskConds = globalRemainingFilters
 	}
@@ -2257,13 +2266,25 @@ func convertToIndexMergeScan(ds *logicalop.DataSource, prop *property.PhysicalPr
 		cop.IndexPlanFinished = true
 		task = cop.ConvertToRootTask(ds.SCtx())
 	} else {
-		_, pureTableScan := ts.(*physicalop.PhysicalTableScan)
-		if !pureTableScan {
+		if ts == nil {
+			cop.IndexPlanFinished = true
+		} else if _, pureTableScan := ts.(*physicalop.PhysicalTableScan); !pureTableScan {
 			cop.IndexPlanFinished = true
 		}
 		task = cop
 	}
 	return task, nil
+}
+
+func canBuildSingleMVIndexOnlyIndexMerge(path *util.AccessPath) bool {
+	if path.IndexMergeIsIntersection || !path.IndexMergeAccessMVIndex || len(path.PartialIndexPaths) != 1 {
+		return false
+	}
+	partialPath := path.PartialIndexPaths[0]
+	if partialPath == nil || partialPath.IsTablePath() || partialPath.Index == nil || !partialPath.Index.MVIndex {
+		return false
+	}
+	return true
 }
 
 func checkColinSchema(cols []*expression.Column, schema *expression.Schema) bool {
