@@ -2302,3 +2302,20 @@ func TestIssue66619(t *testing.T) {
 	tk.MustQuery("select a, (select count(1) from t2 where t2.a = t1.a) from t1 order by a").
 		Check(testkit.Rows("1 1", "2 1", "3 0", "4 0"))
 }
+
+func TestOuterJoinHavingAliasWithGroupBy(t *testing.T) {
+	store := testkit.CreateMockStore(t)
+	tk := testkit.NewTestKit(t, store)
+	tk.MustExec("set tidb_enable_outer_join_reorder=0")
+	tk.MustExec("drop database if exists mpp_complex_sql1000")
+	tk.MustExec("create database mpp_complex_sql1000")
+	tk.MustExec("use mpp_complex_sql1000")
+	tk.MustExec("create table d (col_varchar_1024_not_null varchar(1024) not null, col_varchar_1024 varchar(1024) default null, col_datetime_not_null datetime not null, col_int int(11) default null, col_decimal_not_null decimal(10,0) not null, col_varchar_10 varchar(10) default null, col_datetime datetime default null, col_varchar_10_not_null varchar(10) not null, pk int(11) not null auto_increment, col_int_not_null int(11) not null, col_decimal decimal(10,0) default null, primary key (pk))")
+	tk.MustExec("create table f (col_datetime_not_null datetime not null, col_decimal decimal(10,0) default null, col_datetime datetime default null, col_varchar_10_not_null varchar(10) not null, pk int(11) not null auto_increment, col_int int(11) default null, col_varchar_1024_not_null varchar(1024) not null, col_decimal_not_null decimal(10,0) not null, col_varchar_1024 varchar(1024) default null, col_int_not_null int(11) not null, col_varchar_10 varchar(10) default null, primary key (pk))")
+	tk.MustExec("create table m (col_decimal_not_null decimal(10,0) not null, col_datetime datetime default null, col_datetime_not_null datetime not null, col_int_not_null int(11) not null, pk int(11) not null auto_increment, col_decimal decimal(10,0) default null, col_varchar_1024 varchar(1024) default null, col_varchar_10_not_null varchar(10) not null, col_int int(11) default null, col_varchar_10 varchar(10) default null, col_varchar_1024_not_null varchar(1024) not null, primary key (pk))")
+	tk.MustExec("create table n (col_varchar_1024_not_null varchar(1024) not null, col_int_not_null int(11) not null, col_varchar_1024 varchar(1024) default null, col_varchar_10_not_null varchar(10) not null, col_decimal_not_null decimal(10,0) not null, col_datetime_not_null datetime not null, col_datetime datetime default null, col_int int(11) default null, pk int(11) not null auto_increment, col_varchar_10 varchar(10) default null, col_decimal decimal(10,0) default null, primary key (pk))")
+	tk.MustExec("insert into f(col_datetime_not_null, col_datetime, col_varchar_10_not_null, col_varchar_1024_not_null, col_decimal_not_null, col_int_not_null) values ('2024-01-01 00:00:00', '2024-01-01 00:00:00', 'x', 'x', 1, 1)")
+	tk.MustExec("insert into m(col_decimal_not_null, col_datetime_not_null, col_int_not_null, col_varchar_10_not_null, col_varchar_1024_not_null) values (1, '2024-01-01 00:00:00', 1, 'x', 'x')")
+
+	tk.MustQuery("select table2.col_int_not_null as field1 from d as table1 right join m as table2 on table1.col_varchar_1024_not_null = table2.col_varchar_1024_not_null left join n as table3 on table1.col_decimal_not_null = table3.col_decimal_not_null right join f as table4 on table2.col_datetime_not_null = table4.col_datetime where table4.pk != 5 group by field1 having (((field1 <> 6 and field1 <= 8) or field1 <> 7) or field1 <= 9) order by field1").Check(testkit.Rows("1"))
+}
