@@ -379,87 +379,33 @@ func (p *PhysicalHashJoin) RightIsBuildSide() bool {
 func (p *PhysicalHashJoin) ResolveIndicesItself() (err error) {
 	lSchema := p.Children()[0].Schema()
 	rSchema := p.Children()[1].Schema()
-	mergedSchema := expression.MergeSchema(lSchema, rSchema)
 	ctx := p.SCtx()
-	p.LeftJoinKeys = p.LeftJoinKeys[:0]
-	p.RightJoinKeys = p.RightJoinKeys[:0]
-	resolvedEqConds := make([]*expression.ScalarFunction, 0, len(p.EqualConditions))
-	for _, fun := range p.EqualConditions {
-		lCol, rCol := expression.ExtractColumnsFromColOpCol(fun)
-		switch {
-		case lCol != nil && rCol != nil && expression.ExprFromSchema(lCol, lSchema) && expression.ExprFromSchema(rCol, rSchema):
-			lArg, err := lCol.ResolveIndices(lSchema)
-			if err != nil {
-				return err
-			}
-			rArg, err := rCol.ResolveIndices(rSchema)
-			if err != nil {
-				return err
-			}
-			p.LeftJoinKeys = append(p.LeftJoinKeys, lArg.(*expression.Column))
-			p.RightJoinKeys = append(p.RightJoinKeys, rArg.(*expression.Column))
-			resolvedEqConds = append(resolvedEqConds, expression.NewFunctionInternal(
-				ctx.GetExprCtx(), fun.FuncName.L, fun.GetStaticType(), lArg, rArg,
-			).(*expression.ScalarFunction))
-		case lCol != nil && rCol != nil && expression.ExprFromSchema(lCol, rSchema) && expression.ExprFromSchema(rCol, lSchema):
-			lArg, err := rCol.ResolveIndices(lSchema)
-			if err != nil {
-				return err
-			}
-			rArg, err := lCol.ResolveIndices(rSchema)
-			if err != nil {
-				return err
-			}
-			p.LeftJoinKeys = append(p.LeftJoinKeys, lArg.(*expression.Column))
-			p.RightJoinKeys = append(p.RightJoinKeys, rArg.(*expression.Column))
-			resolvedEqConds = append(resolvedEqConds, expression.NewFunctionInternal(
-				ctx.GetExprCtx(), fun.FuncName.L, fun.GetStaticType(), lArg, rArg,
-			).(*expression.ScalarFunction))
-		case expression.ExprFromSchema(fun, mergedSchema):
-			p.OtherConditions = append(p.OtherConditions, fun)
+	for i, fun := range p.EqualConditions {
+		lArg, err := fun.GetArgs()[0].ResolveIndices(lSchema)
+		if err != nil {
+			return err
 		}
-	}
-	p.EqualConditions = resolvedEqConds
-
-	p.LeftNAJoinKeys = p.LeftNAJoinKeys[:0]
-	p.RightNAJoinKeys = p.RightNAJoinKeys[:0]
-	resolvedNAEqConds := make([]*expression.ScalarFunction, 0, len(p.NAEqualConditions))
-	for _, fun := range p.NAEqualConditions {
-		lCol, rCol := expression.ExtractColumnsFromColOpCol(fun)
-		switch {
-		case lCol != nil && rCol != nil && expression.ExprFromSchema(lCol, lSchema) && expression.ExprFromSchema(rCol, rSchema):
-			lArg, err := lCol.ResolveIndices(lSchema)
-			if err != nil {
-				return err
-			}
-			rArg, err := rCol.ResolveIndices(rSchema)
-			if err != nil {
-				return err
-			}
-			p.LeftNAJoinKeys = append(p.LeftNAJoinKeys, lArg.(*expression.Column))
-			p.RightNAJoinKeys = append(p.RightNAJoinKeys, rArg.(*expression.Column))
-			resolvedNAEqConds = append(resolvedNAEqConds, expression.NewFunctionInternal(
-				ctx.GetExprCtx(), fun.FuncName.L, fun.GetStaticType(), lArg, rArg,
-			).(*expression.ScalarFunction))
-		case lCol != nil && rCol != nil && expression.ExprFromSchema(lCol, rSchema) && expression.ExprFromSchema(rCol, lSchema):
-			lArg, err := rCol.ResolveIndices(lSchema)
-			if err != nil {
-				return err
-			}
-			rArg, err := lCol.ResolveIndices(rSchema)
-			if err != nil {
-				return err
-			}
-			p.LeftNAJoinKeys = append(p.LeftNAJoinKeys, lArg.(*expression.Column))
-			p.RightNAJoinKeys = append(p.RightNAJoinKeys, rArg.(*expression.Column))
-			resolvedNAEqConds = append(resolvedNAEqConds, expression.NewFunctionInternal(
-				ctx.GetExprCtx(), fun.FuncName.L, fun.GetStaticType(), lArg, rArg,
-			).(*expression.ScalarFunction))
-		case expression.ExprFromSchema(fun, mergedSchema):
-			p.OtherConditions = append(p.OtherConditions, fun)
+		p.LeftJoinKeys[i] = lArg.(*expression.Column)
+		rArg, err := fun.GetArgs()[1].ResolveIndices(rSchema)
+		if err != nil {
+			return err
 		}
+		p.RightJoinKeys[i] = rArg.(*expression.Column)
+		p.EqualConditions[i] = expression.NewFunctionInternal(ctx.GetExprCtx(), fun.FuncName.L, fun.GetStaticType(), lArg, rArg).(*expression.ScalarFunction)
 	}
-	p.NAEqualConditions = resolvedNAEqConds
+	for i, fun := range p.NAEqualConditions {
+		lArg, err := fun.GetArgs()[0].ResolveIndices(lSchema)
+		if err != nil {
+			return err
+		}
+		p.LeftNAJoinKeys[i] = lArg.(*expression.Column)
+		rArg, err := fun.GetArgs()[1].ResolveIndices(rSchema)
+		if err != nil {
+			return err
+		}
+		p.RightNAJoinKeys[i] = rArg.(*expression.Column)
+		p.NAEqualConditions[i] = expression.NewFunctionInternal(ctx.GetExprCtx(), fun.FuncName.L, fun.GetStaticType(), lArg, rArg).(*expression.ScalarFunction)
+	}
 	for i, expr := range p.LeftConditions {
 		p.LeftConditions[i], err = expr.ResolveIndices(lSchema)
 		if err != nil {
@@ -472,6 +418,8 @@ func (p *PhysicalHashJoin) ResolveIndicesItself() (err error) {
 			return err
 		}
 	}
+
+	mergedSchema := expression.MergeSchema(lSchema, rSchema)
 
 	for i, expr := range p.OtherConditions {
 		p.OtherConditions[i], err = expr.ResolveIndices(mergedSchema)
