@@ -173,8 +173,16 @@ func TestMVIndexMergeIndexOnlyPlannerAndExecutorGuard(t *testing.T) {
 	tk.MustExec("create table t_mv_idx_only (a int, j json, index idx((cast(j as signed array)), a))")
 	tk.MustExec("insert into t_mv_idx_only values (1, '[1, 1, 1]'), (2, '[1, 2, 3]'), (3, '[2, 3, 4]')")
 
-	err := tk.ExecToErr("select /*+ use_index_merge(t_mv_idx_only, idx) */ a from t_mv_idx_only where 1 member of (j)")
-	require.ErrorContains(t, err, "IndexMerge executor requires a table scan under IndexMerge")
+	rows := tk.MustQuery("explain format = brief select /*+ use_index_merge(t_mv_idx_only, idx) */ a from t_mv_idx_only where 1 member of (j)").Rows()
+	hasTableRowIDScan := false
+	for _, row := range rows {
+		if strings.Contains(row[0].(string), "TableRowIDScan") {
+			hasTableRowIDScan = true
+			break
+		}
+	}
+	require.True(t, hasTableRowIDScan)
+	tk.MustQuery("select /*+ use_index_merge(t_mv_idx_only, idx) */ a from t_mv_idx_only where 1 member of (j) order by a").Check(testkit.Rows("1", "2"))
 }
 
 func TestIndexMergeReaderMemTracker(t *testing.T) {

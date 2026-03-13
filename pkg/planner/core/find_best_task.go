@@ -2228,7 +2228,7 @@ func convertToIndexMergeScan(ds *logicalop.DataSource, prop *property.PhysicalPr
 	if (prop.ExpectedCnt + cost.ToleranceFactor) < ds.StatsInfo().RowCount {
 		totalRowCount *= prop.ExpectedCnt / ds.StatsInfo().RowCount
 	}
-	needTableScan := !canBuildSingleMVIndexOnlyIndexMerge(path)
+	needTableScan := !canBuildSingleMVIndexOnlyIndexMerge(ds, path)
 	var ts base.PhysicalPlan
 	if needTableScan {
 		var remainingFilters2 []expression.Expression
@@ -2276,7 +2276,7 @@ func convertToIndexMergeScan(ds *logicalop.DataSource, prop *property.PhysicalPr
 	return task, nil
 }
 
-func canBuildSingleMVIndexOnlyIndexMerge(path *util.AccessPath) bool {
+func canBuildSingleMVIndexOnlyIndexMerge(ds *logicalop.DataSource, path *util.AccessPath) bool {
 	if path.IndexMergeIsIntersection || !path.IndexMergeAccessMVIndex || len(path.PartialIndexPaths) != 1 {
 		return false
 	}
@@ -2284,7 +2284,13 @@ func canBuildSingleMVIndexOnlyIndexMerge(path *util.AccessPath) bool {
 	if partialPath == nil || partialPath.IsTablePath() || partialPath.Index == nil || !partialPath.Index.MVIndex {
 		return false
 	}
-	return true
+	// Requirement 1: all predicates are covered by the partial index path.
+	// Non-empty TableFilters means there are predicates left after partial paths.
+	if len(path.TableFilters) > 0 {
+		return false
+	}
+	// Requirement 2: selected columns are covered by this partial index path.
+	return ds.IsIndexCoveringColumns(ds.Schema().Columns, partialPath.FullIdxCols, partialPath.FullIdxColLens)
 }
 
 func checkColinSchema(cols []*expression.Column, schema *expression.Schema) bool {
