@@ -21,6 +21,7 @@ import (
 	"math"
 	"math/bits"
 	"slices"
+	"strings"
 
 	"github.com/pingcap/tidb/pkg/expression"
 	"github.com/pingcap/tidb/pkg/expression/aggregation"
@@ -146,6 +147,7 @@ func (p *LogicalJoin) ReplaceExprColumns(replace map[string]*expression.Column) 
 	for i, otherExpr := range p.OtherConditions {
 		p.OtherConditions[i] = ruleutil.ResolveExprAndReplace(otherExpr, replace)
 	}
+	p.normalizeEqualConditionsByChildren()
 }
 
 // *************************** end implementation of Plan interface ***************************
@@ -156,6 +158,9 @@ func (p *LogicalJoin) ReplaceExprColumns(replace map[string]*expression.Column) 
 
 // PredicatePushDown implements the base.LogicalPlan.<1st> interface.
 func (p *LogicalJoin) PredicatePushDown(predicates []expression.Expression) (ret []expression.Expression, retPlan base.LogicalPlan, err error) {
+	for i, pred := range predicates {
+		predicates[i] = p.normalizeExprColumnsByChildren(pred)
+	}
 	switch p.JoinType {
 	case base.AntiLeftOuterSemiJoin, base.LeftOuterSemiJoin, base.AntiSemiJoin:
 		// For LeftOuterSemiJoin and AntiLeftOuterSemiJoin, we can actually generate
@@ -401,6 +406,24 @@ func specialNullRejectedCase1(ctx planctx.PlanContext, schema *expression.Schema
 func (p *LogicalJoin) PruneColumns(parentUsedCols []*expression.Column) (base.LogicalPlan, error) {
 	p.normalizeEqualConditionsByChildren()
 	leftCols, rightCols := p.ExtractUsedCols(parentUsedCols)
+	lSchema := p.Children()[0].Schema()
+	rSchema := p.Children()[1].Schema()
+	joinConds := make([]expression.Expression, 0, len(p.EqualConditions)+len(p.NAEQConditions)+len(p.LeftConditions)+len(p.RightConditions)+len(p.OtherConditions))
+	joinConds = append(joinConds, expression.ScalarFuncs2Exprs(p.EqualConditions)...)
+	joinConds = append(joinConds, expression.ScalarFuncs2Exprs(p.NAEQConditions)...)
+	joinConds = append(joinConds, p.LeftConditions...)
+	joinConds = append(joinConds, p.RightConditions...)
+	joinConds = append(joinConds, p.OtherConditions...)
+	for _, col := range expression.ExtractColumnsFromExpressions(joinConds, nil) {
+		if lSchema.Contains(col) || rSchema.Contains(col) {
+			continue
+		}
+		// If condition columns can't be matched to either child schema at this point,
+		// pruning can drop still-referenced columns and break ResolveIndices later.
+		leftCols = append(leftCols, lSchema.Columns...)
+		rightCols = append(rightCols, rSchema.Columns...)
+		break
+	}
 
 	var err error
 	p.Children()[0], err = p.Children()[0].PruneColumns(leftCols)
@@ -1215,6 +1238,70 @@ func (p *LogicalJoin) AppendJoinConds(eq []*expression.ScalarFunction, left, rig
 	p.normalizeEqualConditionsByChildren()
 }
 
+func columnNameFromOrigName(origName string) string {
+	if idx := strings.LastIndex(origName, "."); idx >= 0 && idx+1 < len(origName) {
+		return origName[idx+1:]
+	}
+	return origName
+}
+
+func findEquivalentColInSchema(schema *expression.Schema, col *expression.Column) *expression.Column {
+	if schema == nil || col == nil {
+		return nil
+	}
+	if matched := schema.RetrieveColumn(col); matched != nil {
+		return matched
+	}
+	for _, c := range schema.Columns {
+		if c.ID == col.ID && c.OrigName == col.OrigName {
+			return c
+		}
+	}
+	colName := columnNameFromOrigName(col.OrigName)
+	if colName == "" {
+		return nil
+	}
+	var candidate *expression.Column
+	for _, c := range schema.Columns {
+		if c.ID == col.ID && columnNameFromOrigName(c.OrigName) == colName {
+			if candidate != nil {
+				return nil
+			}
+			candidate = c
+		}
+	}
+	return candidate
+}
+
+func (p *LogicalJoin) normalizeExprColumnsByChildren(expr expression.Expression) expression.Expression {
+	if len(p.Children()) < 2 {
+		return expr
+	}
+	leftSchema := p.Children()[0].Schema()
+	rightSchema := p.Children()[1].Schema()
+	if leftSchema == nil || rightSchema == nil {
+		return expr
+	}
+	cols := expression.ExtractColumns(expr)
+	if len(cols) == 0 {
+		return expr
+	}
+	replace := make(map[string]*expression.Column, len(cols))
+	for _, col := range cols {
+		matched := findEquivalentColInSchema(leftSchema, col)
+		if matched == nil {
+			matched = findEquivalentColInSchema(rightSchema, col)
+		}
+		if matched != nil && matched.UniqueID != col.UniqueID {
+			replace[string(col.HashCode())] = matched
+		}
+	}
+	if len(replace) == 0 {
+		return expr
+	}
+	return ruleutil.ResolveExprAndReplace(expr, replace)
+}
+
 // normalizeEqualConditionsByChildren ensures equal-join conditions are aligned with
 // the current children order: arg0 from left child and arg1 from right child.
 // Conditions that cannot be mapped to both children are downgraded to other conditions.
@@ -1231,34 +1318,21 @@ func (p *LogicalJoin) normalizeEqualConditionsByChildren() {
 		return
 	}
 
-	resolveColFromSchema := func(col *expression.Column, schema *expression.Schema) *expression.Column {
-		if matched := schema.RetrieveColumn(col); matched != nil {
-			return matched
-		}
-		for _, c := range schema.Columns {
-			// Fallback for stale/cloned columns that represent the same base column
-			// but have a different UniqueID before full column substitution.
-			if c.ID == col.ID && c.OrigName == col.OrigName {
-				return c
-			}
-		}
-		return nil
-	}
-
 	normalize := func(conds []*expression.ScalarFunction) ([]*expression.ScalarFunction, []expression.Expression) {
 		newConds := make([]*expression.ScalarFunction, 0, len(conds))
 		movedToOther := make([]expression.Expression, 0)
 		for _, cond := range conds {
+			cond = p.normalizeExprColumnsByChildren(cond).(*expression.ScalarFunction)
 			arg0, arg1, ok := expression.IsColOpCol(cond)
 			if !ok {
 				movedToOther = append(movedToOther, cond)
 				continue
 			}
 
-			arg0InLeft := resolveColFromSchema(arg0, leftSchema)
-			arg0InRight := resolveColFromSchema(arg0, rightSchema)
-			arg1InLeft := resolveColFromSchema(arg1, leftSchema)
-			arg1InRight := resolveColFromSchema(arg1, rightSchema)
+			arg0InLeft := findEquivalentColInSchema(leftSchema, arg0)
+			arg0InRight := findEquivalentColInSchema(rightSchema, arg0)
+			arg1InLeft := findEquivalentColInSchema(leftSchema, arg1)
+			arg1InRight := findEquivalentColInSchema(rightSchema, arg1)
 
 			switch {
 			case arg0InLeft != nil && arg1InRight != nil:
@@ -1290,8 +1364,21 @@ func (p *LogicalJoin) normalizeEqualConditionsByChildren() {
 	newNAEqConds, movedNAEq := normalize(p.NAEQConditions)
 	p.EqualConditions = newEqConds
 	p.NAEQConditions = newNAEqConds
-	p.OtherConditions = append(p.OtherConditions, movedEq...)
-	p.OtherConditions = append(p.OtherConditions, movedNAEq...)
+	for i, cond := range p.LeftConditions {
+		p.LeftConditions[i] = p.normalizeExprColumnsByChildren(cond)
+	}
+	for i, cond := range p.RightConditions {
+		p.RightConditions[i] = p.normalizeExprColumnsByChildren(cond)
+	}
+	for i, cond := range p.OtherConditions {
+		p.OtherConditions[i] = p.normalizeExprColumnsByChildren(cond)
+	}
+	for _, cond := range movedEq {
+		p.OtherConditions = append(p.OtherConditions, p.normalizeExprColumnsByChildren(cond))
+	}
+	for _, cond := range movedNAEq {
+		p.OtherConditions = append(p.OtherConditions, p.normalizeExprColumnsByChildren(cond))
+	}
 }
 
 func (p *LogicalJoin) isAllUniqueIDInTheSameLeaf(cond expression.Expression) bool {
@@ -1382,12 +1469,14 @@ func (p *LogicalJoin) ExtractUsedCols(parentUsedCols []*expression.Column) (left
 		rFullSchema = join.FullSchema
 	}
 	for _, col := range parentUsedCols {
-		if (lSchema != nil && lSchema.Contains(col)) ||
-			(lFullSchema != nil && lFullSchema.Contains(col)) {
-			leftCols = append(leftCols, col)
-		} else if (rSchema != nil && rSchema.Contains(col)) ||
-			(rFullSchema != nil && rFullSchema.Contains(col)) {
-			rightCols = append(rightCols, col)
+		if matched := findEquivalentColInSchema(lSchema, col); matched != nil {
+			leftCols = append(leftCols, matched)
+		} else if matched := findEquivalentColInSchema(lFullSchema, col); matched != nil {
+			leftCols = append(leftCols, matched)
+		} else if matched := findEquivalentColInSchema(rSchema, col); matched != nil {
+			rightCols = append(rightCols, matched)
+		} else if matched := findEquivalentColInSchema(rFullSchema, col); matched != nil {
+			rightCols = append(rightCols, matched)
 		}
 	}
 	return leftCols, rightCols
