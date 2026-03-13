@@ -399,6 +399,7 @@ func specialNullRejectedCase1(ctx planctx.PlanContext, schema *expression.Schema
 
 // PruneColumns implements the base.LogicalPlan.<2nd> interface.
 func (p *LogicalJoin) PruneColumns(parentUsedCols []*expression.Column) (base.LogicalPlan, error) {
+	p.normalizeEqualConditionsByChildren()
 	leftCols, rightCols := p.ExtractUsedCols(parentUsedCols)
 
 	var err error
@@ -413,6 +414,7 @@ func (p *LogicalJoin) PruneColumns(parentUsedCols []*expression.Column) (base.Lo
 	}
 
 	p.MergeSchema()
+	p.normalizeEqualConditionsByChildren()
 	if p.JoinType == base.LeftOuterSemiJoin || p.JoinType == base.AntiLeftOuterSemiJoin {
 		joinCol := p.Schema().Columns[len(p.Schema().Columns)-1]
 		parentUsedCols = append(parentUsedCols, joinCol)
@@ -825,6 +827,7 @@ func (p *LogicalJoin) ConvertOuterToInnerJoin(predicates []expression.Expression
 		p.SetChild(0, innerTable)
 		p.SetChild(1, outerTable)
 	}
+	p.normalizeEqualConditionsByChildren()
 
 	return p
 }
@@ -1192,6 +1195,7 @@ func (p *LogicalJoin) ColumnSubstituteAll(schema *expression.Schema, exprs []exp
 
 		p.EqualConditions[i] = newCond
 	}
+	p.normalizeEqualConditionsByChildren()
 	return false
 }
 
@@ -1208,6 +1212,86 @@ func (p *LogicalJoin) AppendJoinConds(eq []*expression.ScalarFunction, left, rig
 	p.LeftConditions = append(left, p.LeftConditions...)
 	p.RightConditions = append(right, p.RightConditions...)
 	p.OtherConditions = append(other, p.OtherConditions...)
+	p.normalizeEqualConditionsByChildren()
+}
+
+// normalizeEqualConditionsByChildren ensures equal-join conditions are aligned with
+// the current children order: arg0 from left child and arg1 from right child.
+// Conditions that cannot be mapped to both children are downgraded to other conditions.
+func (p *LogicalJoin) normalizeEqualConditionsByChildren() {
+	if len(p.EqualConditions) == 0 && len(p.NAEQConditions) == 0 {
+		return
+	}
+	if len(p.Children()) < 2 {
+		return
+	}
+	leftSchema := p.Children()[0].Schema()
+	rightSchema := p.Children()[1].Schema()
+	if leftSchema == nil || rightSchema == nil {
+		return
+	}
+
+	resolveColFromSchema := func(col *expression.Column, schema *expression.Schema) *expression.Column {
+		if matched := schema.RetrieveColumn(col); matched != nil {
+			return matched
+		}
+		for _, c := range schema.Columns {
+			// Fallback for stale/cloned columns that represent the same base column
+			// but have a different UniqueID before full column substitution.
+			if c.ID == col.ID && c.OrigName == col.OrigName {
+				return c
+			}
+		}
+		return nil
+	}
+
+	normalize := func(conds []*expression.ScalarFunction) ([]*expression.ScalarFunction, []expression.Expression) {
+		newConds := make([]*expression.ScalarFunction, 0, len(conds))
+		movedToOther := make([]expression.Expression, 0)
+		for _, cond := range conds {
+			arg0, arg1, ok := expression.IsColOpCol(cond)
+			if !ok {
+				movedToOther = append(movedToOther, cond)
+				continue
+			}
+
+			arg0InLeft := resolveColFromSchema(arg0, leftSchema)
+			arg0InRight := resolveColFromSchema(arg0, rightSchema)
+			arg1InLeft := resolveColFromSchema(arg1, leftSchema)
+			arg1InRight := resolveColFromSchema(arg1, rightSchema)
+
+			switch {
+			case arg0InLeft != nil && arg1InRight != nil:
+				normalized := expression.NewFunctionInternal(
+					p.SCtx().GetExprCtx(),
+					cond.FuncName.L,
+					cond.GetStaticType(),
+					arg0InLeft,
+					arg1InRight,
+				).(*expression.ScalarFunction)
+				newConds = append(newConds, normalized)
+			case arg0InRight != nil && arg1InLeft != nil:
+				normalized := expression.NewFunctionInternal(
+					p.SCtx().GetExprCtx(),
+					cond.FuncName.L,
+					cond.GetStaticType(),
+					arg1InLeft,
+					arg0InRight,
+				).(*expression.ScalarFunction)
+				newConds = append(newConds, normalized)
+			default:
+				movedToOther = append(movedToOther, cond)
+			}
+		}
+		return newConds, movedToOther
+	}
+
+	newEqConds, movedEq := normalize(p.EqualConditions)
+	newNAEqConds, movedNAEq := normalize(p.NAEQConditions)
+	p.EqualConditions = newEqConds
+	p.NAEQConditions = newNAEqConds
+	p.OtherConditions = append(p.OtherConditions, movedEq...)
+	p.OtherConditions = append(p.OtherConditions, movedNAEq...)
 }
 
 func (p *LogicalJoin) isAllUniqueIDInTheSameLeaf(cond expression.Expression) bool {

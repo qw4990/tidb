@@ -2279,6 +2279,51 @@ WHERE t1.id IN (SELECT MIN(id) FROM t1)`
 	require.NoError(t, err)
 }
 
+func TestIssueCase6OuterJoinConditionColumnPrune(t *testing.T) {
+	store := testkit.CreateMockStore(t)
+	tk := testkit.NewTestKit(t, store)
+	tk.MustExec("use test")
+	tk.MustExec("set tidb_enable_outer_join_reorder=0")
+
+	tk.MustExec("drop table if exists d_case6, f_case6, m_case6, n_case6")
+	tk.MustExec("create table d_case6(" +
+		"col_varchar_1024_not_null varchar(1024) not null," +
+		"col_decimal_not_null decimal(10,0) not null," +
+		"pk int not null auto_increment," +
+		"primary key (pk))")
+	tk.MustExec("create table m_case6(" +
+		"col_varchar_1024_not_null varchar(1024) not null," +
+		"col_datetime_not_null datetime not null," +
+		"col_int_not_null int not null," +
+		"pk int not null auto_increment," +
+		"primary key (pk))")
+	tk.MustExec("create table n_case6(" +
+		"col_decimal_not_null decimal(10,0) not null," +
+		"pk int not null auto_increment," +
+		"primary key (pk))")
+	tk.MustExec("create table f_case6(" +
+		"col_datetime datetime default null," +
+		"pk int not null auto_increment," +
+		"primary key (pk))")
+
+	sql := `select
+    table2.col_int_not_null as field1
+from d_case6 as table1
+right join m_case6 as table2
+    on table1.col_varchar_1024_not_null = table2.col_varchar_1024_not_null
+left join n_case6 as table3
+    on table1.col_decimal_not_null = table3.col_decimal_not_null
+right join f_case6 as table4
+    on table2.col_datetime_not_null = table4.col_datetime
+where table4.pk != 5
+group by field1
+having (((field1 <> 6 and field1 <= 8) or field1 <> 7) or field1 <= 9)
+order by field1`
+
+	err := tk.QueryToErr(sql)
+	require.NoError(t, err)
+}
+
 func TestIssue66619(t *testing.T) {
 	store := testkit.CreateMockStore(t)
 	tk := testkit.NewTestKit(t, store)
