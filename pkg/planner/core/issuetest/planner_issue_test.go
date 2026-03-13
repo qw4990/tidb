@@ -443,6 +443,26 @@ HAVING EXISTS (SELECT 1 FROM t_panic WHERE x IS NULL);`).Check(testkit.Rows("<ni
 		tk.MustQuery("select @@last_plan_from_cache;").Check(testkit.Rows("0"))
 		tk.MustQuery(fmt.Sprintf("explain for connection %d", tkProcess.ID)).MultiCheckContain([]string{"IndexRangeScan"})
 	}
+
+	// issue-66399-outer-join-eliminate-must-keep-parent-join-condition-columns
+	{
+		tk := prepareSharedTestKit(t)
+		tk.MustExec("set tidb_enable_outer_join_reorder=0")
+		tk.MustExec("create table d(col_varchar_1024_not_null varchar(1024) not null, col_decimal_not_null decimal(10,0) not null, col_datetime_not_null datetime not null, col_int_not_null int not null)")
+		tk.MustExec("create table f(col_datetime datetime default null, pk int not null)")
+		tk.MustExec("create table m(col_varchar_1024_not_null varchar(1024) not null, col_decimal_not_null decimal(10,0) not null, col_datetime_not_null datetime not null, col_int_not_null int not null)")
+		tk.MustExec("create table n(col_decimal_not_null decimal(10,0) not null)")
+
+		tk.MustQuery(`SELECT table2.col_int_not_null AS field1
+FROM d AS table1
+RIGHT JOIN m AS table2 ON table1.col_varchar_1024_not_null = table2.col_varchar_1024_not_null
+LEFT JOIN n AS table3 ON table1.col_decimal_not_null = table3.col_decimal_not_null
+RIGHT JOIN f AS table4 ON table2.col_datetime_not_null = table4.col_datetime
+WHERE table4.pk != 5
+GROUP BY field1
+HAVING (((field1 <> 6 AND field1 <= 8) OR field1 <> 7) OR field1 <= 9)
+ORDER BY field1`).Check(testkit.Rows())
+	}
 }
 
 func TestOnlyFullGroupCantFeelUnaryConstant(t *testing.T) {
