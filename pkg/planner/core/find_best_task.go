@@ -2290,7 +2290,11 @@ func canBuildSingleMVIndexOnlyIndexMerge(ds *logicalop.DataSource, path *util.Ac
 		return false
 	}
 	// Requirement 2: selected columns are covered by this partial index path.
-	return ds.IsIndexCoveringColumns(ds.Schema().Columns, partialPath.FullIdxCols, partialPath.FullIdxColLens)
+	selectedCols := ds.ColsRequiringFullLen
+	if selectedCols == nil {
+		selectedCols = ds.Schema().Columns
+	}
+	return ds.IsIndexCoveringColumns(selectedCols, partialPath.FullIdxCols, partialPath.FullIdxColLens)
 }
 
 func checkColinSchema(cols []*expression.Column, schema *expression.Schema) bool {

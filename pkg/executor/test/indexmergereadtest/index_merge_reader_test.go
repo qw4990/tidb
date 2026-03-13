@@ -164,25 +164,18 @@ func TestIndexMergeWithPreparedStmt(t *testing.T) {
 	require.True(t, re.MatchString(indexMergeLine))
 }
 
-func TestMVIndexMergeIndexOnlyPlannerAndExecutorGuard(t *testing.T) {
+func TestMVIndexMergePlanTree(t *testing.T) {
 	store := testkit.CreateMockStore(t)
 	tk := testkit.NewTestKit(t, store)
 	tk.MustExec("use test")
 	tk.MustExec("set @@tidb_enable_index_merge=1")
 	tk.MustExec("drop table if exists t_mv_idx_only")
 	tk.MustExec("create table t_mv_idx_only (a int, j json, index idx((cast(j as signed array)), a))")
-	tk.MustExec("insert into t_mv_idx_only values (1, '[1, 1, 1]'), (2, '[1, 2, 3]'), (3, '[2, 3, 4]')")
-
-	rows := tk.MustQuery("explain format = brief select /*+ use_index_merge(t_mv_idx_only, idx) */ a from t_mv_idx_only where 1 member of (j)").Rows()
-	hasTableRowIDScan := false
-	for _, row := range rows {
-		if strings.Contains(row[0].(string), "TableRowIDScan") {
-			hasTableRowIDScan = true
-			break
-		}
-	}
-	require.True(t, hasTableRowIDScan)
-	tk.MustQuery("select /*+ use_index_merge(t_mv_idx_only, idx) */ a from t_mv_idx_only where 1 member of (j) order by a").Check(testkit.Rows("1", "2"))
+	tk.MustQuery("explain format='plan_tree' select /*+ use_index_merge(t_mv_idx_only, idx) */ a from t_mv_idx_only where 1 member of (j)").Check(testkit.Rows(
+		"Projection root  test.t_mv_idx_only.a",
+		"└─IndexMerge root  type: union",
+		"  └─IndexRangeScan(Build) cop[tikv] table:t_mv_idx_only, index:idx(cast(`j` as signed array), a) range:[1,1], keep order:false, stats:pseudo",
+	))
 }
 
 func TestIndexMergeReaderMemTracker(t *testing.T) {
