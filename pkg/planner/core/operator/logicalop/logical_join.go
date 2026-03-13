@@ -1116,6 +1116,50 @@ func (p *LogicalJoin) Decorrelate(schema *expression.Schema) {
 	}
 }
 
+// normalizeEqualConditionsByChildren keeps only cross-child col-op-col predicates in EqualConditions.
+// Predicates that become single-side filters or non-col-op-col conditions are moved accordingly.
+func (p *LogicalJoin) normalizeEqualConditionsByChildren() {
+	lSchema := p.Children()[0].Schema()
+	rSchema := p.Children()[1].Schema()
+	eqConds := make([]*expression.ScalarFunction, 0, len(p.EqualConditions))
+	for _, eqCond := range p.EqualConditions {
+		// If all columns come from one side, turn it into side filter.
+		if expression.ExprFromSchema(eqCond, lSchema) {
+			p.LeftConditions = append(p.LeftConditions, eqCond)
+			continue
+		}
+		if expression.ExprFromSchema(eqCond, rSchema) {
+			p.RightConditions = append(p.RightConditions, eqCond)
+			continue
+		}
+
+		lExpr, rExpr, ok := expression.IsColOpCol(eqCond)
+		// EqualConditions must stay as strict col-op-col only.
+		if !ok {
+			p.OtherConditions = append(p.OtherConditions, eqCond)
+			continue
+		}
+
+		lOnLeft := expression.ExprFromSchema(lExpr, lSchema)
+		rOnRight := expression.ExprFromSchema(rExpr, rSchema)
+		if lOnLeft && rOnRight {
+			eqConds = append(eqConds, eqCond)
+			continue
+		}
+		lOnRight := expression.ExprFromSchema(lExpr, rSchema)
+		rOnLeft := expression.ExprFromSchema(rExpr, lSchema)
+		if lOnRight && rOnLeft {
+			eqConds = append(eqConds, expression.NewFunctionInternal(
+				p.SCtx().GetExprCtx(), eqCond.FuncName.L, eqCond.GetStaticType(), rExpr, lExpr,
+			).(*expression.ScalarFunction))
+			continue
+		}
+		// If the predicate cannot be mapped to this join's two child schemas, keep it as other-condition.
+		p.OtherConditions = append(p.OtherConditions, eqCond)
+	}
+	p.EqualConditions = eqConds
+}
+
 // ColumnSubstituteAll is used in projection elimination in apply de-correlation.
 // Substitutions for all conditions should be successful, otherwise, we should keep all conditions unchanged.
 func (p *LogicalJoin) ColumnSubstituteAll(schema *expression.Schema, exprs []expression.Expression) (hasFail bool) {
@@ -1163,35 +1207,7 @@ func (p *LogicalJoin) ColumnSubstituteAll(schema *expression.Schema, exprs []exp
 	p.OtherConditions = cpOtherConditions
 	p.EqualConditions = cpEqualConditions
 
-	for i := len(p.EqualConditions) - 1; i >= 0; i-- {
-		newCond := p.EqualConditions[i]
-
-		// If the columns used in the new filter all come from the left child,
-		// we can push this filter to it.
-		if expression.ExprFromSchema(newCond, p.Children()[0].Schema()) {
-			p.LeftConditions = append(p.LeftConditions, newCond)
-			p.EqualConditions = slices.Delete(p.EqualConditions, i, i+1)
-			continue
-		}
-
-		// If the columns used in the new filter all come from the right
-		// child, we can push this filter to it.
-		if expression.ExprFromSchema(newCond, p.Children()[1].Schema()) {
-			p.RightConditions = append(p.RightConditions, newCond)
-			p.EqualConditions = slices.Delete(p.EqualConditions, i, i+1)
-			continue
-		}
-		_, _, ok := expression.IsColOpCol(newCond)
-		// If the columns used in the new filter are not all expression.Column,
-		// we can not use it as join's equal condition.
-		if !ok {
-			p.OtherConditions = append(p.OtherConditions, newCond)
-			p.EqualConditions = slices.Delete(p.EqualConditions, i, i+1)
-			continue
-		}
-
-		p.EqualConditions[i] = newCond
-	}
+	p.normalizeEqualConditionsByChildren()
 	return false
 }
 
@@ -1208,6 +1224,7 @@ func (p *LogicalJoin) AppendJoinConds(eq []*expression.ScalarFunction, left, rig
 	p.LeftConditions = append(left, p.LeftConditions...)
 	p.RightConditions = append(right, p.RightConditions...)
 	p.OtherConditions = append(other, p.OtherConditions...)
+	p.normalizeEqualConditionsByChildren()
 }
 
 func (p *LogicalJoin) isAllUniqueIDInTheSameLeaf(cond expression.Expression) bool {
