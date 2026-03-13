@@ -147,7 +147,6 @@ func (p *LogicalJoin) ReplaceExprColumns(replace map[string]*expression.Column) 
 	for i, otherExpr := range p.OtherConditions {
 		p.OtherConditions[i] = ruleutil.ResolveExprAndReplace(otherExpr, replace)
 	}
-	p.normalizeEqualConditionsByChildren()
 }
 
 // *************************** end implementation of Plan interface ***************************
@@ -418,8 +417,6 @@ func (p *LogicalJoin) PruneColumns(parentUsedCols []*expression.Column) (base.Lo
 		if lSchema.Contains(col) || rSchema.Contains(col) {
 			continue
 		}
-		// If condition columns can't be matched to either child schema at this point,
-		// pruning can drop still-referenced columns and break ResolveIndices later.
 		leftCols = append(leftCols, lSchema.Columns...)
 		rightCols = append(rightCols, rSchema.Columns...)
 		break
@@ -850,7 +847,6 @@ func (p *LogicalJoin) ConvertOuterToInnerJoin(predicates []expression.Expression
 		p.SetChild(0, innerTable)
 		p.SetChild(1, outerTable)
 	}
-	p.normalizeEqualConditionsByChildren()
 
 	return p
 }
@@ -1218,7 +1214,6 @@ func (p *LogicalJoin) ColumnSubstituteAll(schema *expression.Schema, exprs []exp
 
 		p.EqualConditions[i] = newCond
 	}
-	p.normalizeEqualConditionsByChildren()
 	return false
 }
 
@@ -1302,9 +1297,6 @@ func (p *LogicalJoin) normalizeExprColumnsByChildren(expr expression.Expression)
 	return ruleutil.ResolveExprAndReplace(expr, replace)
 }
 
-// normalizeEqualConditionsByChildren ensures equal-join conditions are aligned with
-// the current children order: arg0 from left child and arg1 from right child.
-// Conditions that cannot be mapped to both children are downgraded to other conditions.
 func (p *LogicalJoin) normalizeEqualConditionsByChildren() {
 	if len(p.EqualConditions) == 0 && len(p.NAEQConditions) == 0 {
 		return
@@ -1328,31 +1320,19 @@ func (p *LogicalJoin) normalizeEqualConditionsByChildren() {
 				movedToOther = append(movedToOther, cond)
 				continue
 			}
-
 			arg0InLeft := findEquivalentColInSchema(leftSchema, arg0)
 			arg0InRight := findEquivalentColInSchema(rightSchema, arg0)
 			arg1InLeft := findEquivalentColInSchema(leftSchema, arg1)
 			arg1InRight := findEquivalentColInSchema(rightSchema, arg1)
-
 			switch {
 			case arg0InLeft != nil && arg1InRight != nil:
-				normalized := expression.NewFunctionInternal(
-					p.SCtx().GetExprCtx(),
-					cond.FuncName.L,
-					cond.GetStaticType(),
-					arg0InLeft,
-					arg1InRight,
-				).(*expression.ScalarFunction)
-				newConds = append(newConds, normalized)
+				newConds = append(newConds, expression.NewFunctionInternal(
+					p.SCtx().GetExprCtx(), cond.FuncName.L, cond.GetStaticType(), arg0InLeft, arg1InRight,
+				).(*expression.ScalarFunction))
 			case arg0InRight != nil && arg1InLeft != nil:
-				normalized := expression.NewFunctionInternal(
-					p.SCtx().GetExprCtx(),
-					cond.FuncName.L,
-					cond.GetStaticType(),
-					arg1InLeft,
-					arg0InRight,
-				).(*expression.ScalarFunction)
-				newConds = append(newConds, normalized)
+				newConds = append(newConds, expression.NewFunctionInternal(
+					p.SCtx().GetExprCtx(), cond.FuncName.L, cond.GetStaticType(), arg1InLeft, arg0InRight,
+				).(*expression.ScalarFunction))
 			default:
 				movedToOther = append(movedToOther, cond)
 			}
