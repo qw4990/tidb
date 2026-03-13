@@ -252,7 +252,7 @@ func (pn *planEncoder) encodePlan(p base.Plan, isRoot bool, store kv.StoreType, 
 		for _, p := range copPlan.PartialPlansRaw {
 			pn.encodePlan(p, false, store, depth)
 		}
-		if copPlan.TablePlan != nil {
+		if copPlan.TablePlan != nil && !canOmitIndexMergeProbeInExplain(copPlan) {
 			pn.encodePlan(copPlan.TablePlan, false, store, depth)
 		}
 	case *physicalop.PhysicalCTE:

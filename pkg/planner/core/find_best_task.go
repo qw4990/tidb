@@ -2241,6 +2241,7 @@ func convertToIndexMergeScan(ds *logicalop.DataSource, prop *property.PhysicalPr
 	cop.IdxMergePartPlans = scans
 	cop.IdxMergeIsIntersection = path.IndexMergeIsIntersection
 	cop.IdxMergeAccessMVIndex = path.IndexMergeAccessMVIndex
+	cop.IdxMergeCanSkipProbeForExplain = canSkipIndexMergeProbeForExplain(ds, path, globalRemainingFilters)
 	if moreColumn {
 		cop.NeedExtraProj = true
 		cop.OriginSchema = ds.Schema()
@@ -2264,6 +2265,25 @@ func convertToIndexMergeScan(ds *logicalop.DataSource, prop *property.PhysicalPr
 		task = cop
 	}
 	return task, nil
+}
+
+func canSkipIndexMergeProbeForExplain(ds *logicalop.DataSource, path *util.AccessPath, remainingFilters []expression.Expression) bool {
+	stmtCtx := ds.SCtx().GetSessionVars().StmtCtx
+	if !stmtCtx.InExplainStmt || stmtCtx.InExplainAnalyzeStmt {
+		return false
+	}
+	if len(path.PartialIndexPaths) != 1 || len(path.TableFilters) != 0 || len(remainingFilters) != 0 {
+		return false
+	}
+	partialPath := path.PartialIndexPaths[0]
+	if partialPath.IsTablePath() || partialPath.Index == nil || !partialPath.Index.MVIndex {
+		return false
+	}
+	colsToCover := ds.ColsRequiringFullLen
+	if colsToCover == nil {
+		colsToCover = ds.Schema().Columns
+	}
+	return ds.IsIndexCoveringColumns(colsToCover, partialPath.FullIdxCols, partialPath.FullIdxColLens)
 }
 
 func checkColinSchema(cols []*expression.Column, schema *expression.Schema) bool {

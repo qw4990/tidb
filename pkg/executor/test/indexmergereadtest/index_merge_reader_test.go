@@ -130,6 +130,74 @@ func TestPartitionTableRandomIndexMerge2(t *testing.T) {
 	}
 }
 
+func prepareMVIndexMergeTestTable(tk *testkit.TestKit) {
+	tk.MustExec("use test")
+	tk.MustExec("drop table if exists t_mv_idx_merge")
+	tk.MustExec("set @@tidb_enable_index_merge=1")
+	tk.MustExec("create table t_mv_idx_merge (a int, j json, index idx((cast(j as signed array)), a))")
+	tk.MustExec(`insert into t_mv_idx_merge values (1, '[1,1,1]'), (2, '[1,1,1]'), (3, '[1,1,1]')`)
+}
+
+func explainRowsToString(rows [][]any) string {
+	var b strings.Builder
+	for _, row := range rows {
+		for i, col := range row {
+			if i > 0 {
+				b.WriteByte('\t')
+			}
+			b.WriteString(fmt.Sprintf("%v", col))
+		}
+		b.WriteByte('\n')
+	}
+	return b.String()
+}
+
+func TestMVIndexMergeIndexOnlyMVPExplainNoTableProbe(t *testing.T) {
+	store := testkit.CreateMockStore(t)
+	tk := testkit.NewTestKit(t, store)
+	prepareMVIndexMergeTestTable(tk)
+
+	rows := tk.MustQuery("explain format = 'brief' select /*+ use_index_merge(t_mv_idx_merge, idx) */ a from t_mv_idx_merge where (1 member of (j))").Rows()
+	plan := explainRowsToString(rows)
+	require.Contains(t, plan, "IndexMerge")
+	require.Contains(t, plan, "IndexRangeScan")
+	require.NotContains(t, plan, "TableRowIDScan")
+}
+
+func TestMVIndexMergeIndexOnlyMVPExplainTreeShape(t *testing.T) {
+	store := testkit.CreateMockStore(t)
+	tk := testkit.NewTestKit(t, store)
+	prepareMVIndexMergeTestTable(tk)
+
+	rows := tk.MustQuery("explain format = 'plan_tree' select /*+ use_index_merge(t_mv_idx_merge, idx) */ a from t_mv_idx_merge where (1 member of (j))").Rows()
+	plan := explainRowsToString(rows)
+	require.Contains(t, plan, "IndexMerge")
+	require.Contains(t, plan, "IndexRangeScan")
+	require.NotContains(t, plan, "TableRowIDScan")
+}
+
+func TestMVIndexMergeSelectStarExplainHasTableProbe(t *testing.T) {
+	store := testkit.CreateMockStore(t)
+	tk := testkit.NewTestKit(t, store)
+	prepareMVIndexMergeTestTable(tk)
+
+	rows := tk.MustQuery("explain format = 'brief' select /*+ use_index_merge(t_mv_idx_merge, idx) */ * from t_mv_idx_merge where (1 member of (j))").Rows()
+	plan := explainRowsToString(rows)
+	require.Contains(t, plan, "IndexMerge")
+	require.Contains(t, plan, "TableRowIDScan")
+}
+
+func TestMVIndexMergeSelectExprExplainHasTableProbe(t *testing.T) {
+	store := testkit.CreateMockStore(t)
+	tk := testkit.NewTestKit(t, store)
+	prepareMVIndexMergeTestTable(tk)
+
+	rows := tk.MustQuery("explain format = 'brief' select /*+ use_index_merge(t_mv_idx_merge, idx) */ json_length(j) from t_mv_idx_merge where (1 member of (j))").Rows()
+	plan := explainRowsToString(rows)
+	require.Contains(t, plan, "IndexMerge")
+	require.Contains(t, plan, "TableRowIDScan")
+}
+
 func TestIndexMergeWithPreparedStmt(t *testing.T) {
 	store := testkit.CreateMockStore(t)
 	tk := testkit.NewTestKit(t, store)

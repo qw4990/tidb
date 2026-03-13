@@ -231,6 +231,9 @@ func FlattenPhysicalPlan(p base.Plan, buildSideFirst bool) *FlatPhysicalPlan {
 }
 
 func (*FlatPhysicalPlan) flattenSingle(p base.Plan, info *operatorCtx) *FlatOperator {
+	if p == nil {
+		return nil
+	}
 	// Some operators are not initialized and given an ExplainID. So their explain IDs are "_0"
 	// (when in EXPLAIN FORMAT = 'brief' it will be ""), we skip such operators.
 	// Examples: Explain, Execute
@@ -257,6 +260,9 @@ func (*FlatPhysicalPlan) flattenSingle(p base.Plan, info *operatorCtx) *FlatOper
 
 // Note that info should not be modified in this method.
 func (f *FlatPhysicalPlan) flattenRecursively(p base.Plan, info *operatorCtx, target FlatPlanTree) (res FlatPlanTree, idx int) {
+	if p == nil {
+		return target, -1
+	}
 	idx = -1
 	flat := f.flattenSingle(p, info)
 	if flat != nil {
@@ -376,18 +382,21 @@ func (f *FlatPhysicalPlan) flattenRecursively(p base.Plan, info *operatorCtx, ta
 		childCtx.isRoot = false
 		childCtx.reqType = physicalop.Cop
 		childCtx.storeType = kv.TiKV
-		for _, pchild := range plan.PartialPlansRaw {
+		hasProbeChild := plan.TablePlan != nil && !canOmitIndexMergeProbeInExplain(plan)
+		for i, pchild := range plan.PartialPlansRaw {
 			childCtx.label = BuildSide
-			childCtx.isLastChild = false
+			childCtx.isLastChild = !hasProbeChild && i == len(plan.PartialPlansRaw)-1
 			target, childIdx = f.flattenRecursively(pchild, childCtx, target)
 			childIdxs = append(childIdxs, childIdx)
 		}
-		childCtx.label = ProbeSide
-		childCtx.isLastChild = true
-		// set the index merge child signal.
-		childCtx.isINLProbeChild = true
-		target, childIdx = f.flattenRecursively(plan.TablePlan, childCtx, target)
-		childIdxs = append(childIdxs, childIdx)
+		if hasProbeChild {
+			childCtx.label = ProbeSide
+			childCtx.isLastChild = true
+			// set the index merge child signal.
+			childCtx.isINLProbeChild = true
+			target, childIdx = f.flattenRecursively(plan.TablePlan, childCtx, target)
+			childIdxs = append(childIdxs, childIdx)
+		}
 	case *physicalop.PhysicalShuffleReceiverStub:
 		childCtx.isRoot = true
 		childCtx.label = Empty
@@ -476,6 +485,21 @@ func (f *FlatPhysicalPlan) flattenRecursively(p base.Plan, info *operatorCtx, ta
 		flat.ChildrenEndIdx = len(target) - 1
 	}
 	return target, idx
+}
+
+func canOmitIndexMergeProbeInExplain(plan *physicalop.PhysicalIndexMergeReader) bool {
+	if plan == nil || !plan.CanSkipProbeForExplain {
+		return false
+	}
+	sctx := plan.SCtx()
+	if sctx == nil || sctx.GetSessionVars() == nil {
+		return false
+	}
+	stmtCtx := sctx.GetSessionVars().StmtCtx
+	if !stmtCtx.InExplainStmt || stmtCtx.InExplainAnalyzeStmt {
+		return false
+	}
+	return true
 }
 
 func (f *FlatPhysicalPlan) flattenForeignKeyChecksAndCascadesMap(childCtx *operatorCtx, target FlatPlanTree, childIdxs []int, fkChecksMap map[int64][]*physicalop.FKCheck, fkCascadesMap map[int64][]*physicalop.FKCascade) (FlatPlanTree, []int) {

@@ -41,6 +41,9 @@ type PhysicalIndexMergeReader struct {
 	IsIntersectionType bool
 	// AccessMVIndex indicates whether this IndexMergeReader access a MVIndex.
 	AccessMVIndex bool
+	// CanSkipProbeForExplain indicates probe side can be omitted in EXPLAIN output.
+	// It is planner-only metadata for staged rollout before executor support.
+	CanSkipProbeForExplain bool
 
 	// PushedLimit is used to avoid unnecessary table scan tasks of IndexMergeReader.
 	PushedLimit *PushedDownLimit
@@ -108,6 +111,14 @@ func (p PhysicalIndexMergeReader) Init(ctx base.PlanContext, offset int) *Physic
 
 // GetAvgTableRowSize return the average row size of table plan.
 func (p *PhysicalIndexMergeReader) GetAvgTableRowSize() float64 {
+	if len(p.TablePlans) == 0 {
+		if len(p.PartialPlans) == 0 || len(p.PartialPlans[0]) == 0 {
+			return 0
+		}
+		partialPlan := p.PartialPlans[0][0]
+		_, isIdxScan := partialPlan.(*PhysicalIndexScan)
+		return cardinality.GetAvgRowSize(p.SCtx(), GetTblStats(partialPlan), p.Schema().Columns, isIdxScan, false)
+	}
 	return cardinality.GetAvgRowSize(p.SCtx(), GetTblStats(p.TablePlans[len(p.TablePlans)-1]), p.Schema().Columns, false, false)
 }
 
@@ -170,13 +181,16 @@ func (p *PhysicalIndexMergeReader) MemoryUsage() (sum int64) {
 
 // LoadTableStats preloads the stats data for the physical table
 func (p *PhysicalIndexMergeReader) LoadTableStats(ctx sessionctx.Context) {
+	if len(p.TablePlans) == 0 {
+		return
+	}
 	ts := p.TablePlans[0].(*PhysicalTableScan)
 	stats.LoadTableStats(ctx, ts.Table, ts.PhysicalTableID)
 }
 
 // AccessObject implements PartitionAccesser interface.
 func (p *PhysicalIndexMergeReader) AccessObject(sctx base.PlanContext) base.AccessObject {
-	if !sctx.GetSessionVars().StmtCtx.UseDynamicPartitionPrune() {
+	if !sctx.GetSessionVars().StmtCtx.UseDynamicPartitionPrune() || len(p.TablePlans) == 0 {
 		return access.DynamicPartitionAccessObjects(nil)
 	}
 	ts := p.TablePlans[0].(*PhysicalTableScan)
@@ -211,7 +225,11 @@ func (p *PhysicalIndexMergeReader) ExplainInfo() string {
 
 // ResolveIndices implements Plan interface.
 func (p *PhysicalIndexMergeReader) ResolveIndices() (err error) {
-	err = ResolveIndicesForVirtualColumn(p.TablePlan.Schema().Columns, p.Schema())
+	baseCols := p.Schema().Columns
+	if p.TablePlan != nil {
+		baseCols = p.TablePlan.Schema().Columns
+	}
+	err = ResolveIndicesForVirtualColumn(baseCols, p.Schema())
 	if err != nil {
 		return err
 	}

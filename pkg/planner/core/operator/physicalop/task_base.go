@@ -384,6 +384,9 @@ type CopTask struct {
 	IdxMergePartPlans      []base.PhysicalPlan
 	IdxMergeIsIntersection bool
 	IdxMergeAccessMVIndex  bool
+	// IdxMergeCanSkipProbeForExplain marks that probe side can be omitted in EXPLAIN output.
+	// This is planner-only metadata for staged rollout before executor support.
+	IdxMergeCanSkipProbeForExplain bool
 
 	// RootTaskConds stores select conditions containing virtual columns.
 	// These conditions can't push to TiKV, so we have to add a selection for rootTask
@@ -451,7 +454,7 @@ func (t *CopTask) MemoryUsage() (sum int64) {
 		return
 	}
 
-	sum = size.SizeOfInterface*(2+int64(cap(t.IdxMergePartPlans)+cap(t.RootTaskConds))) + size.SizeOfBool*3 + size.SizeOfUint64 +
+	sum = size.SizeOfInterface*(2+int64(cap(t.IdxMergePartPlans)+cap(t.RootTaskConds))) + size.SizeOfBool*4 + size.SizeOfUint64 +
 		size.SizeOfPointer*(3+int64(cap(t.CommonHandleCols)+cap(t.TblCols))) + size.SizeOfSlice*4 + t.PhysPlanPartInfo.MemoryUsage()
 	if t.IndexPlan != nil {
 		sum += t.IndexPlan.MemoryUsage()
@@ -521,11 +524,12 @@ func (t *CopTask) convertToRootTaskImpl(ctx base.PlanContext) (rt *RootTask) {
 	newTask := &RootTask{}
 	if t.IdxMergePartPlans != nil {
 		p := PhysicalIndexMergeReader{
-			PartialPlansRaw:    t.IdxMergePartPlans,
-			TablePlan:          t.TablePlan,
-			IsIntersectionType: t.IdxMergeIsIntersection,
-			AccessMVIndex:      t.IdxMergeAccessMVIndex,
-			KeepOrder:          t.KeepOrder,
+			PartialPlansRaw:        t.IdxMergePartPlans,
+			TablePlan:              t.TablePlan,
+			IsIntersectionType:     t.IdxMergeIsIntersection,
+			AccessMVIndex:          t.IdxMergeAccessMVIndex,
+			CanSkipProbeForExplain: t.IdxMergeCanSkipProbeForExplain,
+			KeepOrder:              t.KeepOrder,
 		}.Init(ctx, t.IdxMergePartPlans[0].QueryBlockOffset())
 		p.PlanPartInfo = t.PhysPlanPartInfo
 		newTask.SetPlan(p)
