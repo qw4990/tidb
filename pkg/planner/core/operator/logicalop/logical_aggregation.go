@@ -634,43 +634,18 @@ func (la *LogicalAggregation) splitCondForAggregation(predicates []expression.Ex
 		exprsOriginal = append(exprsOriginal, fun.Args[0])
 	}
 	groupByColumns := expression.NewSchema(la.GetGroupByCols()...)
-	aggFirstRowColumns := expression.NewSchema(la.getAggFuncsColsForFirstRow()...)
 	for _, cond := range predicates {
 		for _, cnfItem := range expression.SplitCNFItems(cond) {
 			subCondsToPush, subRet := la.pushDownDNFPredicates(cnfItem, groupByColumns, exprsOriginal, la.pushDownPredicatesByGroupby)
 			if len(subCondsToPush) > 0 {
 				condsToPush = append(condsToPush, subCondsToPush...)
 			}
-			if len(subRet) > 0 {
-				// If we cannot find columns that can be pushed down in the GROUP BY clause,
-				// we will then look for columns that can be pushed down in the aggregate functions.
-				// Currently, only the first row is supported.
-				for _, s := range subRet {
-					subCondsToPush1, subRet1 := la.pushDownDNFPredicates(s, aggFirstRowColumns, exprsOriginal, la.pushDownPredicatesByAggFuncs)
-					if len(subCondsToPush1) > 0 {
-						condsToPush = append(condsToPush, subCondsToPush1...)
-					}
-					ret = append(ret, subRet1...)
-				}
-			}
+			// Predicates referencing non-group-by columns must stay above aggregation.
+			// Pushing them through first_row() can change HAVING semantics under non-ONLY_FULL_GROUP_BY mode.
+			ret = append(ret, subRet...)
 		}
 	}
 	return condsToPush, ret
-}
-
-// getAggFuncsColsForFirstRow gets the columns that are used by first_row agg functions.
-func (la *LogicalAggregation) getAggFuncsColsForFirstRow() (aggFuncsCols []*expression.Column) {
-	aggFuncsCols = make([]*expression.Column, 0, len(la.AggFuncs))
-	for idx, col := range la.Schema().Columns {
-		aggFunc := la.AggFuncs[idx]
-		if aggFunc.Name == ast.AggFuncFirstRow {
-			cols := expression.ExtractColumns(aggFunc.Args[0])
-			if len(cols) == 1 {
-				aggFuncsCols = append(aggFuncsCols, col)
-			}
-		}
-	}
-	return aggFuncsCols
 }
 
 // pushDownPredicates split a condition to two parts, can be pushed-down or can not be pushed-down below aggregation.
@@ -708,30 +683,6 @@ func (la *LogicalAggregation) pushDownPredicatesByGroupby(cond *expression.Scala
 		ret = append(ret, cond)
 	}
 	return
-}
-
-// pushDownPredicatesByAggFuncs is only used for firstrow
-func (la *LogicalAggregation) pushDownPredicatesByAggFuncs(cond *expression.ScalarFunction, aggFirstRowColumns *expression.Schema, exprsOriginal []expression.Expression) (condsToPush, ret []expression.Expression) {
-	extractedCols := expression.ExtractColumnsMapFromExpressions(nil, cond)
-	if len(extractedCols) != 1 || len(aggFirstRowColumns.Columns) == 0 {
-		ret = append(ret, cond)
-		return condsToPush, ret
-	}
-	var schemaCol *expression.Column
-	// `aggFirstRowColumns` are the output columns of the first row function.
-	// We compare the columns in the push-down predicates with the output columns of the first row.
-	// The columns that match are the ones that can be pushed down.
-	// The length of extractedCols is 1, so this loop will only run once.
-	for _, col := range extractedCols {
-		schemaCol = aggFirstRowColumns.RetrieveColumn(col)
-	}
-	if schemaCol != nil {
-		newFunc := expression.ColumnSubstitute(la.SCtx().GetExprCtx(), cond, la.Schema(), exprsOriginal)
-		condsToPush = append(condsToPush, newFunc)
-	} else {
-		ret = append(ret, cond)
-	}
-	return condsToPush, ret
 }
 
 // BuildSelfKeyInfo builds the key information for the aggregation itself.
