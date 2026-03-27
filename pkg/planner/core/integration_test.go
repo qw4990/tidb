@@ -2324,3 +2324,89 @@ func TestIssue66619(t *testing.T) {
 	tk.MustQuery("select /* issue:66947 derived-filter */ hex(ref0) from (select t0.c0 as ref0, (sum(t0.c0) > -1 and char_length(t0.c0)) as ref1 from t0 group by t0.c0) as s where ref1").
 		Check(testkit.Rows("20"))
 }
+
+func TestIssue65653(t *testing.T) {
+	store := testkit.CreateMockStore(t)
+	tk := testkit.NewTestKit(t, store)
+	tk.MustExec("use test")
+
+	execIgnoreErr := func(sql string) {
+		_, _ = tk.Exec(sql)
+	}
+
+	tk.MustExec("drop table if exists t0")
+	tk.MustExec("drop view if exists v0")
+	tk.MustExec("create table t0(c0 char, c1 blob(173), c2 char)")
+	execIgnoreErr("update t0 set c0='K', c2=-493926160")
+	tk.MustExec("alter table t0 drop c1")
+	tk.MustExec("create algorithm=undefined view v0(c0) as select t0.c2 from t0 where t0.c0")
+	tk.MustExec("replace into t0 values (NULL, '0'), ('0', 'X'), ('A', '0')")
+	execIgnoreErr("admin checksum table t0")
+	tk.MustExec("insert into t0(c0) values ('6')")
+	execIgnoreErr("alter table t0 add primary key(c2)")
+	tk.MustExec("replace into t0 values ('g', '1')")
+	tk.MustExec("insert ignore into t0 values ('_', '(')")
+	tk.MustExec("replace into t0(c2) values ('p')")
+	execIgnoreErr("update t0 set c2=t0.c2, c0=((818354575)and(-498102208)) where 0.31994056953914873")
+	tk.MustExec("replace into t0(c0, c2) values ('A', '8')")
+	execIgnoreErr("alter table t0 disable keys")
+	tk.MustExec("replace into t0(c0) values ('-'), ('遞')")
+	tk.MustExec("replace into t0(c2, c0) values (NULL, '-')")
+
+	sql := `select t0.c0
+from t0 natural right join v0
+group by ((v0.c0) is not null)
+having '0'
+union all
+select t0.c0
+from t0 natural right join v0
+group by ((v0.c0) is not null)
+having (not ('0'))
+union all
+select t0.c0
+from t0 natural right join v0
+group by ((v0.c0) is not null)
+having (('0') is null)`
+
+	baseline := tk.MustQuery(sql).Sort().Rows()
+	for i := 0; i < 20; i++ {
+		require.Equal(t, baseline, tk.MustQuery(sql).Sort().Rows())
+	}
+}
+
+func TestIssue65654(t *testing.T) {
+	store := testkit.CreateMockStore(t)
+	tk := testkit.NewTestKit(t, store)
+	tk.MustExec("use test")
+
+	execIgnoreErr := func(sql string) {
+		_, _ = tk.Exec(sql)
+	}
+
+	tk.MustExec("drop table if exists t0")
+	tk.MustExec("drop view if exists v0")
+	tk.MustExec("create table t0(c0 bool zerofill)")
+	execIgnoreErr("delete from t0 order by t0.c0 asc")
+	tk.MustExec("insert ignore into t0 values (false), (true) on duplicate key update c0=t0.c0")
+	tk.MustExec("replace into t0(c0) values (true)")
+	execIgnoreErr("update t0 set c0=0.8975324002384114 where t0.c0")
+	tk.MustExec("create or replace view v0(c0) as select pi() from t0 where true")
+	execIgnoreErr("alter table t0 enable keys")
+	tk.MustExec("insert into t0 values (false)")
+	tk.MustExec("replace into t0(c0) values (true), (true), (true)")
+	execIgnoreErr("alter table t0 change c0 c0 bool not null")
+	execIgnoreErr("insert into t0 values (false), (true), (null)")
+	execIgnoreErr("replace into t0(c0) values (null)")
+	execIgnoreErr("replace into t0 values (null), (false)")
+	tk.MustExec("insert ignore into t0(c0) values (true)")
+	tk.MustExec("replace into t0(c0) values (false)")
+	tk.MustExec("replace into t0(c0) values (false)")
+
+	baseline := tk.MustQuery("select v0.c0 from v0, t0").Rows()
+	decomposed := tk.MustQuery(`select v0.c0 from v0, t0 where ''
+union all
+select v0.c0 from v0, t0 where (not (''))
+union all
+select v0.c0 from v0, t0 where (('') is null)`).Rows()
+	require.Equal(t, baseline, decomposed)
+}

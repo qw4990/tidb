@@ -2158,6 +2158,12 @@ func (b *executorBuilder) buildHashAggFromChildExec(childExec exec.Executor, v *
 			e.IsUnparallelExec = true
 		}
 	}
+	// `first_row()` over non-group-by expressions may become unstable under parallel hash aggregation,
+	// because partial/final merge does not preserve global input order.
+	// Keep this case unparallel to make results deterministic across repeated executions.
+	if hasUnsafeFirstRow(v) {
+		e.IsUnparallelExec = true
+	}
 	// When we set both tidb_hashagg_final_concurrency and tidb_hashagg_partial_concurrency to 1,
 	// we do not need to parallelly execute hash agg,
 	// and this action can be a workaround when meeting some unexpected situation using parallelExec.
@@ -2196,6 +2202,28 @@ func (b *executorBuilder) buildHashAggFromChildExec(childExec exec.Executor, v *
 
 	executor_metrics.ExecutorCounterHashAggExec.Inc()
 	return e
+}
+
+func hasUnsafeFirstRow(v *physicalop.PhysicalHashAgg) bool {
+	for _, aggDesc := range v.AggFuncs {
+		if aggDesc.Name != ast.AggFuncFirstRow || len(aggDesc.Args) != 1 {
+			continue
+		}
+		if len(v.GroupByItems) == 0 {
+			return true
+		}
+		matchedGroupByExpr := false
+		for _, groupByExpr := range v.GroupByItems {
+			if expression.ExpressionsSemanticEqual(aggDesc.Args[0], groupByExpr) {
+				matchedGroupByExpr = true
+				break
+			}
+		}
+		if !matchedGroupByExpr {
+			return true
+		}
+	}
+	return false
 }
 
 func (b *executorBuilder) buildStreamAgg(v *physicalop.PhysicalStreamAgg) exec.Executor {
