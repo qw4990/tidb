@@ -496,41 +496,36 @@ func (b *PlanBuilder) buildResultSetNode(ctx context.Context, node ast.ResultSet
 		}
 
 		if x.AsName.L != "" {
-			if x.Lateral {
-				// LATERAL derived tables: clone output names to avoid mutating shared
-				// structs across correlated re-executions, and clear DBName so that
-				// error messages show "alias.col" not "db.alias.col".
-				clonedNames := make([]*types.FieldName, len(p.OutputNames()))
-				for i, name := range p.OutputNames() {
-					if name.Hidden {
-						clonedNames[i] = name
-						continue
-					}
-					dbName := pmodel.NewCIStr("")
-					if isTableName {
-						dbName = name.DBName
-					}
-					clonedNames[i] = &types.FieldName{
-						DBName:            dbName,
-						OrigTblName:       name.OrigTblName,
-						OrigColName:       name.OrigColName,
-						TblName:           x.AsName,
-						ColName:           name.ColName,
-						NotExplicitUsable: name.NotExplicitUsable,
-						Redundant:         name.Redundant,
-						Hidden:            name.Hidden,
-					}
+			// Clone output names before modifying to avoid mutating shared structs.
+			// This is critical for CTEs whose output names are shared across multiple
+			// references; in-place mutation would corrupt other consumers.
+			clonedNames := make([]*types.FieldName, len(p.OutputNames()))
+			for i, name := range p.OutputNames() {
+				if name.Hidden {
+					clonedNames[i] = name
+					continue
 				}
-				p.SetOutputNames(clonedNames)
-			} else {
-				// Non-LATERAL: preserve original behavior — update TblName in place.
-				for _, name := range p.OutputNames() {
-					if name.Hidden {
-						continue
-					}
-					name.TblName = x.AsName
+				// Clone the field name and update table name.
+				// For derived tables, clear DBName so that error messages (e.g. only_full_group_by)
+				// show "alias.col" not "db.alias.col". The current-database qualifier needed for
+				// hint generation (leading()) is set separately on plannerSelectBlockAsName below.
+				// For base-table aliases (isTableName), inherit DBName for DEFAULT() resolution.
+				dbName := pmodel.NewCIStr("")
+				if isTableName {
+					dbName = name.DBName
+				}
+				clonedNames[i] = &types.FieldName{
+					DBName:            dbName,
+					OrigTblName:       name.OrigTblName,
+					OrigColName:       name.OrigColName,
+					TblName:           x.AsName,
+					ColName:           name.ColName,
+					NotExplicitUsable: name.NotExplicitUsable,
+					Redundant:         name.Redundant,
+					Hidden:            name.Hidden,
 				}
 			}
+			p.SetOutputNames(clonedNames)
 		}
 		// Apply column alias list from AS dt(c1, c2, ...) syntax.
 		// Only valid for derived tables (not table names); parser enforces this.
@@ -562,13 +557,7 @@ func (b *PlanBuilder) buildResultSetNode(ctx context.Context, node ast.ResultSet
 			plannerSelectBlockAsName = *p
 		}
 		if len(plannerSelectBlockAsName) > 0 && !isTableName {
-			dbName := p.OutputNames()[0].DBName
-			if x.Lateral {
-				// LATERAL derived tables clear DBName on output names, so use CurrentDB
-				// for hint generation (e.g. leading()) which needs the qualified form.
-				dbName = pmodel.NewCIStr(b.ctx.GetSessionVars().CurrentDB)
-			}
-			plannerSelectBlockAsName[p.QueryBlockOffset()] = ast.HintTable{DBName: dbName, TableName: p.OutputNames()[0].TblName}
+			plannerSelectBlockAsName[p.QueryBlockOffset()] = ast.HintTable{DBName: pmodel.NewCIStr(b.ctx.GetSessionVars().CurrentDB), TableName: p.OutputNames()[0].TblName}
 		}
 		// Duplicate column name in one table is not allowed.
 		// "select * from (select 1, 1) as a;" is duplicate
@@ -696,6 +685,22 @@ func containsLateralTableSource(node ast.ResultSetNode) bool {
 		}
 		// Check both sides for nested LATERAL
 		return containsLateralTableSource(n.Left) || containsLateralTableSource(n.Right)
+	case *ast.SelectStmt:
+		// Descend into the FROM clause of a derived subquery.
+		if n.From != nil {
+			return containsLateralTableSource(n.From.TableRefs)
+		}
+		return false
+	case *ast.SetOprStmt:
+		// Check each operand in the UNION/INTERSECT/EXCEPT list.
+		if n.SelectList != nil {
+			for _, sel := range n.SelectList.Selects {
+				if rs, ok := sel.(ast.ResultSetNode); ok && containsLateralTableSource(rs) {
+					return true
+				}
+			}
+		}
+		return false
 	default:
 		return false
 	}
@@ -1063,6 +1068,10 @@ func (b *PlanBuilder) buildLateralJoin(ctx context.Context, leftPlan, rightPlan 
 		name := *rName
 		ap.FullNames = append(ap.FullNames, &name)
 	}
+
+	// Mark inner CTEs against FullSchema so correlations via USING/NATURAL
+	// merged columns are detected and the CTE storage is reset per outer row.
+	setIsInApplyForCTE(rightPlan, ap.FullSchema)
 
 	// Handle ON conditions if present
 	if joinNode.On != nil {
