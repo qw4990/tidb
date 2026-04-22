@@ -475,6 +475,7 @@ func RestoreDBForBinding(node ast.StmtNode, defaultDB string) string {
 func NormalizeStmtForBinding(stmtNode ast.StmtNode, specifiedDB string, noDB bool) (normalizedStmt, sqlDigest string) {
 	normalize := func(n ast.StmtNode) (normalizedStmt, sqlDigest string) {
 		eraseLastSemicolon(n)
+		parser.StripRedundantConditionParenthesesForBinding(n)
 		var digest *parser.Digest
 		var normalizedSQL string
 		if !noDB {

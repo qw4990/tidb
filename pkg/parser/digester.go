@@ -23,7 +23,9 @@ import (
 	"unsafe"
 
 	"github.com/pingcap/errors"
+	"github.com/pingcap/tidb/pkg/parser/ast"
 	"github.com/pingcap/tidb/pkg/parser/charset"
+	"github.com/pingcap/tidb/pkg/parser/opcode"
 )
 
 // Digest stores the fixed length hash value.
@@ -145,6 +147,12 @@ var digesterPool = sync.Pool{
 	},
 }
 
+var bindingConditionParserPool = sync.Pool{
+	New: func() interface{} {
+		return New()
+	},
+}
+
 // sqlDigester is used to compute DigestHash or Normalize for sql.
 type sqlDigester struct {
 	buffer bytes.Buffer
@@ -178,6 +186,9 @@ func (d *sqlDigester) doNormalize(sql string, redact string, keepHint bool) (res
 }
 
 func (d *sqlDigester) doNormalizeForBinding(sql string, keepHint bool, forPlanReplayerReload bool) (result string) {
+	if !forPlanReplayerReload {
+		sql = stripRedundantConditionParenthesesForBinding(sql)
+	}
 	d.normalize(sql, errors.RedactLogEnable, keepHint, true, forPlanReplayerReload)
 	result = d.buffer.String()
 	d.buffer.Reset()
@@ -195,6 +206,7 @@ func (d *sqlDigester) doNormalizeDigest(sql string) (normalized string, digest *
 }
 
 func (d *sqlDigester) doNormalizeDigestForBinding(sql string) (normalized string, digest *Digest) {
+	sql = stripRedundantConditionParenthesesForBinding(sql)
 	d.normalize(sql, errors.RedactLogEnable, false, true, false)
 	normalized = d.buffer.String()
 	d.hasher.Write(d.buffer.Bytes())
@@ -202,6 +214,268 @@ func (d *sqlDigester) doNormalizeDigestForBinding(sql string) (normalized string
 	digest = NewDigest(d.hasher.Sum(nil))
 	d.hasher.Reset()
 	return
+}
+
+// StripRedundantConditionParenthesesForBinding removes semantically redundant
+// parentheses from binding condition expressions in-place.
+func StripRedundantConditionParenthesesForBinding(stmt ast.StmtNode) {
+	if stmt == nil {
+		return
+	}
+	_, _ = stmt.Accept(bindingConditionParenthesesStripper{})
+}
+
+func stripRedundantConditionParenthesesForBinding(sql string) string {
+	if !strings.Contains(sql, "(") || !strings.Contains(sql, ")") {
+		return sql
+	}
+
+	p := bindingConditionParserPool.Get().(*Parser)
+	p.Reset()
+	defer func() {
+		p.Reset()
+		bindingConditionParserPool.Put(p)
+	}()
+
+	stmt, err := p.ParseOneStmt(sql, "", "")
+	if err != nil {
+		return sql
+	}
+
+	collector := bindingConditionParenthesesCollector{sql: sql}
+	if _, ok := stmt.Accept(&collector); !ok || len(collector.ranges) == 0 {
+		return sql
+	}
+	return collector.remove()
+}
+
+type bindingConditionParenthesesCollector struct {
+	sql    string
+	ranges []bindingConditionParenthesesRange
+}
+
+type bindingConditionParenthesesRange struct {
+	left  int
+	right int
+}
+
+type bindingConditionParenthesesStripper struct{}
+
+func (bindingConditionParenthesesStripper) Enter(in ast.Node) (ast.Node, bool) {
+	return in, false
+}
+
+func (bindingConditionParenthesesStripper) Leave(in ast.Node) (ast.Node, bool) {
+	switch n := in.(type) {
+	case *ast.SelectStmt:
+		n.Where = stripConditionParenthesesForBinding(n.Where, 0, true)
+	case *ast.HavingClause:
+		n.Expr = stripConditionParenthesesForBinding(n.Expr, 0, true)
+	case *ast.OnCondition:
+		n.Expr = stripConditionParenthesesForBinding(n.Expr, 0, true)
+	case *ast.DeleteStmt:
+		n.Where = stripConditionParenthesesForBinding(n.Where, 0, true)
+	case *ast.UpdateStmt:
+		n.Where = stripConditionParenthesesForBinding(n.Where, 0, true)
+	}
+	return in, true
+}
+
+func (*bindingConditionParenthesesCollector) Enter(in ast.Node) (ast.Node, bool) {
+	return in, false
+}
+
+func (c *bindingConditionParenthesesCollector) Leave(in ast.Node) (ast.Node, bool) {
+	switch n := in.(type) {
+	case *ast.SelectStmt:
+		c.collectCondition(n.Where, 0, true)
+	case *ast.HavingClause:
+		c.collectCondition(n.Expr, 0, true)
+	case *ast.OnCondition:
+		c.collectCondition(n.Expr, 0, true)
+	case *ast.DeleteStmt:
+		c.collectCondition(n.Where, 0, true)
+	case *ast.UpdateStmt:
+		c.collectCondition(n.Where, 0, true)
+	}
+	return in, true
+}
+
+func (c *bindingConditionParenthesesCollector) collectCondition(expr ast.ExprNode, parentLogicalOp opcode.Op, isRoot bool) {
+	if expr == nil {
+		return
+	}
+
+	switch x := expr.(type) {
+	case *ast.ParenthesesExpr:
+		c.collectCondition(x.Expr, parentLogicalOp, isRoot)
+		if shouldStripConditionParenthesesForBinding(x.Expr, parentLogicalOp, isRoot) {
+			c.addRange(x)
+		}
+	case *ast.BinaryOperationExpr:
+		childLogicalOp := opcode.Op(0)
+		if isBindingLogicalOp(x.Op) {
+			childLogicalOp = x.Op
+		}
+		c.collectCondition(x.L, childLogicalOp, false)
+		c.collectCondition(x.R, childLogicalOp, false)
+	}
+}
+
+func shouldStripConditionParenthesesForBinding(inner ast.ExprNode, parentLogicalOp opcode.Op, isRoot bool) bool {
+	if inner == nil {
+		return false
+	}
+	if isRoot {
+		return true
+	}
+	if _, ok := inner.(*ast.ParenthesesExpr); ok {
+		return true
+	}
+	if !isBindingLogicalOp(parentLogicalOp) {
+		return false
+	}
+
+	innerPrecedence := bindingConditionPrecedence(inner)
+	parentPrecedence := bindingLogicalOpPrecedence(parentLogicalOp)
+	if innerPrecedence > parentPrecedence {
+		return true
+	}
+	if innerPrecedence < parentPrecedence {
+		return false
+	}
+
+	innerBinary, ok := inner.(*ast.BinaryOperationExpr)
+	if !ok {
+		return true
+	}
+	return innerBinary.Op == parentLogicalOp && (parentLogicalOp == opcode.LogicAnd || parentLogicalOp == opcode.LogicOr)
+}
+
+func stripConditionParenthesesForBinding(expr ast.ExprNode, parentLogicalOp opcode.Op, isRoot bool) ast.ExprNode {
+	if expr == nil {
+		return nil
+	}
+
+	switch x := expr.(type) {
+	case *ast.ParenthesesExpr:
+		x.Expr = stripConditionParenthesesForBinding(x.Expr, parentLogicalOp, isRoot)
+		if shouldStripConditionParenthesesForBinding(x.Expr, parentLogicalOp, isRoot) {
+			return x.Expr
+		}
+		return x
+	case *ast.BinaryOperationExpr:
+		childLogicalOp := opcode.Op(0)
+		if isBindingLogicalOp(x.Op) {
+			childLogicalOp = x.Op
+		}
+		x.L = stripConditionParenthesesForBinding(x.L, childLogicalOp, false)
+		x.R = stripConditionParenthesesForBinding(x.R, childLogicalOp, false)
+		return x
+	default:
+		return expr
+	}
+}
+
+func bindingConditionPrecedence(expr ast.ExprNode) int {
+	binaryExpr, ok := expr.(*ast.BinaryOperationExpr)
+	if !ok {
+		return 4
+	}
+	return bindingLogicalOpPrecedence(binaryExpr.Op)
+}
+
+func bindingLogicalOpPrecedence(op opcode.Op) int {
+	switch op {
+	case opcode.LogicOr:
+		return 1
+	case opcode.LogicXor:
+		return 2
+	case opcode.LogicAnd:
+		return 3
+	default:
+		return 4
+	}
+}
+
+func isBindingLogicalOp(op opcode.Op) bool {
+	switch op {
+	case opcode.LogicAnd, opcode.LogicOr, opcode.LogicXor:
+		return true
+	default:
+		return false
+	}
+}
+
+func (c *bindingConditionParenthesesCollector) addRange(expr *ast.ParenthesesExpr) {
+	left, right, ok := findParenthesesRange(c.sql, expr.OriginTextPosition())
+	if !ok {
+		return
+	}
+	c.ranges = append(c.ranges, bindingConditionParenthesesRange{left: left, right: right})
+}
+
+func findParenthesesRange(sql string, offset int) (left, right int, ok bool) {
+	if offset < 0 || offset >= len(sql) {
+		return 0, 0, false
+	}
+
+	lexer := NewScanner(sql[offset:])
+	_, pos, lit := lexer.scan()
+	if lit != "(" {
+		return 0, 0, false
+	}
+
+	left = offset + pos.Offset
+	depth := 1
+	for depth > 0 {
+		tok, pos, lit := lexer.scan()
+		if tok == invalid || tok == 0 {
+			return 0, 0, false
+		}
+		switch lit {
+		case "(":
+			depth++
+		case ")":
+			depth--
+			if depth == 0 {
+				right = offset + pos.Offset
+				if right <= left || right >= len(sql) {
+					return 0, 0, false
+				}
+				return left, right, true
+			}
+		}
+	}
+
+	if right <= left || right >= len(sql) {
+		return
+	}
+	return left, right, true
+}
+
+func (c *bindingConditionParenthesesCollector) remove() string {
+	removed := make([]bool, len(c.sql))
+	removedCount := 0
+	for _, r := range c.ranges {
+		if !removed[r.left] {
+			removed[r.left] = true
+			removedCount++
+		}
+		if !removed[r.right] {
+			removed[r.right] = true
+			removedCount++
+		}
+	}
+
+	var sb strings.Builder
+	sb.Grow(len(c.sql) - removedCount)
+	for i := 0; i < len(c.sql); i++ {
+		if !removed[i] {
+			sb.WriteByte(c.sql[i])
+		}
+	}
+	return sb.String()
 }
 
 const (

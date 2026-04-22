@@ -103,6 +103,37 @@ func TestNormalize(t *testing.T) {
 		require.Equal(t, normalized, normalized2)
 		require.Equalf(t, digest.String(), digest2.String(), "%+v", test)
 	}
+
+	bindingDigestEquivalentSQLs := []string{
+		"select pid from t where id=1 and (ptype=1 or ptype=2) order by pid limit 10",
+		"select pid from t where id=1 and ((ptype=1) or ptype=2) order by pid limit 10",
+		"select pid from t where id=1 and (ptype=1 or (ptype=2)) order by pid limit 10",
+		"select pid from t where id=1 and ((ptype=1) or (ptype=2)) order by pid limit 10",
+		"select pid from t where (id=1) and (ptype=1 or ptype=2) order by pid limit 10",
+		"select pid from t where (id=1) and ((ptype=1) or ptype=2) order by pid limit 10",
+		"select pid from t where (id=1) and (ptype=1 or (ptype=2)) order by pid limit 10",
+		"select pid from t where (id=1) and ((ptype=1) or (ptype=2)) order by pid limit 10",
+		"select pid from t where (id=1 and (ptype=1 or ptype=2)) order by pid limit 10",
+		"select pid from t where (id=1 and ((ptype=1) or ptype=2)) order by pid limit 10",
+		"select pid from t where (id=1 and (ptype=1 or (ptype=2))) order by pid limit 10",
+		"select pid from t where (id=1 and ((ptype=1) or (ptype=2))) order by pid limit 10",
+		"select pid from t where ((id=1) and (ptype=1 or ptype=2)) order by pid limit 10",
+		"select pid from t where ((id=1) and ((ptype=1) or ptype=2)) order by pid limit 10",
+		"select pid from t where ((id=1) and (ptype=1 or (ptype=2))) order by pid limit 10",
+		"select pid from t where ((id=1) and ((ptype=1) or (ptype=2))) order by pid limit 10",
+	}
+	var normalizedForBinding string
+	var digestForBinding string
+	for _, sql := range bindingDigestEquivalentSQLs {
+		normalized, digest := parser.NormalizeDigestForBinding(sql)
+		if normalizedForBinding == "" {
+			normalizedForBinding = normalized
+			digestForBinding = digest.String()
+			continue
+		}
+		require.Equalf(t, normalizedForBinding, normalized, "sql: %s", sql)
+		require.Equalf(t, digestForBinding, digest.String(), "sql: %s", sql)
+	}
 }
 
 func TestNormalizeRedact(t *testing.T) {

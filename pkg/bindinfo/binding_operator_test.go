@@ -727,6 +727,38 @@ func TestNormalizeStmtForBinding(t *testing.T) {
 		require.Equalf(t, test.normalized, n, "sql: %s", test.sql)
 		require.Equalf(t, test.digest, digest, "sql: %s", test.sql)
 	}
+
+	bindingEquivalentSQLs := []string{
+		"select pid from t where id=1 and (ptype=1 or ptype=2) order by pid limit 10",
+		"select pid from t where id=1 and ((ptype=1) or ptype=2) order by pid limit 10",
+		"select pid from t where id=1 and (ptype=1 or (ptype=2)) order by pid limit 10",
+		"select pid from t where id=1 and ((ptype=1) or (ptype=2)) order by pid limit 10",
+		"select pid from t where (id=1) and (ptype=1 or ptype=2) order by pid limit 10",
+		"select pid from t where (id=1) and ((ptype=1) or ptype=2) order by pid limit 10",
+		"select pid from t where (id=1) and (ptype=1 or (ptype=2)) order by pid limit 10",
+		"select pid from t where (id=1) and ((ptype=1) or (ptype=2)) order by pid limit 10",
+		"select pid from t where (id=1 and (ptype=1 or ptype=2)) order by pid limit 10",
+		"select pid from t where (id=1 and ((ptype=1) or ptype=2)) order by pid limit 10",
+		"select pid from t where (id=1 and (ptype=1 or (ptype=2))) order by pid limit 10",
+		"select pid from t where (id=1 and ((ptype=1) or (ptype=2))) order by pid limit 10",
+		"select pid from t where ((id=1) and (ptype=1 or ptype=2)) order by pid limit 10",
+		"select pid from t where ((id=1) and ((ptype=1) or ptype=2)) order by pid limit 10",
+		"select pid from t where ((id=1) and (ptype=1 or (ptype=2))) order by pid limit 10",
+		"select pid from t where ((id=1) and ((ptype=1) or (ptype=2))) order by pid limit 10",
+	}
+	var normalized string
+	var digest string
+	for _, sql := range bindingEquivalentSQLs {
+		stmt, _, _ := utilNormalizeWithDefaultDB(t, sql)
+		n, d := bindinfo.NormalizeStmtForBinding(stmt, "", true)
+		if normalized == "" {
+			normalized = n
+			digest = d
+			continue
+		}
+		require.Equalf(t, normalized, n, "sql: %s", sql)
+		require.Equalf(t, digest, d, "sql: %s", sql)
+	}
 }
 
 func TestHintsSetID(t *testing.T) {
