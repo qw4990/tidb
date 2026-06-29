@@ -59,3 +59,11 @@ _Avoid_: Dynamic metric label, billing tier
 **Demo Metric Status**:
 A bounded status label for demo Prometheus metrics, such as `success`, `unsupported_non_analyze`, `unsupported_non_select`, `unsupported_ru_version`, or `error`.
 _Avoid_: SQL error text, statement digest
+
+**Row-width Source**:
+A bounded explanation of where a Row-width Factor came from, such as `operator_helper`, `plan_stats`, `schema_type_width`, or `schema_fallback`. It is separate from the row's overall source so users can tell whether the row came from a component counter, plan-node model, or excluded storage while still understanding the width estimate.
+_Avoid_: Table name, index name, sampled bytes
+
+**Render Status**:
+The bounded outcome recorded by Demo Metrics for one `FORMAT='RU'` attempt. It is derived from the renderer or format gate, not from raw error text.
+_Avoid_: SQL error message, stack trace
