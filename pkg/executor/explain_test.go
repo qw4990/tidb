@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/pingcap/tidb/pkg/config"
+	"github.com/pingcap/tidb/pkg/parser/auth"
 	plannercore "github.com/pingcap/tidb/pkg/planner/core"
 	"github.com/pingcap/tidb/pkg/testkit"
 	"github.com/pingcap/tidb/pkg/types"
@@ -575,6 +576,37 @@ func requireExplainRUExcludedStorageRow(t *testing.T, rows [][]any) {
 	require.Fail(t, "missing FORMAT='RU' excluded storage row")
 }
 
+func TestExplainAnalyzeFormatRUPlanDigest(t *testing.T) {
+	store := testkit.CreateMockStore(t)
+	tk := testkit.NewTestKit(t, store)
+	require.NoError(t, tk.Session().Auth(&auth.UserIdentity{Username: "root", Hostname: "%"}, nil, nil, nil))
+	tk.MustExec("use test")
+
+	originEnableStmtSummary := fmt.Sprint(tk.MustQuery("select @@global.tidb_enable_stmt_summary").Rows()[0][0])
+	originStmtSummaryRefreshInterval := fmt.Sprint(tk.MustQuery("select @@global.tidb_stmt_summary_refresh_interval").Rows()[0][0])
+	originStmtSummaryHistorySize := fmt.Sprint(tk.MustQuery("select @@global.tidb_stmt_summary_history_size").Rows()[0][0])
+	defer tk.MustExec(fmt.Sprintf("set global tidb_enable_stmt_summary = %s", originEnableStmtSummary))
+	defer tk.MustExec(fmt.Sprintf("set global tidb_stmt_summary_refresh_interval = %s", originStmtSummaryRefreshInterval))
+	defer tk.MustExec(fmt.Sprintf("set global tidb_stmt_summary_history_size = %s", originStmtSummaryHistorySize))
+	tk.MustExec("set global tidb_stmt_summary_history_size = 24")
+	tk.MustExec("set global tidb_stmt_summary_refresh_interval = 999999999")
+	tk.MustExec("set global tidb_enable_stmt_summary = 0")
+	tk.MustExec("set global tidb_enable_stmt_summary = 1")
+
+	tk.MustExec("drop table if exists explain_ru_digest")
+	tk.MustExec("create table explain_ru_digest(a int primary key, b int)")
+	tk.MustExec("insert into explain_ru_digest values (1, 10)")
+	tk.MustQuery("select b from explain_ru_digest where a = 1").Check(testkit.Rows("10"))
+
+	digestRows := tk.MustQuery("select plan_digest from information_schema.statements_summary_history where digest_text like 'select `b` from `explain_ru_digest`%' and plan_digest != ''").Rows()
+	require.NotEmpty(t, digestRows)
+	planDigest := fmt.Sprint(digestRows[0][0])
+	rows := tk.MustQuery(fmt.Sprintf("explain analyze format='ru' '%s'", planDigest)).Rows()
+	require.NotEmpty(t, rows)
+	require.Equal(t, "summary", rows[0][0])
+	requireExplainRUPlanRow(t, rows)
+}
+
 func TestExplainAnalyzeFormatRUUnsupportedTargetsBeforeExecution(t *testing.T) {
 	store := testkit.CreateMockStore(t)
 	tk := testkit.NewTestKit(t, store)
@@ -595,6 +627,20 @@ func TestExplainAnalyzeFormatRUUnsupportedTargetsBeforeExecution(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "unsupported_non_select")
 	tk.MustQuery("select * from explain_ru_dml order by a").Check(testkit.Rows("1"))
+
+	for _, sql := range []string{
+		"explain analyze format='ru' update explain_ru_dml set a = 2 where a = 1",
+		"explain analyze format='ru' delete from explain_ru_dml where a = 1",
+		"explain analyze format='ru' replace into explain_ru_dml values (2)",
+		"explain analyze format='ru' alter table explain_ru_dml add column b int",
+		"explain analyze format='ru' import into explain_ru_dml from select * from explain_ru_dml",
+	} {
+		err = tk.ExecToErr(sql)
+		require.Error(t, err, sql)
+		require.Contains(t, err.Error(), "unsupported_non_select", sql)
+		tk.MustQuery("select * from explain_ru_dml order by a").Check(testkit.Rows("1"))
+	}
+	tk.MustQuery("show columns from explain_ru_dml").Check(testkit.Rows("a int(11) NO PRI <nil> "))
 
 	err = tk.ExecToErr("explain analyze format='ru' values (1)")
 	require.Error(t, err)
@@ -629,6 +675,7 @@ func TestExplainAnalyzeFormatRUUnsupportedTargetsBeforeExecution(t *testing.T) {
 	err = tk.ExecToErr("explain analyze format='ru' select get_lock('explain_ru', 0)")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "unsupported_side_effecting_select")
+	tk.MustQuery("select is_free_lock('explain_ru')").Check(testkit.Rows("1"))
 }
 
 func TestExplainImportFromSelect(t *testing.T) {

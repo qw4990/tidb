@@ -255,7 +255,7 @@ func (e *Explain) renderRUExplain() (err error) {
 
 	rows := make([]explainRURow, 0, len(flat.Main)+4)
 	componentRows := explainRUBuildComponentRows(snapshot, snapshotStatus, weights)
-	planRows := explainRUBuildPlanRows(e.SCtx(), runtimeStats, weights, flat)
+	planRows, excludedRows := explainRUSplitPlanAndExcludedRows(explainRUBuildPlanRows(e.SCtx(), runtimeStats, weights, flat))
 	totalRU := 0.0
 	for _, row := range componentRows {
 		if row.hasTiDBRU {
@@ -281,6 +281,7 @@ func (e *Explain) renderRUExplain() (err error) {
 	})
 	rows = append(rows, componentRows...)
 	rows = append(rows, planRows...)
+	rows = append(rows, excludedRows...)
 
 	e.Rows = make([][]string, 0, len(rows))
 	for _, row := range rows {
@@ -289,6 +290,19 @@ func (e *Explain) renderRUExplain() (err error) {
 	}
 	status = explainRUStatusSuccess
 	return nil
+}
+
+func explainRUSplitPlanAndExcludedRows(rows []explainRURow) ([]explainRURow, []explainRURow) {
+	planRows := make([]explainRURow, 0, len(rows))
+	excludedRows := make([]explainRURow, 0)
+	for _, row := range rows {
+		if row.section == explainRUSectionExcluded {
+			excludedRows = append(excludedRows, row)
+			continue
+		}
+		planRows = append(planRows, row)
+	}
+	return planRows, excludedRows
 }
 
 func explainRUExtractComponentSnapshot(runtimeStats *execdetails.RuntimeStatsColl, targetPlanID int) (*execdetails.RURuntimeStats, explainRUComponentSnapshotStatus) {
@@ -652,7 +666,7 @@ func explainRUObserveRow(row explainRURow) {
 		workBytes = row.workBytes
 	}
 	rowWidth := -1.0
-	if row.hasRowWidth {
+	if row.section == explainRUSectionPlan && row.hasRowWidth {
 		rowWidth = row.rowWidth
 	}
 	component, operator := explainRUMetricComponentOperator(row)

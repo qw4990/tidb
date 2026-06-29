@@ -132,7 +132,7 @@ func ObserveExplainRURow(section, component, operator, source, rowWidthSource st
 	if ExplainRUWorkBytesCounter != nil && workBytes >= 0 {
 		ExplainRUWorkBytesCounter.WithLabelValues(section, component, operator, source).Add(workBytes)
 	}
-	if ExplainRURowWidthHistogram != nil && rowWidth > 0 && operator != "" {
+	if ExplainRURowWidthHistogram != nil && section == "plan" && rowWidth > 0 && operator != "" {
 		ExplainRURowWidthHistogram.WithLabelValues(component, operator, rowWidthSource).Observe(rowWidth)
 	}
 }

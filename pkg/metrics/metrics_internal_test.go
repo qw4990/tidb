@@ -142,6 +142,7 @@ func TestExplainRUMetricsIgnoreEmptyLabelsAndMissingValues(t *testing.T) {
 	ObserveExplainRURenderDuration("", 0.01)
 	RecordExplainRUComponentSnapshot("")
 	ObserveExplainRURow("summary", "total_tidb_ru", "", "summary_total", "", 0, -1, -1, -1)
+	ObserveExplainRURow("excluded", "", "tablefullscan", "excluded_storage", "operator_helper", -1, -1, -1, 32)
 
 	require.Equal(t, 0, countCollectedMetrics(ExplainRUStatementsCounter))
 	require.Equal(t, 0, countCollectedMetrics(ExplainRURenderDurationHistogram))

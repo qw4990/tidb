@@ -21,6 +21,7 @@ import (
 	"github.com/pingcap/tidb/pkg/parser/ast"
 	"github.com/pingcap/tidb/pkg/util/execdetails"
 	"github.com/stretchr/testify/require"
+	rmclient "github.com/tikv/pd/client/resource_group/controller"
 )
 
 func TestNewLineFieldsInfo(t *testing.T) {
@@ -192,6 +193,67 @@ func TestExplainRUPlanFormulaUsesRowsAndModeledBytes(t *testing.T) {
 	weights := execdetails.RUV2Weights{RUScale: 2}
 	require.Equal(t, 8.0, explainRUPlanWorkBytes(1, 2, 3, 2))
 	require.Equal(t, 3.0, explainRUPlanTiDBRU(weights, 0.25, 2, 4096))
+}
+
+func TestExplainRUSplitPlanAndExcludedRows(t *testing.T) {
+	rows := []explainRURow{
+		{section: explainRUSectionPlan, id: "Projection_3"},
+		{section: explainRUSectionExcluded, id: "TableFullScan_5"},
+		{section: explainRUSectionPlan, id: "TableReader_4"},
+		{section: explainRUSectionExcluded, component: "write_size"},
+	}
+
+	planRows, excludedRows := explainRUSplitPlanAndExcludedRows(rows)
+	require.Equal(t, []explainRURow{
+		{section: explainRUSectionPlan, id: "Projection_3"},
+		{section: explainRUSectionPlan, id: "TableReader_4"},
+	}, planRows)
+	require.Equal(t, []explainRURow{
+		{section: explainRUSectionExcluded, id: "TableFullScan_5"},
+		{section: explainRUSectionExcluded, component: "write_size"},
+	}, excludedRows)
+}
+
+func TestExplainRUComponentSnapshotStatusAndWeights(t *testing.T) {
+	require.Equal(t, explainRUComponentSnapshotMissing, extractExplainRUTestSnapshotStatus(nil))
+	require.Equal(t, explainRUComponentSnapshotMissing, extractExplainRUTestSnapshotStatus(&execdetails.RURuntimeStats{}))
+	require.Equal(t, explainRUComponentSnapshotNonV2, extractExplainRUTestSnapshotStatus(&execdetails.RURuntimeStats{
+		RUVersion: rmclient.RUVersionV1,
+		Metrics:   &execdetails.RUV2Metrics{},
+	}))
+	require.Equal(t, explainRUComponentSnapshotNilMetrics, extractExplainRUTestSnapshotStatus(&execdetails.RURuntimeStats{
+		RUVersion: rmclient.RUVersionV2,
+	}))
+
+	bypassedMetrics := &execdetails.RUV2Metrics{}
+	bypassedMetrics.SetBypass(true)
+	require.Equal(t, explainRUComponentSnapshotBypassed, extractExplainRUTestSnapshotStatus(&execdetails.RURuntimeStats{
+		RUVersion: rmclient.RUVersionV2,
+		Metrics:   bypassedMetrics,
+	}))
+
+	okStats := &execdetails.RURuntimeStats{
+		RUVersion: rmclient.RUVersionV2,
+		Metrics:   &execdetails.RUV2Metrics{},
+		Weights:   execdetails.RUV2Weights{RUScale: 2, ExecutorL2: 0.5},
+	}
+	snapshot, status := extractExplainRUTestSnapshot(okStats)
+	require.Equal(t, explainRUComponentSnapshotOK, status)
+	require.Same(t, okStats, snapshot)
+	require.Equal(t, okStats.Weights, explainRUResolveWeights(nil, snapshot, status))
+}
+
+func extractExplainRUTestSnapshotStatus(stats *execdetails.RURuntimeStats) explainRUComponentSnapshotStatus {
+	_, status := extractExplainRUTestSnapshot(stats)
+	return status
+}
+
+func extractExplainRUTestSnapshot(stats *execdetails.RURuntimeStats) (*execdetails.RURuntimeStats, explainRUComponentSnapshotStatus) {
+	coll := execdetails.NewRuntimeStatsColl(nil)
+	if stats != nil && (stats.RUVersion != 0 || stats.Metrics != nil || stats.Weights != (execdetails.RUV2Weights{})) {
+		coll.RegisterStats(1, stats)
+	}
+	return explainRUExtractComponentSnapshot(coll, 1)
 }
 
 func TestExplainRUWriteCountersComponentExcluded(t *testing.T) {
