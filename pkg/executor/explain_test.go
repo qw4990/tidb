@@ -18,6 +18,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -496,6 +498,7 @@ func TestExplainFormatInCtx(t *testing.T) {
 		types.ExplainFormatTiDBJSON,
 		types.ExplainFormatCostTrace,
 		types.ExplainFormatPlanCache,
+		types.ExplainFormatRU,
 	}
 
 	tk.MustExec("select * from t")
@@ -513,6 +516,119 @@ func TestExplainFormatInCtx(t *testing.T) {
 			tk.MustQuery("select @@last_plan_from_cache").Check(testkit.Rows("1"))
 		}
 	}
+}
+
+func TestExplainAnalyzeFormatRUOutput(t *testing.T) {
+	store := testkit.CreateMockStore(t)
+	tk := testkit.NewTestKit(t, store)
+	tk.MustExec("use test")
+
+	rows := tk.MustQuery("explain analyze format='ru' select 1").Rows()
+	require.NotEmpty(t, rows)
+	require.Equal(t, "summary", rows[0][0])
+	require.Equal(t, "total_tidb_ru", rows[0][2])
+	require.Equal(t, "summary_total", rows[0][15])
+	requireExplainRUPlanRow(t, rows)
+
+	tk.MustExec("drop table if exists explain_ru_t")
+	tk.MustExec("create table explain_ru_t(a int primary key, b varchar(20))")
+	tk.MustExec("insert into explain_ru_t values (1, 'x'), (2, 'yy')")
+	rows = tk.MustQuery("explain analyze format='ru' select * from explain_ru_t where a > 0").Rows()
+	requireExplainRUPlanRow(t, rows)
+	requireExplainRUExcludedStorageRow(t, rows)
+}
+
+func requireExplainRUPlanRow(t *testing.T, rows [][]any) {
+	t.Helper()
+	for _, row := range rows {
+		require.Len(t, row, 17)
+		if row[0] != "plan" {
+			continue
+		}
+		require.NotEmpty(t, row[1])
+		require.NotEmpty(t, row[2])
+		require.Contains(t, []string{"l1", "l2", "l3", "unknown"}, row[3])
+		require.NotEmpty(t, row[4])
+		require.NotEmpty(t, row[7])
+		require.NotEmpty(t, row[8])
+		require.Equal(t, "row_byte_model", row[11])
+		require.NotEmpty(t, row[12])
+		require.NotEmpty(t, row[13])
+		require.NotEmpty(t, row[14])
+		require.Equal(t, "plan_model", row[15])
+		return
+	}
+	require.Fail(t, "missing FORMAT='RU' plan row")
+}
+
+func requireExplainRUExcludedStorageRow(t *testing.T, rows [][]any) {
+	t.Helper()
+	for _, row := range rows {
+		require.Len(t, row, 17)
+		if row[0] != "excluded" {
+			continue
+		}
+		require.Equal(t, "excluded_storage", row[15])
+		require.Contains(t, row[16], "storage_ru_excluded")
+		return
+	}
+	require.Fail(t, "missing FORMAT='RU' excluded storage row")
+}
+
+func TestExplainAnalyzeFormatRUUnsupportedTargetsBeforeExecution(t *testing.T) {
+	store := testkit.CreateMockStore(t)
+	tk := testkit.NewTestKit(t, store)
+	tk.MustExec("use test")
+	tk.MustExec("drop table if exists explain_ru_dml")
+	tk.MustExec("create table explain_ru_dml(a int primary key)")
+	tk.MustExec("insert into explain_ru_dml values (1)")
+
+	err := tk.ExecToErr("explain format='ru' select 1")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "cannot work without 'analyze'")
+	require.Contains(t, err.Error(), "format=ru")
+
+	err = tk.ExecToErr("explain analyze format=ru select 1")
+	require.Error(t, err)
+
+	err = tk.ExecToErr("explain analyze format='ru' insert into explain_ru_dml values (2)")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "unsupported_non_select")
+	tk.MustQuery("select * from explain_ru_dml order by a").Check(testkit.Rows("1"))
+
+	err = tk.ExecToErr("explain analyze format='ru' values (1)")
+	require.Error(t, err)
+
+	err = tk.ExecToErr("explain analyze format='ru' table explain_ru_dml")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "unsupported_non_select")
+
+	tk.MustExec("set @explain_ru_var := 7")
+	err = tk.ExecToErr("explain analyze format='ru' select @explain_ru_var := 9")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "unsupported_side_effecting_select")
+	tk.MustQuery("select @explain_ru_var").Check(testkit.Rows("7"))
+
+	tk.MustQuery("select last_insert_id(11)").Check(testkit.Rows("11"))
+	err = tk.ExecToErr("explain analyze format='ru' select last_insert_id(123)")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "unsupported_side_effecting_select")
+	tk.MustQuery("select last_insert_id()").Check(testkit.Rows("11"))
+
+	outFile := filepath.Join(t.TempDir(), "explain_ru.csv")
+	err = tk.ExecToErr(fmt.Sprintf("explain analyze format='ru' select 1 into outfile %q", outFile))
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "unsupported_side_effecting_select")
+	_, statErr := os.Stat(outFile)
+	require.True(t, os.IsNotExist(statErr))
+
+	err = tk.ExecToErr("explain analyze format='ru' select * from explain_ru_dml for update skip locked")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "unsupported_locking_select")
+
+	err = tk.ExecToErr("explain analyze format='ru' select get_lock('explain_ru', 0)")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "unsupported_side_effecting_select")
 }
 
 func TestExplainImportFromSelect(t *testing.T) {

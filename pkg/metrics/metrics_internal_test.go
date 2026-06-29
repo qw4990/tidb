@@ -95,6 +95,56 @@ func TestRUV2ExecutorCounterReturnsCachedKnownLabels(t *testing.T) {
 	}
 }
 
+func TestExplainRUMetrics(t *testing.T) {
+	InitExplainRUMetrics()
+
+	RecordExplainRUStatus("success")
+	ObserveExplainRURenderDuration("success", 0.01)
+	RecordExplainRUComponentSnapshot("ok")
+	ObserveExplainRURow("plan", "", "projection", "plan_model", "plan_stats", 1.25, 3, 24, 8)
+
+	require.Equal(t, 1.0, readCounterValue(t, ExplainRUStatementsCounter.WithLabelValues("success")))
+	require.Equal(t, 1.0, readCounterValue(t, ExplainRUComponentSnapshotCounter.WithLabelValues("ok")))
+	require.Equal(t, 1.25, readCounterValue(t, ExplainRUObservedTiDBRUCounter.WithLabelValues("plan", "", "projection", "plan_model")))
+	require.Equal(t, 3.0, readCounterValue(t, ExplainRUWorkRowsCounter.WithLabelValues("plan", "", "projection", "plan_model")))
+	require.Equal(t, 24.0, readCounterValue(t, ExplainRUWorkBytesCounter.WithLabelValues("plan", "", "projection", "plan_model")))
+
+	registry := prometheus.NewRegistry()
+	require.NoError(t, registry.Register(ExplainRUObservedTiDBRUCounter))
+	require.NoError(t, registry.Register(ExplainRUWorkRowsCounter))
+	require.NoError(t, registry.Register(ExplainRUWorkBytesCounter))
+	require.NoError(t, registry.Register(ExplainRURowWidthHistogram))
+	require.NoError(t, registry.Register(ExplainRUStatementsCounter))
+	require.NoError(t, registry.Register(ExplainRURenderDurationHistogram))
+	require.NoError(t, registry.Register(ExplainRUComponentSnapshotCounter))
+	families, err := registry.Gather()
+	require.NoError(t, err)
+	require.NotNil(t, findMetricFamily(families, "tidb_explain_ru_observed_tidb_ru_total"))
+	require.NotNil(t, findMetricFamily(families, "tidb_explain_ru_work_rows_total"))
+	require.NotNil(t, findMetricFamily(families, "tidb_explain_ru_work_bytes_total"))
+	require.NotNil(t, findMetricFamily(families, "tidb_explain_ru_row_width"))
+	require.NotNil(t, findMetricFamily(families, "tidb_explain_ru_statements_total"))
+	require.NotNil(t, findMetricFamily(families, "tidb_explain_ru_render_duration_seconds"))
+	require.NotNil(t, findMetricFamily(families, "tidb_explain_ru_component_snapshot_total"))
+}
+
+func TestExplainRUMetricsIgnoreEmptyLabelsAndMissingValues(t *testing.T) {
+	InitExplainRUMetrics()
+
+	RecordExplainRUStatus("")
+	ObserveExplainRURenderDuration("", 0.01)
+	RecordExplainRUComponentSnapshot("")
+	ObserveExplainRURow("summary", "total_tidb_ru", "", "summary_total", "", 0, -1, -1, -1)
+
+	require.Equal(t, 0, countCollectedMetrics(ExplainRUStatementsCounter))
+	require.Equal(t, 0, countCollectedMetrics(ExplainRURenderDurationHistogram))
+	require.Equal(t, 0, countCollectedMetrics(ExplainRUComponentSnapshotCounter))
+	require.Equal(t, 1, countCollectedMetrics(ExplainRUObservedTiDBRUCounter))
+	require.Equal(t, 0, countCollectedMetrics(ExplainRUWorkRowsCounter))
+	require.Equal(t, 0, countCollectedMetrics(ExplainRUWorkBytesCounter))
+	require.Equal(t, 0, countCollectedMetrics(ExplainRURowWidthHistogram))
+}
+
 func TestStmtSummaryMetricLabels(t *testing.T) {
 	InitStmtSummaryMetrics()
 	require.Equal(t, 0, countCollectedMetrics(StmtSummaryWindowRecordCount))

@@ -81,11 +81,11 @@ PlanDigest Explain Target means the existing `EXPLAIN [ANALYZE] <plan_digest>` p
 - [x] 2026-06-30: Incorporated read-only audit findings on model fidelity and self-containment: clarified that `inputRows` and `workBytes` are derived model inputs rather than runtime-observed executor inputs, added user-variable assignment rejection to the side-effect-free SELECT gate, added component-snapshot observability, and inlined the key glossary into this ExecPlan.
 - [x] 2026-06-30: Re-audited expression-level SELECT side effects; tightened the gate plan so known state-changing or system-interacting functions are rejected before execution and covered by helper tests.
 - [x] 2026-06-30: Incorporated read-only audit findings on Demo Metrics contamination risk and `FOR CONNECTION` tests; metrics must use frozen render inputs, `unsupported_for_connection` is mandatory, and for-connection tests are separated from current-session side-effect tests.
-- [ ] Implement format parsing, validation, and result schema.
-- [ ] Implement TiDB-side RU estimation for SELECT `EXPLAIN ANALYZE`.
-- [ ] Add Demo Metrics for workload-level Grafana validation.
-- [ ] Add focused unit and integration tests.
-- [ ] Run required validation and update this plan with evidence.
+- [x] 2026-06-30: Implemented quoted `FORMAT='RU'` validation, analyze-only handling, pre-execution SELECT safety gates, for-connection rejection, and the RU result schema.
+- [x] 2026-06-30: Implemented TiDB-side RU rows for component counters, local plan nodes, row-width/model fields, and excluded storage nodes.
+- [x] 2026-06-30: Added low-cardinality `tidb_explain_ru_*` Demo Metrics for statement status, render duration, component snapshot status, observed TiDB RU, work rows, work bytes, and row-width distribution.
+- [x] 2026-06-30: Added focused planner, metrics, executor, and explain-for-connection tests for the first-demo scope and pre-execution rejection paths.
+- [x] 2026-06-30: Ran targeted Go tests, failpoint test runners, `make bazel_prepare`, `make lint`, and `git diff --check`; recorded the implementation outcome in this plan.
 
 ## Surprises & Discoveries
 
@@ -205,6 +205,9 @@ PlanDigest Explain Target means the existing `EXPLAIN [ANALYZE] <plan_digest>` p
 
 - Observation: `EXPLAIN [ANALYZE] <digest>` and `EXPLAIN EXPLORE <digest>` use different AST fields.
   Evidence: `pkg/parser/ast/misc.go` documents `ExplainStmt.PlanDigest` for `EXPLAIN [ANALYZE] <plan_digest>` and `ExplainStmt.SQLDigest` for `EXPLAIN EXPLORE <sql_digest>`; `pkg/planner/core/planbuilder.go::buildExplain` resolves `PlanDigest` through `getHintedStmtThroughPlanDigest`, while `pkg/planner/core/common_plans.go::Explain.SQLDigest` is used by explore rendering.
+
+- Observation: the SQL parser currently rejects the tested `EXPLAIN ANALYZE FORMAT='RU' VALUES (...)` surface before the RU gate runs, but the AST helper still fail-closes manually constructed `SelectStmtKindValues` nodes.
+  Evidence: executor tests cover parser-level rejection for the SQL surface, while `pkg/planner/core/common_plans_test.go::TestExplainRUSelectGateStatus` directly checks `SelectStmtKindValues` and set-operation values leaves.
 
 ## Decision Log
 
@@ -358,7 +361,18 @@ PlanDigest Explain Target means the existing `EXPLAIN [ANALYZE] <plan_digest>` p
 
 ## Outcomes & Retrospective
 
-The detailed implementation plan has been iterated and anchored to current source locations. Feature implementation is still not started; this document is ready to guide a follow-up implementation pass.
+The first-demo implementation is complete for the requested scope. `EXPLAIN ANALYZE FORMAT='RU'` is accepted for side-effect-free SELECT and set-operation targets, rejected before execution for unsupported or side-effecting targets, and rendered through a dedicated RU schema with component, local plan-node, summary, and excluded storage rows. Demo Metrics are emitted from frozen render inputs using bounded labels and exact `tidb_explain_ru_*` metric families for Grafana calibration.
+
+Validation evidence:
+
+- `go test -tags=intest,deadlock ./pkg/metrics -run 'TestExplainRUMetrics' -count=1`
+- `go test -tags=intest,deadlock ./pkg/planner/core -run 'TestExplainRU' -count=1`
+- `go test -tags=intest,deadlock ./pkg/executor -run 'TestExplainAnalyzeFormatRU|TestExplainRUForConnectionUnsupported|TestExplainFormatInCtx' -count=1`
+- `./tools/check/failpoint-go-test.sh pkg/planner/core -run 'TestExplainRU' -count=1`
+- `./tools/check/failpoint-go-test.sh pkg/executor -run 'TestExplainAnalyzeFormatRU|TestExplainRUForConnectionUnsupported|TestExplainFormatInCtx' -count=1`
+- `make bazel_prepare`
+- `make lint`
+- `git diff --check`
 
 ## Context and Orientation
 

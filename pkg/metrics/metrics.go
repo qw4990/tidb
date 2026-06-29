@@ -102,6 +102,7 @@ func InitMetrics() {
 	InitServerMetrics()
 	InitSessionMetrics()
 	InitRUV2Metrics()
+	InitExplainRUMetrics()
 	InitSliMetrics()
 	InitStatsMetrics()
 	InitTelemetryMetrics()
@@ -361,6 +362,13 @@ func RegisterMetrics() {
 	prometheus.MustRegister(RUV2TiKVStorageProcessedKeysBatchGet)
 	prometheus.MustRegister(RUV2TiKVStorageProcessedKeysGet)
 	prometheus.MustRegister(RUV2TiKVCoprocessorWorkTotal)
+	prometheus.MustRegister(ExplainRUObservedTiDBRUCounter)
+	prometheus.MustRegister(ExplainRUWorkRowsCounter)
+	prometheus.MustRegister(ExplainRUWorkBytesCounter)
+	prometheus.MustRegister(ExplainRURowWidthHistogram)
+	prometheus.MustRegister(ExplainRUStatementsCounter)
+	prometheus.MustRegister(ExplainRURenderDurationHistogram)
+	prometheus.MustRegister(ExplainRUComponentSnapshotCounter)
 
 	prometheus.MustRegister(NetworkTransmissionStats)
 
