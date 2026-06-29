@@ -122,10 +122,17 @@ func TestExplainRUMetrics(t *testing.T) {
 	require.NotNil(t, findMetricFamily(families, "tidb_explain_ru_observed_tidb_ru_total"))
 	require.NotNil(t, findMetricFamily(families, "tidb_explain_ru_work_rows_total"))
 	require.NotNil(t, findMetricFamily(families, "tidb_explain_ru_work_bytes_total"))
-	require.NotNil(t, findMetricFamily(families, "tidb_explain_ru_row_width"))
-	require.NotNil(t, findMetricFamily(families, "tidb_explain_ru_statements_total"))
+	rowWidthFamily := findMetricFamily(families, "tidb_explain_ru_row_width_bytes")
+	require.NotNil(t, rowWidthFamily)
+	requireMetricFamilyHasLabels(t, rowWidthFamily, "component", "operator", "source")
+	require.True(t, metricHasLabelValue(rowWidthFamily.GetMetric()[0], "source", "plan_stats"))
+	statementFamily := findMetricFamily(families, "tidb_explain_ru_statements_total")
+	require.NotNil(t, statementFamily)
+	requireMetricFamilyHasLabels(t, statementFamily, "status")
 	require.NotNil(t, findMetricFamily(families, "tidb_explain_ru_render_duration_seconds"))
-	require.NotNil(t, findMetricFamily(families, "tidb_explain_ru_component_snapshot_total"))
+	componentSnapshotFamily := findMetricFamily(families, "tidb_explain_ru_component_snapshot_total")
+	require.NotNil(t, componentSnapshotFamily)
+	requireMetricFamilyHasLabels(t, componentSnapshotFamily, "component_snapshot_status")
 }
 
 func TestExplainRUMetricsIgnoreEmptyLabelsAndMissingValues(t *testing.T) {
@@ -267,4 +274,17 @@ func metricHasLabelValue(metric *dto.Metric, name string, value string) bool {
 		}
 	}
 	return false
+}
+
+func requireMetricFamilyHasLabels(t *testing.T, family *dto.MetricFamily, names ...string) {
+	t.Helper()
+	require.NotEmpty(t, family.GetMetric())
+	labels := make(map[string]struct{}, len(family.GetMetric()[0].GetLabel()))
+	for _, label := range family.GetMetric()[0].GetLabel() {
+		labels[label.GetName()] = struct{}{}
+	}
+	for _, name := range names {
+		_, ok := labels[name]
+		require.Truef(t, ok, "metric %s missing label %s", family.GetName(), name)
+	}
 }

@@ -569,7 +569,7 @@ func requireExplainRUExcludedStorageRow(t *testing.T, rows [][]any) {
 			continue
 		}
 		require.Equal(t, "excluded_storage", row[15])
-		require.Contains(t, row[16], "storage_ru_excluded")
+		require.Equal(t, "excluded_storage_ru", row[16])
 		return
 	}
 	require.Fail(t, "missing FORMAT='RU' excluded storage row")

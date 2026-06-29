@@ -64,6 +64,12 @@ const (
 	explainRUWidthSourcePlanStats                                            = "plan_stats"
 	explainRUWidthSourceSchemaTypeWidth                                      = "schema_type_width"
 	explainRUWidthSourceSchemaFallback                                       = "schema_fallback"
+	explainRUExcludedStorageNote                                             = "excluded_storage_ru"
+	explainRUUnexpectedWriteKeysNote                                         = "unexpected_select_write_counter"
+	explainRUUnweightedWriteSizeNote                                         = "unweighted_write_size_counter"
+	explainRURowCountWeight                                                  = 1.0
+	// The first demo treats 1 KiB of modeled row movement as one row-count unit.
+	explainRUByteWeight = 1.0 / 1024.0
 )
 
 type explainRUComponentSnapshotStatus string
@@ -355,7 +361,18 @@ func explainRUBuildComponentRows(snapshot *execdetails.RURuntimeStats, status ex
 			count:     count,
 			hasCount:  true,
 			source:    explainRUSourceComponentCounter,
-			note:      "unexpected_select_write_counter",
+			note:      explainRUUnexpectedWriteKeysNote,
+		})
+	}
+	if count := m.WriteSize(); count != 0 {
+		rows = append(rows, explainRURow{
+			section:   explainRUSectionExcluded,
+			component: "write_size",
+			unit:      explainRUUnitCounter,
+			count:     count,
+			hasCount:  true,
+			source:    explainRUSourceComponentCounter,
+			note:      explainRUUnweightedWriteSizeNote,
 		})
 	}
 	add("session_parser_total", m.SessionParserTotal(), weights.SessionParserTotal)
@@ -386,9 +403,9 @@ func explainRUAppendPlanTreeRows(rows []explainRURow, sctx base.PlanContext, run
 		outputRows := explainRUPlanActRows(runtimeStats, op.Origin.ID())
 		rowWidth, rowWidthSource := explainRURowWidth(sctx, op.Origin, op.IsRoot)
 		if op.IsRoot {
-			inputRows := explainRUDirectLocalChildRows(runtimeStats, tree, i)
+			inputRows, inputRowWidth := explainRUDirectLocalChildRowsAndWidth(sctx, runtimeStats, tree, i, rowWidth)
 			workRows := outputRows + inputRows
-			workBytes := float64(workRows) * rowWidth
+			workBytes := explainRUPlanWorkBytes(inputRows, inputRowWidth, outputRows, rowWidth)
 			operatorName, operatorClass := explainRUClassifyOperator(op.Origin)
 			if op.Origin.TP() == plancodec.TypeLock {
 				rows = append(rows, explainRURow{
@@ -412,6 +429,7 @@ func explainRUAppendPlanTreeRows(rows []explainRURow, sctx base.PlanContext, run
 				note = "operator_weight_default_l2"
 			}
 			weight := explainRUWeightForClass(weights, operatorClass)
+			tidbRU := explainRUPlanTiDBRU(weights, weight, workRows, workBytes)
 			rows = append(rows, explainRURow{
 				section:        explainRUSectionPlan,
 				id:             op.ExplainID().String(),
@@ -435,7 +453,7 @@ func explainRUAppendPlanTreeRows(rows []explainRURow, sctx base.PlanContext, run
 				hasCount:       true,
 				weight:         weight,
 				hasWeight:      true,
-				tidbRU:         workBytes * weight * weights.RUScale,
+				tidbRU:         tidbRU,
 				hasTiDBRU:      true,
 				source:         explainRUSourcePlanModel,
 				note:           note,
@@ -454,7 +472,7 @@ func explainRUAppendPlanTreeRows(rows []explainRURow, sctx base.PlanContext, run
 			hasRowWidth:    rowWidth > 0,
 			rowWidthSource: rowWidthSource,
 			source:         explainRUSourceExcludedStorage,
-			note:           "storage_ru_excluded_from_tidb_side_demo",
+			note:           explainRUExcludedStorageNote,
 		})
 	}
 	return rows
@@ -467,18 +485,33 @@ func explainRUPlanActRows(runtimeStats *execdetails.RuntimeStatsColl, planID int
 	return runtimeStats.GetPlanActRows(planID)
 }
 
-func explainRUDirectLocalChildRows(runtimeStats *execdetails.RuntimeStatsColl, tree FlatPlanTree, idx int) int64 {
+func explainRUDirectLocalChildRowsAndWidth(sctx base.PlanContext, runtimeStats *execdetails.RuntimeStatsColl, tree FlatPlanTree, idx int, fallbackWidth float64) (int64, float64) {
 	if idx < 0 || idx >= len(tree) || tree[idx] == nil {
-		return 0
+		return 0, fallbackWidth
 	}
 	var rows int64
+	inputBytes := 0.0
 	for _, childIdx := range tree[idx].ChildrenIdx {
 		if childIdx < 0 || childIdx >= len(tree) || tree[childIdx] == nil || !tree[childIdx].IsRoot {
 			continue
 		}
-		rows += explainRUPlanActRows(runtimeStats, tree[childIdx].Origin.ID())
+		childRows := explainRUPlanActRows(runtimeStats, tree[childIdx].Origin.ID())
+		childWidth, _ := explainRURowWidth(sctx, tree[childIdx].Origin, true)
+		rows += childRows
+		inputBytes += float64(childRows) * childWidth
 	}
-	return rows
+	if rows == 0 {
+		return 0, fallbackWidth
+	}
+	return rows, inputBytes / float64(rows)
+}
+
+func explainRUPlanWorkBytes(inputRows int64, inputRowWidth float64, outputRows int64, outputRowWidth float64) float64 {
+	return float64(inputRows)*inputRowWidth + float64(outputRows)*outputRowWidth
+}
+
+func explainRUPlanTiDBRU(weights execdetails.RUV2Weights, operatorWeight float64, workRows int64, workBytes float64) float64 {
+	return weights.RUScale * operatorWeight * (explainRURowCountWeight*float64(workRows) + explainRUByteWeight*workBytes)
 }
 
 func explainRUClassifyOperator(p base.Plan) (operatorName string, operatorClass string) {
@@ -562,8 +595,11 @@ func explainRURowWidth(sctx base.PlanContext, p base.Plan, includedRoot bool) (f
 		if width > 0 {
 			return float64(width), explainRUWidthSourceSchemaTypeWidth
 		}
+		if len(p.Schema().Columns) > 0 {
+			return float64(8 * len(p.Schema().Columns)), explainRUWidthSourceSchemaFallback
+		}
 	}
-	return 1, explainRUWidthSourceSchemaFallback
+	return 8, explainRUWidthSourceSchemaFallback
 }
 
 func (row explainRURow) toStrings() []string {

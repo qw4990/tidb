@@ -188,20 +188,34 @@ func TestExplainRURowFormatting(t *testing.T) {
 	}, row.toStrings())
 }
 
-func TestExplainRUWriteKeysComponentExcluded(t *testing.T) {
+func TestExplainRUPlanFormulaUsesRowsAndModeledBytes(t *testing.T) {
+	weights := execdetails.RUV2Weights{RUScale: 2}
+	require.Equal(t, 8.0, explainRUPlanWorkBytes(1, 2, 3, 2))
+	require.Equal(t, 3.0, explainRUPlanTiDBRU(weights, 0.25, 2, 4096))
+}
+
+func TestExplainRUWriteCountersComponentExcluded(t *testing.T) {
 	ruMetrics := &execdetails.RUV2Metrics{}
 	ruMetrics.AddWriteKeys(3)
+	ruMetrics.AddWriteSize(64)
 	rows := explainRUBuildComponentRows(
 		&execdetails.RURuntimeStats{Metrics: ruMetrics},
 		explainRUComponentSnapshotOK,
 		execdetails.RUV2Weights{RUScale: 1, WriteKeys: 10},
 	)
-	require.Len(t, rows, 1)
+	require.Len(t, rows, 2)
 	require.Equal(t, explainRUSectionExcluded, rows[0].section)
 	require.Equal(t, "write_keys", rows[0].component)
 	require.True(t, rows[0].hasCount)
 	require.Equal(t, int64(3), rows[0].count)
 	require.False(t, rows[0].hasTiDBRU)
 	require.Equal(t, explainRUSourceComponentCounter, rows[0].source)
-	require.Equal(t, "unexpected_select_write_counter", rows[0].note)
+	require.Equal(t, explainRUUnexpectedWriteKeysNote, rows[0].note)
+	require.Equal(t, explainRUSectionExcluded, rows[1].section)
+	require.Equal(t, "write_size", rows[1].component)
+	require.True(t, rows[1].hasCount)
+	require.Equal(t, int64(64), rows[1].count)
+	require.False(t, rows[1].hasTiDBRU)
+	require.Equal(t, explainRUSourceComponentCounter, rows[1].source)
+	require.Equal(t, explainRUUnweightedWriteSizeNote, rows[1].note)
 }
