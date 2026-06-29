@@ -36,6 +36,10 @@ _Avoid_: Unsupported RU, zero-cost storage
 Prometheus metrics emitted during the demo phase so workload runs can be inspected in Grafana. They describe Observed Explain RU inputs and results, and are not a billing contract.
 _Avoid_: Billing metrics, compatibility contract
 
+**Frozen Demo Metric Inputs**:
+The extracted `RURuntimeStats` snapshot, runtime stats, resolved weights, and generated RU output rows used to record Demo Metrics. Metrics for successful renders must come from these inputs, not from live statement counters after rendering starts, because returning the `EXPLAIN FORMAT='RU'` result can update result chunk counters.
+_Avoid_: Live post-render counters, explain-output self-accounting
+
 **Local Plan Node**:
 A plan node in the flattened `EXPLAIN ANALYZE` physical plan that represents work executed in TiDB root executors. Local Plan Nodes can receive plan-node RU attribution in the first demo.
 _Avoid_: All explain nodes, storage executor
@@ -77,7 +81,7 @@ The validation point that rejects unsupported `FORMAT='RU'` statements before `E
 _Avoid_: Renderer-only validation, post-execution rejection
 
 **Side-effect-free SELECT Target**:
-A first-demo supported explain target that is a `SELECT` or set operation and does not carry `SelectIntoOpt` or locking `LockInfo` anywhere in the selected AST tree. `SELECT ... INTO OUTFILE` and `SELECT ... FOR UPDATE/FOR SHARE` are syntactically `SelectStmt`, but they are not side-effect-free and must be rejected before execution.
+A first-demo supported explain target that is a `SELECT` or set operation and does not carry `SelectIntoOpt`, locking `LockInfo`, variable assignment, or known expression-level side-effect functions anywhere in the selected AST tree. `SELECT ... INTO OUTFILE`, `SELECT ... FOR UPDATE/FOR SHARE`, `SELECT @a := ...`, and `SELECT get_lock(...)` are syntactically `SELECT` forms, but they are not side-effect-free for the first demo and must be rejected before execution.
 _Avoid_: Any SelectStmt, SELECT-only without side-effect check
 
 **Component Snapshot Status**:
@@ -95,3 +99,7 @@ _Avoid_: SQLDigest explain target, separate renderer digest lookup
 **Variable-assignment SELECT**:
 A syntactic SELECT that mutates session variables, such as `SELECT @a := 1`. It is outside the Side-effect-free SELECT Target scope and should be rejected before execution with the side-effecting SELECT status.
 _Avoid_: Read-only SELECT, harmless expression
+
+**Side-effecting SELECT Function**:
+A function call inside a syntactic SELECT that can mutate session or external state, acquire or release advisory locks, advance sequences, change `LAST_INSERT_ID`, or block execution. The first deny-list should include `GET_LOCK`, `RELEASE_LOCK`, `RELEASE_ALL_LOCKS`, `LAST_INSERT_ID(expr)`, `NEXTVAL`, `SETVAL`, and `SLEEP`.
+_Avoid_: Deterministic expression, safe SELECT expression
