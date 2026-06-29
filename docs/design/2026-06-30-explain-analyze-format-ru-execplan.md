@@ -8,7 +8,7 @@ Reference: `PLANS.md` at repository root; this plan must be maintained according
 
 After this change, a user can run `EXPLAIN ANALYZE FORMAT='RU' SELECT ...` and see a TiDB-side RU explanation for the statement. The output must show a component summary plus plan-node attribution so users can see which local TiDB work contributed to the observed explain-time RU value.
 
-The first demo is intentionally scoped to SELECT statements and TiDB-side work. TiKV and TiFlash RU are excluded from the first calculation. The new value is allowed to differ from the current statement-level RU v2 total produced by `RUV2Metrics.CalculateRUValues()`, because this feature is a new explain-analyze derivation that will be calibrated.
+The first demo is intentionally scoped to SELECT statements and TiDB-side work. TiKV and TiFlash RU are excluded from the first calculation. The new value is allowed to differ from both the current printed `EXPLAIN ANALYZE` RU total and the TiDB-side value from `RUV2Metrics.CalculateRUValues()`, because this feature is a new explain-analyze derivation that will be calibrated.
 
 During demo validation, the implementation must also emit low-cardinality Prometheus metrics so workload runs can be inspected in Grafana. These Demo Metrics are for calibration and visibility, not for billing or compatibility promises.
 
@@ -20,6 +20,8 @@ During demo validation, the implementation must also emit low-cardinality Promet
 - [x] 2026-06-30: Added demo metrics as a required observability surface for workload and Grafana validation.
 - [x] 2026-06-30: Re-checked the current source anchors for explain rendering, runtime stats, RU v2 weights, row-size helpers, flat-plan metadata, and metrics registration.
 - [x] 2026-06-30: Expanded this plan with a concrete renderer boundary, data flow, output schema, formula skeleton, metrics names, validation commands, and calibration risks for a follow-up implementation agent.
+- [x] 2026-06-30: Added explicit implementation milestones so the plan satisfies `PLANS.md` and can be executed phase by phase by a follow-up implementation agent.
+- [x] 2026-06-30: Tightened source-anchor wording around quoted explain format parsing, RU v2 `CalculateRUValues` versus `TotalRU`, safe `RURuntimeStats` extraction, `write_size` weighting, and operator-specific row-width helper semantics.
 - [ ] Implement format parsing, validation, and result schema.
 - [ ] Implement TiDB-side RU estimation for SELECT `EXPLAIN ANALYZE`.
 - [ ] Add Demo Metrics for workload-level Grafana validation.
@@ -40,8 +42,11 @@ During demo validation, the implementation must also emit low-cardinality Promet
 - Observation: current RU v2 Prometheus metrics already live under `pkg/metrics` and are registered explicitly.
   Evidence: `pkg/metrics/ru_v2.go` defines the `tidb_ruv2` counters and `pkg/metrics/metrics.go` registers them.
 
-- Observation: the current `RuntimeStatsColl` can expose the `RURuntimeStats` object registered on the target plan ID through `GetRootStats(planID).MergeStats()`.
-  Evidence: `pkg/util/execdetails/runtime_stats.go` stores non-basic runtime stats in `RootRuntimeStats.groupRss`, and `RURuntimeStats.Tp()` returns `TpRURuntimeStats`.
+- Observation: the current `RuntimeStatsColl` can expose the `RURuntimeStats` object registered on the target plan ID through root runtime stat groups, but `GetRootStats(planID)` creates an empty entry when one is missing.
+  Evidence: `pkg/util/execdetails/runtime_stats.go` stores non-basic runtime stats in `RootRuntimeStats.groupRss`, `ExistsRootStats(planID)` checks presence without creating entries, and `RURuntimeStats.Tp()` returns `TpRURuntimeStats`.
+
+- Observation: quoted explain format strings already parse, but bare `FORMAT=RU` is a different parser surface.
+  Evidence: `pkg/parser/parser.y` accepts `FORMAT = stringLit`; adding quoted `FORMAT='RU'` does not require grammar work, while supporting bare `FORMAT=RU` would require parser changes.
 
 - Observation: flattened explain nodes already carry enough metadata to separate TiDB root work from storage work.
   Evidence: `pkg/planner/core/flat_plan.go` defines `FlatOperator.IsRoot`, `StoreType`, `ReqType`, `ChildrenIdx`, and `ChildrenEndIdx`.
@@ -49,7 +54,7 @@ During demo validation, the implementation must also emit low-cardinality Promet
 - Observation: session-level RU v2 weights are available without importing global config into the renderer.
   Evidence: `pkg/sessionctx/variable/session.go` exposes `(*SessionVars).RUV2Weights()`, which converts `config.RUV2Config` into `execdetails.RUV2Weights`.
 
-- Observation: several physical access operators already expose scan/read row-size helpers, while generic physical plans expose `StatsInfo()` and `Schema()`.
+- Observation: several physical access operators expose scan/read row-size helpers, but those helpers must only be used when their semantics match the row width needed by the demo formula. Generic physical plans expose `StatsInfo()` and `Schema()` for fallback estimates.
   Evidence: `PhysicalTableScan.GetScanRowSize`, `PhysicalTableReader.GetAvgRowSize`, `PointGetPlan.GetAvgRowSize`, and `base.PhysicalPlan.StatsInfo()` / `Schema()`.
 
 ## Decision Log
@@ -66,8 +71,8 @@ During demo validation, the implementation must also emit low-cardinality Promet
   Rationale: the immediate goal is to make TiDB-side RU explainable; storage-side RU has separate counters, response summaries, and attribution boundaries.
   Date/Author: 2026-06-30 / Codex and user
 
-- Decision: `FORMAT='RU'` may use a new explain-time RU derivation and does not need to match `RUV2Metrics.CalculateRUValues()` exactly.
-  Rationale: the feature is intended to expose a reasonable and calibratable TiDB-side model, not only to reformat the existing statement-level aggregate.
+- Decision: `FORMAT='RU'` may use a new explain-time RU derivation and does not need to match the current printed `EXPLAIN ANALYZE` RU total or `RUV2Metrics.CalculateRUValues()` exactly.
+  Rationale: `RUV2Metrics.CalculateRUValues()` is the current TiDB-side RU v2 calculation, while the printed `RURuntimeStats` string uses `TotalRU()` and can include TiKV/TiFlash RU. The new feature is intended to expose a reasonable and calibratable TiDB-side explain model, not only to reformat either current aggregate.
   Date/Author: 2026-06-30 / Codex and user
 
 - Decision: row width participates in the demo model as an estimated factor.
@@ -116,9 +121,9 @@ The relevant execution path starts in `pkg/executor/explain.go`. `ExplainExec.ge
 
 The result layout for existing explain formats is built in `pkg/planner/core/common_plans.go`, especially `(*Explain).prepareSchema`, `(*Explain).RenderResult`, `ExplainFlatPlanInRowFormat`, and `prepareOperatorInfo`.
 
-Valid explain format names are centralized in `pkg/types/explain_format.go` and validated in `pkg/planner/core/preprocess.go`. The parser already supports a string explain format; adding `ru` should not require grammar work.
+Valid explain format names are centralized in `pkg/types/explain_format.go` and validated in `pkg/planner/core/preprocess.go`. The parser already supports quoted string explain formats through `FORMAT = stringLit`, so quoted `FORMAT='RU'` should not require grammar work. Bare `FORMAT=RU` is out of scope unless the grammar is extended.
 
-Current RU v2 statement accounting lives in `pkg/util/execdetails/ruv2_metrics.go`. It is statement-level and includes components such as result chunk cells, executor level counters, planning counters, resource-manager counters, write counters, parser counters, and transaction counters.
+Current RU v2 statement accounting lives in `pkg/util/execdetails/ruv2_metrics.go`. `RUV2Metrics.CalculateRUValues(weights)` calculates the current TiDB-side RU v2 value from weighted counters. `RUV2Metrics.TotalRU(weights, tiKVRU, tiFlashRU)` adds TiKV and TiFlash RU, and `RURuntimeStats.String()` uses that total for current v2 `EXPLAIN ANALYZE` output. The TiDB-side counters include result chunk cells, executor level counters, planning counters, resource-manager counters, weighted write-key counters, parser counters, and transaction counters. `write_size` is recorded as shadow accounting but has no `RUV2Weights.WriteSize` field today.
 
 Current executor-side RU v2 instrumentation lives in `pkg/executor/internal/exec/executor.go`. It observes `Executor.Next` calls, accumulates child output rows or cells as input, and records by concrete executor type. This is useful as a reference, but it is not directly plan-node attribution.
 
@@ -139,6 +144,18 @@ The demo must use actual runtime row counts from `RuntimeStatsColl` for row coun
 The SQL-visible total must be the sum of non-plan component rows plus the new plan-node estimator rows. Existing RU v2 executor counters are not part of that total unless a later calibration decision explicitly replaces the new plan-node estimator with those counters.
 
 The metrics must be low-cardinality. Do not use SQL text, SQL digest, plan ID, table name, index name, resource group, database, connection ID, or raw error text as labels.
+
+## Milestones
+
+Milestone 1 proves the format gate and SQL result contract. After this milestone, `FORMAT='RU'` is a recognized explain format, `EXPLAIN FORMAT='RU'` fails because analyze is required, non-SELECT analyze targets fail closed for the first demo, and `EXPLAIN ANALYZE FORMAT='RU' SELECT 1` returns the RU schema with placeholder or minimal rows through the new renderer path. This milestone is accepted by focused tests around explain format validation, schema preparation, and a testkit query that checks deterministic columns and unsupported errors.
+
+Milestone 2 proves local plan-node attribution without storage RU. After this milestone, the renderer consumes the flattened physical plan and `RuntimeStatsColl`, separates local root nodes from TiKV/TiFlash storage nodes, computes deterministic work rows and modeled work bytes, assigns bounded operator classes, and produces plan rows whose TiDB-side RU is the sum of the demo formula. This milestone is accepted by same-package estimator tests for local nodes, storage exclusion, unknown-operator fallback, row-width fallback, and formula determinism.
+
+Milestone 3 proves non-plan component accounting. After this milestone, the renderer recovers the `RURuntimeStats` snapshot when `RuntimeStatsColl` has root stats for the target plan ID and the snapshot is RU v2 with non-nil metrics, converts selected parser, planning, transaction, resource-manager, and result-chunk counters into component rows, keeps executor counters out of the SQL-visible total to avoid double counting, and marks unavailable snapshots with a bounded status. This milestone is accepted by tests that build component rows from a controlled metrics snapshot and by a query where the total equals component rows plus plan rows.
+
+Milestone 4 proves demo observability. After this milestone, `pkg/metrics` exposes the `explain_ru` collectors, the renderer records success, unsupported, and error status counters, and successful estimates record observed RU, work rows, work bytes, and row-width observations with only bounded labels. This milestone is accepted by metric registration/sample tests and by inspecting that no labels use SQL text, digest, plan ID, table name, index name, resource group, database, connection ID, or raw error text.
+
+Milestone 5 proves integration readiness. After this milestone, focused planner, executor, and metrics tests pass; `make bazel_prepare` has been run if required by Go imports, new Go test functions, new Go files, or Bazel metadata changes; `make lint` has been run before claiming completion because implementation code changed; and this ExecPlan has been updated with exact validation evidence and remaining calibration points.
 
 ## Plan of Work
 
@@ -176,7 +193,7 @@ The estimator input is:
 - session RU weights from `SessionVars.RUV2Weights()`,
 - demo-local row/byte coefficients kept in one small constants block.
 
-The renderer should recover the RU v2 statement snapshot with a helper like `extractRURuntimeStats(runtimeStatsColl, targetPlan.ID())`. The helper should call `runtimeStatsColl.GetRootStats(targetPlan.ID()).MergeStats()` and find a `*execdetails.RURuntimeStats` in the returned groups. If no RU v2 snapshot is present, the plan-node estimator can still produce plan rows from runtime stats, but the summary should mark the component snapshot as unavailable and record the bounded `unsupported_ru_version` status.
+The renderer should recover the RU v2 statement snapshot with a helper like `extractRURuntimeStats(runtimeStatsColl, targetPlan.ID())`. The helper should first check `runtimeStatsColl != nil` and `runtimeStatsColl.ExistsRootStats(targetPlan.ID())` so it does not create an empty root entry. It can then call `runtimeStatsColl.GetRootStats(targetPlan.ID()).MergeStats()` and find a `*execdetails.RURuntimeStats` whose `RUVersion == rmclient.RUVersionV2` and `Metrics != nil`. If no usable RU v2 snapshot is present, the plan-node estimator can still produce plan rows from runtime stats, but the summary should mark the component snapshot as unavailable and record the bounded `unsupported_ru_version` status.
 
 For each plan node, derive:
 
@@ -191,7 +208,7 @@ Local plan nodes are flattened operators with `FlatOperator.IsRoot == true`. Sto
 
 Row width should be resolved in this order:
 
-1. If the operator has a scan/read helper such as `GetAvgRowSize()` or `GetScanRowSize()`, use it when the helper describes the node output.
+1. If the operator has a scan/read helper such as `GetAvgRowSize()` or `GetScanRowSize()`, use it only when that helper's semantics match the row-width input needed by the demo formula. For example, a scan-row helper may describe scan output, not an arbitrary parent node's output.
 2. Else, if `plan.StatsInfo().HistColl` and `plan.Schema().Columns` are available, call `cardinality.GetAvgRowSize(plan.SCtx(), plan.StatsInfo().HistColl, plan.Schema().Columns, false, false)`.
 3. Else, sum `chunk.EstimateTypeWidth(col.GetStaticType())` over the schema columns.
 4. If the result is zero or negative, fall back to `8 * len(columns)` and set `source = schema_fallback`.
@@ -206,7 +223,7 @@ Milestone 3 adds statement component rows. The demo should include visible rows 
 
     componentRU = RUScale * componentWeight * count
 
-Use these component mappings from `execdetails.RUV2Weights`: `result_chunk_cells`, `plan_cnt`, `plan_derive_stats_paths`, `session_parser_total`, `txn_cnt`, `resource_manager_read_cnt`, and `resource_manager_write_cnt`. For SELECT-only first demo, write counters such as `write_keys`, `write_size`, and `executor_l5_insert_rows` should normally be absent; if they appear, either show them as `excluded` with a note or fail the SELECT-only gate, rather than silently folding them into a SELECT explanation. If a component is unavailable from `EXPLAIN ANALYZE` internals, show it as absent rather than inventing a value. Do not smear component costs onto the root plan node.
+Use these component mappings from `execdetails.RUV2Weights`: `result_chunk_cells`, `plan_cnt`, `plan_derive_stats_paths`, `session_parser_total`, `txn_cnt`, `resource_manager_read_cnt`, `resource_manager_write_cnt`, and `write_keys` when the first-demo SELECT gate still considers the statement valid. `write_size` is recorded by `RUV2Metrics` as shadow accounting but has no current `RUV2Weights.WriteSize`, so treat it as unweighted/excluded unless this demo defines a separate explicit weight. For SELECT-only first demo, write counters such as `write_keys`, `write_size`, and `executor_l5_insert_rows` should normally be absent; if they appear, either show them as `excluded` with a note or fail the SELECT-only gate, rather than silently folding them into a SELECT explanation. If a component is unavailable from `EXPLAIN ANALYZE` internals, show it as absent rather than inventing a value. Do not smear component costs onto the root plan node.
 
 Milestone 4 handles excluded storage work. If the flattened plan contains cop tasks, TiKV, or TiFlash operators, display rows with `section = excluded`, `operatorClass = storage`, `source = excluded_storage`, and `note = excluded_storage_ru`. Keep `tidbRU` empty or `0`, but do not add it to the TiDB-side total. The first demo must not imply that storage work is free.
 
@@ -249,7 +266,7 @@ The first implementation should isolate these points so calibration changes are 
 - `explainRUByteWeight`: decide the initial byte-to-row-equivalent coefficient and document the chosen value in code comments and tests.
 - Operator-class mapping: confirm whether reader nodes, joins, `TopN`, `Limit`, `Projection`, and `Selection` should follow the existing RU v2 L1/L2/L3 weights or need demo-specific weights.
 - Row-width source precedence: verify that helper-specific row sizes and generic `StatsInfo().HistColl` fallback produce stable enough values for common SELECT plans.
-- Missing `RURuntimeStats`: decide whether missing or non-v2 RU snapshots should still return plan-only rows or fail the whole format as unsupported.
+- Missing `RURuntimeStats`: decide whether missing, non-v2, or nil-metrics RU snapshots should still return plan-only rows or fail the whole format as unsupported.
 - Excluded storage display: decide whether every storage node gets an `excluded` row or only storage subtrees with non-zero runtime rows are shown.
 - Demo metric buckets: tune histogram buckets for row width and render duration after a small workload run.
 
@@ -300,7 +317,7 @@ The first implementation should isolate these points so calibration changes are 
 
    - flatten the target plan with `FlattenPhysicalPlan(e.TargetPlan, true)`;
    - validate that `flat.InExplain` is false and the target is SELECT-only for the first demo;
-   - extract `RURuntimeStats` from the root target plan ID when available;
+   - extract a v2 `RURuntimeStats` with non-nil metrics from the root target plan ID when available;
    - build component rows from non-plan counters;
    - build plan rows for `flat.Main`, `flat.CTEs`, and `flat.ScalarSubQueries`;
    - append excluded storage rows when useful;
@@ -320,7 +337,7 @@ The first implementation should isolate these points so calibration changes are 
            GetScanRowSize() float64
        }
 
-   Prefer helper-specific row size, then stats-based `cardinality.GetAvgRowSize`, then schema type-width fallback.
+   Prefer helper-specific row size only when the helper's semantics match the needed width, then stats-based `cardinality.GetAvgRowSize`, then schema type-width fallback.
 
 8. Add Demo Metrics in `pkg/metrics/explain_ru.go`, initialize them from `InitMetrics`, register them in `pkg/metrics/metrics.go`, and record them from the `FORMAT='RU'` renderer after a successful estimate. Record unsupported/error counts on the failure paths that are specific to this format.
 
@@ -354,7 +371,7 @@ Acceptance for the demo:
 - Queries with TiKV cop work do not include TiKV/TiFlash RU in the TiDB-side total and clearly mark storage RU as excluded if shown.
 - Prometheus exposes Demo Metrics that can be graphed in Grafana during workload runs, with no high-cardinality labels.
 - Existing explain formats still pass their targeted tests.
-- The SQL-visible total is not a reformatted `RUV2Metrics.CalculateRUValues()` total; it is the sum of non-plan component rows plus the explain-time plan-node model, and the output should make that boundary clear.
+- The SQL-visible total is not a reformatted current printed `EXPLAIN ANALYZE` RU total or a raw `RUV2Metrics.CalculateRUValues()` total; it is the sum of non-plan component rows plus the explain-time plan-node model, and the output should make that boundary clear.
 
 The final implementation report must include exact commands run and whether `make bazel_prepare` was required.
 
@@ -372,8 +389,8 @@ Design source facts used for this plan:
 
 - `pkg/executor/explain.go` registers current RU runtime stats after analyze execution.
 - `pkg/executor/internal/exec/executor.go` records existing RU v2 executor metrics by concrete executor type.
-- `pkg/util/execdetails/ruv2_metrics.go` calculates current statement-level RU v2 from counters and weights.
-- `pkg/util/execdetails/runtime_stats.go` stores `RURuntimeStats` as a root runtime stat group that can be recovered through `RootRuntimeStats.MergeStats()`.
+- `pkg/util/execdetails/ruv2_metrics.go` calculates current TiDB-side RU v2 with `CalculateRUValues()` and TiDB+storage RU with `TotalRU()`.
+- `pkg/util/execdetails/runtime_stats.go` stores `RURuntimeStats` as a root runtime stat group that can be recovered through `RootRuntimeStats.MergeStats()` after checking `ExistsRootStats(planID)`.
 - `pkg/planner/core/flat_plan.go` exposes flattened node root/storage metadata and child ranges.
 - `pkg/planner/cardinality/row_size.go` provides row-width estimation helpers.
 - `pkg/planner/core/operator/physicalop` contains operator-specific row-size helpers such as `GetAvgRowSize()` and `GetScanRowSize()`.
@@ -401,6 +418,8 @@ The RU runtime snapshot helper should look like:
         targetPlanID int,
     ) (*execdetails.RURuntimeStats, bool)
 
+This helper must not call `GetRootStats` before confirming the target root stats exist, because `GetRootStats` creates an empty entry for missing plan IDs. A returned snapshot is usable for component rows only when `RUVersion == rmclient.RUVersionV2` and `Metrics != nil`.
+
 The row-width helper should look like:
 
     func estimateExplainRURowWidth(
@@ -425,3 +444,9 @@ The metrics boundary should keep these concepts separate:
 - SQL-visible `FORMAT='RU'` rows for one statement;
 - low-cardinality Demo Metrics for workload-level trend inspection;
 - existing RU v2 metrics and billing/resource-control accounting.
+
+## Revision Notes
+
+2026-06-30: Added a dedicated `Milestones` section and recorded that structural update in `Progress`. This keeps the ExecPlan aligned with `PLANS.md` and gives the follow-up implementation agent independently verifiable checkpoints before code work starts.
+
+2026-06-30: Tightened source-anchor wording after a read-only code audit: quoted `FORMAT='RU'` parses without grammar work, `CalculateRUValues()` is TiDB-side while current printed v2 RU uses `TotalRU()`, `GetRootStats` should be guarded by `ExistsRootStats`, `write_size` has no current RU weight, and row-size helpers must be used only when their semantics match the desired width.
