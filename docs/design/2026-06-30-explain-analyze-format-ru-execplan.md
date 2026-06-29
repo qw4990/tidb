@@ -29,6 +29,8 @@ During demo validation, the implementation must also emit low-cardinality Promet
 - [x] 2026-06-30: Incorporated a second read-only audit: moved SELECT-only rejection to a pre-execution gate, split `operatorClass` from row kind, added concrete row-width helper guidance, added `unsupported_for_connection`, and documented that runtime-info string helpers must not be reused for RU attribution.
 - [x] 2026-06-30: Incorporated a third read-only audit: clarified that the SELECT-only gate should run after plan-digest resolution but before target optimization/execution, documented the DML `handleNoDelay` hazard, tightened `EXPLAIN FOR CONNECTION` status handling, and added row-width/operator-name/test details.
 - [x] 2026-06-30: Re-audited the apparent SELECT-only boundary and tightened it to exclude side-effecting `SELECT INTO` forms, including `SetOprStmt` trees that contain a nested `SelectStmt.SelectIntoOpt`.
+- [x] 2026-06-30: Re-audited helper-interface boundaries before implementation; clarified `PlanDigest` versus `SQLDigest`, recursive set-operation AST handling, component snapshot status reporting, and operator-class-to-weight resolution.
+- [x] 2026-06-30: Incorporated a fresh read-only audit finding: locking SELECT forms such as `FOR UPDATE` and `FOR SHARE` are not side-effect-free and must be rejected before target execution with a bounded `unsupported_locking_select` status.
 - [ ] Implement format parsing, validation, and result schema.
 - [ ] Implement TiDB-side RU estimation for SELECT `EXPLAIN ANALYZE`.
 - [ ] Add Demo Metrics for workload-level Grafana validation.
@@ -121,8 +123,17 @@ During demo validation, the implementation must also emit low-cardinality Promet
 - Observation: a top-level `*ast.SelectStmt` can still represent a side-effecting `SELECT ... INTO OUTFILE` statement.
   Evidence: `pkg/parser/ast/dml.go` stores `SelectStmt.SelectIntoOpt`, `pkg/planner/core/planbuilder.go` routes such selects to `buildSelectInto`, and `pkg/executor/select_into.go` writes rows in `SelectIntoExec.Next`.
 
+- Observation: a top-level `*ast.SelectStmt` can also represent a locking SELECT rather than a side-effect-free read.
+  Evidence: `pkg/parser/ast/dml.go` stores `SelectStmt.LockInfo`; `pkg/parser/ast/util.go::IsReadOnly` treats `FOR UPDATE` and `FOR SHARE` lock types as non-read-only; `pkg/planner/core/logical_plan_builder.go` calls `buildSelectLock` for non-`SelectLockNone` lock info; and `pkg/executor/select.go::SelectLockExec` locks row keys before commit.
+
 - Observation: a `*ast.SetOprStmt` can contain nested `*ast.SelectStmt` nodes, and the existing union preprocessor only rejects `INTO` on non-final select operands.
   Evidence: `pkg/parser/ast/dml.go` defines `SetOprSelectList.Selects []Node`; `pkg/planner/core/preprocess.go::checkSetOprSelectList` iterates only `stmt.Selects[:len(stmt.Selects)-1]` when checking `SelectIntoOpt`.
+
+- Observation: the set-operation AST list is not semantically guaranteed to be only `SelectStmt` nodes.
+  Evidence: `pkg/parser/ast/dml.go` documents `SetOprSelectList` as a `SelectStmt/TableStmt/ValuesStmt` list, and `pkg/planner/core/logical_plan_builder.go::buildIntersect` only builds the currently handled `*ast.SelectStmt` and nested `*ast.SetOprSelectList` cases. The RU gate should fail closed for nil, table/values, or future node shapes until they are explicitly designed.
+
+- Observation: `EXPLAIN [ANALYZE] <digest>` and `EXPLAIN EXPLORE <digest>` use different AST fields.
+  Evidence: `pkg/parser/ast/misc.go` documents `ExplainStmt.PlanDigest` for `EXPLAIN [ANALYZE] <plan_digest>` and `ExplainStmt.SQLDigest` for `EXPLAIN EXPLORE <sql_digest>`; `pkg/planner/core/planbuilder.go::buildExplain` resolves `PlanDigest` through `getHintedStmtThroughPlanDigest`, while `pkg/planner/core/common_plans.go::Explain.SQLDigest` is used by explore rendering.
 
 ## Decision Log
 
@@ -179,7 +190,7 @@ During demo validation, the implementation must also emit low-cardinality Promet
   Date/Author: 2026-06-30 / Codex
 
 - Decision: enforce the SELECT-only demo gate from `Explain.ExecStmt` after plan-digest resolution and before target-plan optimization or execution.
-  Rationale: the grammar allows non-SELECT explain targets and `GetSelectPlan()` skips DML wrappers, so using the skipped subtree as proof of SELECT support would accidentally allow statements that the first demo must reject. The primary gate should run in `buildExplain` after `getHintedStmtThroughPlanDigest` has replaced `explain.Stmt` and before `OptimizeAstNodeNoCache` / `OptimizeAstNode` builds the target plan; `buildExplainPlan` or `prepareSchema` can retain a defensive check. Plain `*ast.SelectStmt` and `*ast.SetOprStmt` are allowed only when they do not contain `SelectIntoOpt`; DML, `ALTER TABLE`, `IMPORT INTO`, `SELECT ... INTO`, `*ast.ExecuteStmt` if ever reachable, nil `ExecStmt`, and `EXPLAIN FOR CONNECTION` are unsupported for the first demo.
+  Rationale: the grammar allows non-SELECT explain targets and `GetSelectPlan()` skips DML wrappers, so using the skipped subtree as proof of SELECT support would accidentally allow statements that the first demo must reject. The primary gate should run in `buildExplain` after `getHintedStmtThroughPlanDigest` has replaced `explain.Stmt` and before `OptimizeAstNodeNoCache` / `OptimizeAstNode` builds the target plan; `buildExplainPlan` or `prepareSchema` can retain a defensive check. Plain `*ast.SelectStmt` and `*ast.SetOprStmt` are allowed only when they do not contain `SelectIntoOpt` and do not contain locking `LockInfo`; DML, `ALTER TABLE`, `IMPORT INTO`, `SELECT ... INTO`, locking SELECT, `*ast.ExecuteStmt` if ever reachable, nil `ExecStmt`, and `EXPLAIN FOR CONNECTION` are unsupported for the first demo.
   Date/Author: 2026-06-30 / Codex
 
 - Decision: split the SQL row's overall `source` from a new `rowWidthSource` column.
@@ -187,7 +198,7 @@ During demo validation, the implementation must also emit low-cardinality Promet
   Date/Author: 2026-06-30 / Codex
 
 - Decision: record unsupported Demo Metric status at the gate that rejects the statement.
-  Rationale: `unsupported_non_analyze`, `unsupported_non_select`, and `unsupported_for_connection` are returned before the renderer runs, while `success` and renderer `error` statuses are known in `RenderResult`. Counting only renderer exits would miss planning-time format rejections and would reject non-SELECT statements too late.
+  Rationale: `unsupported_non_analyze`, `unsupported_non_select`, `unsupported_side_effecting_select`, `unsupported_locking_select`, and `unsupported_for_connection` are returned before the renderer runs, while `success` and renderer `error` statuses are known in `RenderResult`. Counting only renderer exits would miss planning-time format rejections and would reject unsupported targets too late.
   Date/Author: 2026-06-30 / Codex
 
 - Decision: keep bare `FORMAT=RU` and `EXPLAIN FORMAT='RU' FOR CONNECTION` out of the first demo.
@@ -230,6 +241,22 @@ During demo validation, the implementation must also emit low-cardinality Promet
   Rationale: `SELECT ... INTO` is syntactically a `SelectStmt` but can write output through `SelectIntoExec`. Labeling it as `unsupported_non_select` would hide a safety-relevant distinction; use `unsupported_side_effecting_select` for the gate and tests.
   Date/Author: 2026-06-30 / Codex
 
+- Decision: locking SELECT targets should use a bounded status distinct from ordinary SELECT and `SELECT INTO`.
+  Rationale: `SELECT ... FOR UPDATE` and related `FOR SHARE` forms are syntactically `SelectStmt`, but the planner builds select-lock behavior and execution can lock row keys. Treating them as side-effect-free would violate the first demo safety boundary; use `unsupported_locking_select` for the gate, metrics, and tests.
+  Date/Author: 2026-06-30 / Codex
+
+- Decision: the SELECT gate helper should separate top-level statement validation from recursive set-operation node validation.
+  Rationale: the public gate is called with `ast.StmtNode`, but the recursive walk must inspect `ast.Node` values inside `SetOprSelectList.Selects`. That internal helper must reject nil, `TableStmt`, `ValuesStmt`, and future node types as `unsupported_non_select`, return `unsupported_side_effecting_select` for `SelectStmt.SelectIntoOpt`, and return `unsupported_locking_select` for `SelectStmt.LockInfo` with a lock type other than `ast.SelectLockNone`.
+  Date/Author: 2026-06-30 / Codex
+
+- Decision: component snapshot extraction should return a bounded availability status, not only `(*RURuntimeStats, bool)`.
+  Rationale: the renderer needs to distinguish `component_snapshot_missing`, `component_snapshot_non_v2`, `component_snapshot_nil_metrics`, and `component_snapshot_bypassed` for SQL notes and tests. A boolean-only helper would force the implementation either to lose that explanation or duplicate the scan.
+  Date/Author: 2026-06-30 / Codex
+
+- Decision: operator classification returns a bounded operator name and class; weight resolution is a separate helper that receives the resolved `RUV2Weights`.
+  Rationale: `classifyExplainRUOperator(p)` has no weight source by itself. Returning a numeric weight from that function would invite hidden global config reads or hard-coded stale weights. Keep the classifier pure, then map `l1`/`l2`/`l3`/`unknown` through the one resolved weight source for the statement.
+  Date/Author: 2026-06-30 / Codex
+
 ## Outcomes & Retrospective
 
 The detailed implementation plan has been iterated and anchored to current source locations. Feature implementation is still not started; this document is ready to guide a follow-up implementation pass.
@@ -244,7 +271,7 @@ Valid explain format names are centralized in `pkg/types/explain_format.go` and 
 
 The AST grammar for explain targets is wider than this demo. `ExplainableStmt` includes `SELECT`, set operations, DML, `ALTER TABLE`, and `IMPORT INTO`. The first demo must therefore gate on `Explain.ExecStmt` before rendering: allow only side-effect-free `*ast.SelectStmt` and `*ast.SetOprStmt` targets as defined below, and fail closed for anything else. Do not use `FlatPlanTree.GetSelectPlan()` as the proof that the original target was SELECT-only, because that helper skips DML wrappers for existing explain rendering.
 
-The phrase SELECT-only means side-effect-free SELECT or set-operation targets for the first demo. A `*ast.SelectStmt` with `SelectIntoOpt != nil` is not in scope because `PlanBuilder` turns it into a `SelectInto` plan and `SelectIntoExec` writes output files. A `*ast.SetOprStmt` is in scope only if its `SetOprSelectList` recursively contains no `*ast.SelectStmt` with `SelectIntoOpt != nil`; the helper must not assume a top-level set operation is side-effect-free without walking the select list.
+The phrase SELECT-only means side-effect-free SELECT or set-operation targets for the first demo. A `*ast.SelectStmt` with `SelectIntoOpt != nil` is not in scope because `PlanBuilder` turns it into a `SelectInto` plan and `SelectIntoExec` writes output files. A `*ast.SelectStmt` with `LockInfo != nil` and `LockInfo.LockType != ast.SelectLockNone` is also not in scope because `SelectLockExec` can lock row keys. A `*ast.SetOprStmt` is in scope only if its `SetOprSelectList` recursively contains allowed `*ast.SelectStmt` and nested `*ast.SetOprSelectList` nodes, with no `SelectIntoOpt` or locking `LockInfo` anywhere. `SetOprSelectList` is documented as a `SelectStmt/TableStmt/ValuesStmt` list, so the first demo should reject nil, table/values, and future node shapes until a later design covers them; the helper must not assume a top-level set operation is side-effect-free without walking the select list.
 
 `EXPLAIN FOR CONNECTION` is separate from `EXPLAIN ANALYZE`. `buildExplainFor` currently supports only `brief`, `row`, and `verbose`; keep `FORMAT='RU' FOR CONNECTION` unsupported in the first demo because it does not execute the target statement and cannot produce Observed Explain RU.
 
@@ -270,9 +297,9 @@ The implementation should use `CONTEXT.md` as the glossary for this feature. Imp
 
 ## Implementation Requirements
 
-`EXPLAIN ANALYZE FORMAT='RU'` must be accepted by explain-format validation, but `EXPLAIN FORMAT='RU'` without `ANALYZE` must fail with a clear unsupported error. The first demo must also fail closed for non-SELECT targets before the analyzed target statement can execute. Add an AST helper, for example `isExplainRUSideEffectFreeSelect(ast.StmtNode) bool`, that returns true only for `*ast.SelectStmt` with `SelectIntoOpt == nil` and `*ast.SetOprStmt` whose `SetOprSelectList` recursively contains only allowed select or set-operation nodes. Call it from `buildExplain` after any `getHintedStmtThroughPlanDigest` replacement and before `OptimizeAstNodeNoCache` or `OptimizeAstNode` so unsupported targets are rejected before optimization and before executor construction. A second defensive call from `buildExplainPlan` or `prepareSchema` is acceptable, but it must not be the primary safety gate. The helper must return false for DML, `ALTER TABLE`, `IMPORT INTO`, `SELECT ... INTO`, nested set-operation `SELECT ... INTO`, `*ast.ExecuteStmt` if it becomes reachable, nil `ExecStmt`, and any future explain target not explicitly allowed. Use `unsupported_non_select` for targets that are not SELECT/set-operation ASTs, and `unsupported_side_effecting_select` for `SELECT INTO`-like targets that are syntactically SELECT but outside the first demo. A renderer-only gate is insufficient because it would run after `ExplainExec.generateExplainInfo` has already executed the target. If the implementation also inspects the flattened plan as defense in depth, it must inspect the original leading flat operator before any `GetSelectPlan()` skip.
+`EXPLAIN ANALYZE FORMAT='RU'` must be accepted by explain-format validation, but `EXPLAIN FORMAT='RU'` without `ANALYZE` must fail with a clear unsupported error. The first demo must also fail closed for non-SELECT targets before the analyzed target statement can execute. Add an AST helper, for example `explainRUSelectGateStatus(ast.StmtNode) explainRUStatus`, that returns success only for `*ast.SelectStmt` with `SelectIntoOpt == nil` and either nil `LockInfo` or `LockInfo.LockType == ast.SelectLockNone`, plus `*ast.SetOprStmt` whose `SetOprSelectList` recursively contains only allowed select or set-operation nodes. Call it from `buildExplain` after any `getHintedStmtThroughPlanDigest` replacement and before `OptimizeAstNodeNoCache` or `OptimizeAstNode` so unsupported targets are rejected before optimization and before executor construction. A second defensive call from `buildExplainPlan` or `prepareSchema` is acceptable, but it must not be the primary safety gate. The helper must return unsupported status for DML, `ALTER TABLE`, `IMPORT INTO`, `SELECT ... INTO`, nested set-operation `SELECT ... INTO`, locking SELECT, nested set-operation locking SELECT, `*ast.ExecuteStmt` if it becomes reachable, nil `ExecStmt`, and any future explain target not explicitly allowed. Use `unsupported_non_select` for targets that are not SELECT/set-operation ASTs, `unsupported_side_effecting_select` for `SELECT INTO`-like targets that are syntactically SELECT but outside the first demo, and `unsupported_locking_select` for locking SELECT targets. A renderer-only gate is insufficient because it would run after `ExplainExec.generateExplainInfo` has already executed the target. If the implementation also inspects the flattened plan as defense in depth, it must inspect the original leading flat operator before any `GetSelectPlan()` skip.
 
-`EXPLAIN ANALYZE FORMAT='RU' '<plan_digest>'` is in scope only after the existing planner digest path resolves the digest to a SELECT or set-operation statement through `getHintedStmtThroughPlanDigest`. The renderer should not add a separate digest lookup. If digest resolution fails, produces no `ExecStmt`, or resolves to a non-SELECT statement, return the existing resolution error or `unsupported_non_select` as appropriate.
+`EXPLAIN ANALYZE FORMAT='RU' '<plan_digest>'` is in scope only after the existing planner digest path resolves `ast.ExplainStmt.PlanDigest` to a SELECT or set-operation statement through `getHintedStmtThroughPlanDigest`. Do not confuse this with `ast.ExplainStmt.SQLDigest`, which is for `EXPLAIN EXPLORE`. The renderer should not add a separate digest lookup and should not read `Explain.SQLDigest` for this feature. If digest resolution fails, produces no `ExecStmt`, or resolves to a non-SELECT statement, return the existing resolution error or `unsupported_non_select` as appropriate.
 
 `EXPLAIN FORMAT='RU' FOR CONNECTION ...` must remain unsupported in the first demo. `ExplainForStmt` is not validated by the `preprocess.go` loop over `types.ExplainFormats`, so handle this in `buildExplainFor` after process/access checks and before returning a no-target-plan `Explain` or decoding a target plan. Bare `FORMAT=RU` is also out of scope unless the implementation intentionally extends `ExplainFormatType` in `pkg/parser/parser.y`, regenerates parser artifacts, and adds parser-specific validation.
 
@@ -297,7 +324,7 @@ The metrics must be low-cardinality. Do not use SQL text, SQL digest, plan ID, t
 
 ## Milestones
 
-Milestone 1 proves the format gate and SQL result contract. After this milestone, quoted `FORMAT='RU'` is a recognized explain format, `EXPLAIN FORMAT='RU'` fails because analyze is required, bare `FORMAT=RU` is either still a parser error or explicitly implemented with parser regeneration, non-SELECT and side-effecting SELECT analyze targets fail closed before execution for the first demo, resolved plan-digest targets reuse the same SELECT-only gate, `EXPLAIN FORMAT='RU' FOR CONNECTION ...` remains unsupported, and `EXPLAIN ANALYZE FORMAT='RU' SELECT 1` returns the RU schema with placeholder or minimal rows through the new renderer path. This milestone is accepted by focused tests around explain format validation, schema preparation, statement-context format propagation, a testkit query that checks deterministic columns, unsupported-error tests for non-analyze, non-SELECT, side-effecting SELECT, and for-connection cases, and a digest-path test or helper test that proves the gate is applied after digest resolution. Include a non-SELECT test that would visibly mutate data if executed, plus a `SELECT ... INTO` or helper-level set-operation-with-`INTO` test, and assert the target side effect did not happen after the unsupported `EXPLAIN ANALYZE FORMAT='RU'` attempt. The implementation must also audit hard-coded explain-format lists and add `ru` only to analyze-capable loops; plain-EXPLAIN loops should keep `ru` out and use a dedicated unsupported test instead.
+Milestone 1 proves the format gate and SQL result contract. After this milestone, quoted `FORMAT='RU'` is a recognized explain format, `EXPLAIN FORMAT='RU'` fails because analyze is required, bare `FORMAT=RU` is either still a parser error or explicitly implemented with parser regeneration, non-SELECT and non-side-effect-free SELECT analyze targets fail closed before execution for the first demo, resolved `PlanDigest` targets reuse the same SELECT-only gate, `EXPLAIN FORMAT='RU' FOR CONNECTION ...` remains unsupported, and `EXPLAIN ANALYZE FORMAT='RU' SELECT 1` returns the RU schema with placeholder or minimal rows through the new renderer path. This milestone is accepted by focused tests around explain format validation, schema preparation, statement-context format propagation, a testkit query that checks deterministic columns, unsupported-error tests for non-analyze, non-SELECT, `SELECT INTO`, locking SELECT, and for-connection cases, and a digest-path test or helper test that proves the gate is applied after `PlanDigest` resolution. Include a non-SELECT test that would visibly mutate data if executed, plus `SELECT ... INTO`, `SELECT ... FOR UPDATE` or `FOR SHARE`, and helper-level set-operation tests for nested `INTO` and nested locking SELECT, and assert the target side effect or row-locking path did not happen after the unsupported `EXPLAIN ANALYZE FORMAT='RU'` attempt. Add helper tests for `SetOprSelectList` recursion that reject nil, table/values, or unknown AST nodes as unsupported rather than silently treating them as side-effect-free SELECTs. The implementation must also audit hard-coded explain-format lists and add `ru` only to analyze-capable loops; plain-EXPLAIN loops should keep `ru` out and use a dedicated unsupported test instead.
 
 Milestone 2 proves local plan-node attribution without storage RU. After this milestone, the renderer consumes the flattened physical plan and `RuntimeStatsColl`, separates local root nodes from TiKV/TiFlash storage nodes, computes deterministic work rows and modeled work bytes, assigns bounded operator classes, and produces plan rows whose TiDB-side RU is the sum of the demo formula. This milestone is accepted by same-package estimator tests for local nodes, storage exclusion, unknown-operator fallback, row-width fallback, and formula determinism.
 
@@ -346,7 +373,7 @@ The estimator input is:
 - resolved RU weights from the usable `RURuntimeStats` snapshot or, if no usable snapshot weights exist, `SessionVars.RUV2Weights()`,
 - demo-local row/byte coefficients kept in one small constants block.
 
-The renderer should recover the RU v2 statement snapshot with a helper like `extractRURuntimeStats(runtimeStatsColl, targetPlan.ID())`. The helper should first check `runtimeStatsColl != nil` and `runtimeStatsColl.ExistsRootStats(targetPlan.ID())` so it does not create an empty root entry. It can then call `runtimeStatsColl.GetRootStats(targetPlan.ID()).MergeStats()` and find a `*execdetails.RURuntimeStats` whose `RUVersion == rmclient.RUVersionV2`, `Metrics != nil`, and `!Metrics.Bypass()`. It should return the whole snapshot plus a boolean, then a separate `resolveExplainRUWeights(snapshot, sessionWeights)` helper should choose `snapshot.Weights` when the snapshot is usable and not zero-valued, otherwise `sessionWeights`. If no usable RU v2 snapshot is present, the plan-node estimator can still produce plan rows from runtime stats using session weights, but the summary should mark the component snapshot as unavailable with a bounded SQL note such as `component_snapshot_missing`, `component_snapshot_non_v2`, or `component_snapshot_bypassed`. Only use statement status `unsupported_ru_version` if the renderer intentionally fails the whole output instead of returning plan-only rows. Pure helper tests should construct `RURuntimeStats` directly with `RUVersionV2`, non-nil metrics, and non-zero weights; end-to-end tests that depend on the v2 component snapshot must set up a real or mocked domain that reports RU v2.
+The renderer should recover the RU v2 statement snapshot with a helper like `extractRURuntimeStats(runtimeStatsColl, targetPlan.ID())`. The helper should first check `runtimeStatsColl != nil` and `runtimeStatsColl.ExistsRootStats(targetPlan.ID())` so it does not create an empty root entry. It can then call `runtimeStatsColl.GetRootStats(targetPlan.ID()).MergeStats()` and find a `*execdetails.RURuntimeStats`. It should return the snapshot plus a bounded component snapshot status, then a separate `resolveExplainRUWeights(snapshot, status, sessionWeights)` helper should choose `snapshot.Weights` when the snapshot status is ok and the weights are not zero-valued, otherwise `sessionWeights`. If no usable RU v2 snapshot is present, the plan-node estimator can still produce plan rows from runtime stats using session weights, but the summary should mark the component snapshot as unavailable with a bounded SQL note such as `component_snapshot_missing`, `component_snapshot_non_v2`, `component_snapshot_nil_metrics`, or `component_snapshot_bypassed`. Only use statement status `unsupported_ru_version` if the renderer intentionally fails the whole output instead of returning plan-only rows. Pure helper tests should construct `RURuntimeStats` directly with `RUVersionV2`, non-nil metrics, and non-zero weights; end-to-end tests that depend on the v2 component snapshot must set up a real or mocked domain that reports RU v2.
 
 For each plan node, derive:
 
@@ -416,7 +443,7 @@ Milestone 4 adds Demo Metrics. Add `pkg/metrics/explain_ru.go`, initialize it fr
     Prometheus name: tidb_explain_ru_render_duration_seconds
     Labels: status
 
-Allowed `status` values are `success`, `unsupported_non_analyze`, `unsupported_non_select`, `unsupported_side_effecting_select`, `unsupported_ru_version`, `unsupported_for_connection`, and `error`. For observed RU, work rows, and work bytes, allowed `source` values should be bounded row sources such as `summary_total`, `component_counter`, `plan_model`, and `excluded_storage`. For `ExplainRURowWidth`, observe the SQL-visible plan-row `rowWidth` once for each included local plan row; this is the output row-width factor, not `inputRowWidth` and not both input and output widths. The `source` label for this histogram should use bounded Row-width Source values such as `operator_helper`, `plan_stats`, `schema_type_width`, and `schema_fallback`. Allowed `operator` values should come from a canonical bounded mapping based on operator kind; never use the plan ID.
+Allowed `status` values are `success`, `unsupported_non_analyze`, `unsupported_non_select`, `unsupported_side_effecting_select`, `unsupported_locking_select`, `unsupported_ru_version`, `unsupported_for_connection`, and `error`. For observed RU, work rows, and work bytes, allowed `source` values should be bounded row sources such as `summary_total`, `component_counter`, `plan_model`, and `excluded_storage`. For `ExplainRURowWidth`, observe the SQL-visible plan-row `rowWidth` once for each included local plan row; this is the output row-width factor, not `inputRowWidth` and not both input and output widths. The `source` label for this histogram should use bounded Row-width Source values such as `operator_helper`, `plan_stats`, `schema_type_width`, and `schema_fallback`. Allowed `operator` values should come from a canonical bounded mapping based on operator kind; never use the plan ID.
 
 The metrics must not label by SQL text, SQL digest, plan ID, table name, index name, resource group, database, connection ID, or raw error text in the first demo. Grafana panels should be able to answer: total observed TiDB-side RU over time, component/operator contribution mix, work row and byte trends, row-width distribution, and error/unsupported counts.
 
@@ -445,8 +472,8 @@ The first implementation should isolate these points so calibration changes are 
 
    - add the RU schema in `prepareSchema`;
    - reject `FORMAT='RU'` unless `Analyze` is true, recording `unsupported_non_analyze`;
-   - add a helper such as `isExplainRUSideEffectFreeSelect(ast.StmtNode) bool` that accepts only `*ast.SelectStmt` with `SelectIntoOpt == nil` and `*ast.SetOprStmt` whose nested `SetOprSelectList` contains no side-effecting select;
-   - reject non-SELECT targets for the first demo from `buildExplain` after plan-digest resolution and before target-plan optimization, recording `unsupported_non_select`; reject `SELECT INTO`-like targets from the same gate with `unsupported_side_effecting_select`; keep a defensive check in `buildExplainPlan` or `prepareSchema` if it keeps the control flow clearer;
+   - add a top-level helper such as `explainRUSelectGateStatus(ast.StmtNode) explainRUStatus` plus an internal recursive helper over `ast.Node`; accept only `*ast.SelectStmt` with `SelectIntoOpt == nil` and `LockInfo == nil || LockInfo.LockType == ast.SelectLockNone`, plus `*ast.SetOprStmt` whose nested `SetOprSelectList` contains only allowed select or nested set-operation list nodes; reject nil, table/values, or future node shapes with `unsupported_non_select`; reject any `SelectIntoOpt` path with `unsupported_side_effecting_select`; reject any locking `LockInfo` path with `unsupported_locking_select`;
+   - reject non-SELECT targets for the first demo from `buildExplain` after plan-digest resolution and before target-plan optimization, recording `unsupported_non_select`; reject `SELECT INTO`-like targets from the same gate with `unsupported_side_effecting_select`; reject locking SELECT targets with `unsupported_locking_select`; keep a defensive check in `buildExplainPlan` or `prepareSchema` if it keeps the control flow clearer;
    - keep direct prepared `EXECUTE` unsupported for the first demo if it becomes reachable through a future grammar path, and keep wrapped execute plans from `EXPLAIN FOR CONNECTION` unsupported;
    - keep `EXPLAIN FORMAT='RU' FOR CONNECTION ...` unsupported in `buildExplainFor`, recording `unsupported_for_connection` after process/access checks and before any no-target-plan return or brief-binary decode;
    - route `RenderResult` to a new `renderRUExplain` helper;
@@ -482,15 +509,17 @@ The first implementation should isolate these points so calibration changes are 
            weights execdetails.RUV2Weights
        }
 
+       type explainRUComponentSnapshotStatus string
+
    Keep these types unexported unless tests need a narrow helper. Prefer tests in the same package before exporting.
 
 6. Implement `renderRUExplain` with this data flow:
 
    - flatten the target plan with `FlattenPhysicalPlan(e.TargetPlan, true)`;
    - validate that `flat.InExplain` is false and the original `e.ExecStmt` is a side-effect-free SELECT target for the first demo as defense in depth;
-   - extract a v2 `RURuntimeStats` with non-nil, non-bypassed metrics from the root target plan ID when available;
+   - extract the `RURuntimeStats` from the root target plan ID when available and return a bounded component snapshot status such as `component_snapshot_ok`, `component_snapshot_missing`, `component_snapshot_non_v2`, `component_snapshot_nil_metrics`, or `component_snapshot_bypassed`;
    - resolve one `RUV2Weights` value for the whole output, preferring usable snapshot weights over session weights;
-   - build component rows from non-plan counters when the RU v2 snapshot is usable; otherwise attach a bounded note such as `component_snapshot_missing`, `component_snapshot_bypassed`, or `component_snapshot_non_v2` to the summary and keep component rows absent;
+   - build component rows from non-plan counters when the RU v2 snapshot status is `component_snapshot_ok`; otherwise attach the bounded status note to the summary and keep component rows absent;
    - build plan rows for `flat.Main`, `flat.CTEs`, and `flat.ScalarSubQueries`;
    - append excluded storage rows when useful;
    - order rows as one total `summary` row, then component `summary` rows, then `plan` rows, then `excluded` rows;
@@ -522,7 +551,7 @@ The first implementation should isolate these points so calibration changes are 
 
    Prefer helper-specific row size only when the helper's semantics match the needed width and returns a positive value, then stats-based `cardinality.GetAvgRowSize`, then schema type-width fallback. Guard `StatsInfo()` and `HistColl` before the stats-based call.
 
-9. Add Demo Metrics in `pkg/metrics/explain_ru.go`, initialize them from `InitMetrics`, register them in `pkg/metrics/metrics.go`, and record them from the `FORMAT='RU'` gates and renderer. Record `unsupported_non_analyze` where `prepareSchema` rejects non-analyze RU. Record `unsupported_non_select` at the same pre-execution gate that rejects non-SELECT targets, and record `unsupported_side_effecting_select` when that same gate rejects `SELECT INTO`-like targets. Record `unsupported_for_connection` from `buildExplainFor` if the metrics package can be used there without an import cycle. Record `success` and `error` in or around `RenderResult`. Avoid double counting if `prepareSchema` is called more than once on the same `Explain` object or if the renderer wraps an error path; a small unexported boolean/status field on `Explain` or a helper that records only once per terminal path is acceptable if needed.
+9. Add Demo Metrics in `pkg/metrics/explain_ru.go`, initialize them from `InitMetrics`, register them in `pkg/metrics/metrics.go`, and record them from the `FORMAT='RU'` gates and renderer. Record `unsupported_non_analyze` where `prepareSchema` rejects non-analyze RU. Record `unsupported_non_select` at the same pre-execution gate that rejects non-SELECT targets, record `unsupported_side_effecting_select` when that same gate rejects `SELECT INTO`-like targets, and record `unsupported_locking_select` when it rejects locking SELECT targets. Record `unsupported_for_connection` from `buildExplainFor` if the metrics package can be used there without an import cycle. Record `success` and `error` in or around `RenderResult`. Avoid double counting if `prepareSchema` is called more than once on the same `Explain` object or if the renderer wraps an error path; a small unexported boolean/status field on `Explain` or a helper that records only once per terminal path is acceptable if needed.
 
 10. Add tests in the nearest existing files:
 
@@ -553,6 +582,7 @@ Acceptance for the demo:
 - `EXPLAIN FORMAT='RU' SELECT 1` returns a clear unsupported error because analyze is required.
 - `EXPLAIN ANALYZE FORMAT='RU' INSERT/UPDATE/DELETE/REPLACE/ALTER TABLE/IMPORT INTO ...` returns a clear unsupported error in the first demo before the target statement executes. A mutation-oriented regression test must prove that rejected DML did not change table contents.
 - `EXPLAIN ANALYZE FORMAT='RU' SELECT ... INTO OUTFILE ...` and set-operation targets that contain nested `SELECT ... INTO` return a clear unsupported error before execution. A regression test should prove no output file or other target side effect is created when the statement is rejected.
+- `EXPLAIN ANALYZE FORMAT='RU' SELECT ... FOR UPDATE/FOR SHARE ...` and set-operation targets that contain nested locking SELECT return a clear unsupported error before execution. A regression or helper-level test should prove the lock-producing path is rejected before `SelectLockExec` can run.
 - `EXPLAIN FORMAT='RU' FOR CONNECTION ...` remains unsupported, and bare `FORMAT=RU` is either a syntax error or is covered only if parser grammar support is intentionally added.
 - A simple table query shows plan-node attribution based on actual row counts and estimated row widths.
 - Queries with TiKV cop work do not include TiKV/TiFlash RU in the TiDB-side total and clearly mark storage RU as excluded if shown.
@@ -612,9 +642,9 @@ The RU runtime snapshot helper should look like:
     func extractRURuntimeStats(
         runtimeStats *execdetails.RuntimeStatsColl,
         targetPlanID int,
-    ) (*execdetails.RURuntimeStats, bool)
+    ) (*execdetails.RURuntimeStats, explainRUComponentSnapshotStatus)
 
-This helper must not call `GetRootStats` before confirming the target root stats exist, because `GetRootStats` creates an empty entry for missing plan IDs. A returned snapshot is usable for component rows only when `RUVersion == rmclient.RUVersionV2`, `Metrics != nil`, and `!Metrics.Bypass()`. The renderer should resolve one weight source for both component rows and plan rows: use `snapshot.Weights` when usable and non-zero, otherwise use the passed session weights.
+This helper must not call `GetRootStats` before confirming the target root stats exist, because `GetRootStats` creates an empty entry for missing plan IDs. Return `component_snapshot_missing` when the runtime stats collection, root stats, or merged RU runtime stats are absent; return `component_snapshot_non_v2` when `RUVersion != rmclient.RUVersionV2`; return `component_snapshot_nil_metrics` when `Metrics == nil`; return `component_snapshot_bypassed` when `Metrics.Bypass()` is true; and return `component_snapshot_ok` only for a v2, non-nil, non-bypassed component snapshot. The renderer should resolve one weight source for both component rows and plan rows: use `snapshot.Weights` when the snapshot status is ok and the weights are non-zero, otherwise use the passed session weights. A small helper such as `isZeroRUV2Weights(weights execdetails.RUV2Weights) bool` should compare against `execdetails.RUV2Weights{}` so newly added fields are not accidentally ignored.
 
 The row-width helper should look like:
 
@@ -625,9 +655,13 @@ The row-width helper should look like:
 
 The operator classifier should look like:
 
-    func classifyExplainRUOperator(p base.Plan) (operator string, class string, weight float64, note string)
+    func classifyExplainRUOperator(p base.Plan) (operator string, class string, note string)
 
-These helpers are intentionally narrow so formula calibration does not require rewriting explain rendering.
+Then resolve the numeric weight through a separate helper:
+
+    func explainRUOperatorWeight(class string, weights execdetails.RUV2Weights) float64
+
+`class` is the SQL-visible `operatorClass` value (`l1`, `l2`, `l3`, or `unknown`). `explainRUOperatorWeight` maps `l1`, `l2`, and `l3` to the resolved `weights.ExecutorL1`, `weights.ExecutorL2`, and `weights.ExecutorL3`; for `unknown`, use the chosen default class weight and keep `note = operator_weight_default_l2`. These helpers are intentionally narrow so formula calibration does not require rewriting explain rendering.
 
 The estimator should keep these concepts separate:
 
@@ -660,3 +694,7 @@ The metrics boundary should keep these concepts separate:
 2026-06-30: Incorporated a third read-only audit. The plan now places the primary SELECT-only gate after plan-digest resolution and before target-plan optimization, documents the DML no-delay execution hazard, clarifies that `ExplainForStmt` must be handled in `buildExplainFor`, tightens row-width fallback nil/zero handling, and calls out real plan-name/operator classification and metrics-test details.
 
 2026-06-30: Re-audited the SELECT-only boundary against current `SELECT INTO` planning and execution. The plan now defines first-demo support as side-effect-free SELECT/set-operation targets, requires recursive `SetOprStmt` checks for nested `SelectIntoOpt`, adds `unsupported_side_effecting_select`, and separates component-snapshot SQL notes from statement-level unsupported statuses.
+
+2026-06-30: Re-audited implementation-helper boundaries. The plan now distinguishes `PlanDigest` from explore-only `SQLDigest`, requires recursive set-operation helpers to reject nil/table/values/future nodes explicitly, changes RU snapshot extraction to return a bounded component snapshot status, and separates operator classification from numeric weight resolution.
+
+2026-06-30: Incorporated a read-only audit finding for locking SELECT. The plan now treats `SELECT ... FOR UPDATE/FOR SHARE` and nested locking SELECT forms as outside the first-demo side-effect-free SELECT scope, adds `unsupported_locking_select`, and requires tests that prove the pre-execution gate rejects them before the select-lock execution path can run.

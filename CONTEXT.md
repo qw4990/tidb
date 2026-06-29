@@ -61,7 +61,7 @@ A bounded class such as `l1`, `l2`, `l3`, or `unknown` used to pick a demo formu
 _Avoid_: Dynamic metric label, billing tier, row kind
 
 **Demo Metric Status**:
-A bounded status label for demo Prometheus metrics, such as `success`, `unsupported_non_analyze`, `unsupported_non_select`, `unsupported_side_effecting_select`, `unsupported_ru_version`, `unsupported_for_connection`, or `error`.
+A bounded status label for demo Prometheus metrics, such as `success`, `unsupported_non_analyze`, `unsupported_non_select`, `unsupported_side_effecting_select`, `unsupported_locking_select`, `unsupported_ru_version`, `unsupported_for_connection`, or `error`.
 _Avoid_: SQL error text, statement digest
 
 **Row-width Source**:
@@ -73,9 +73,17 @@ The bounded outcome recorded by Demo Metrics for one `FORMAT='RU'` attempt. It i
 _Avoid_: SQL error message, stack trace
 
 **Pre-execution RU Gate**:
-The validation point that rejects unsupported `FORMAT='RU'` statements before `EXPLAIN ANALYZE` executes the target statement. It prevents the first demo from mutating data through rejected non-SELECT or side-effecting SELECT explain targets.
+The validation point that rejects unsupported `FORMAT='RU'` statements before `EXPLAIN ANALYZE` executes the target statement. It prevents the first demo from mutating data or locking row keys through rejected non-SELECT, side-effecting SELECT, or locking SELECT explain targets.
 _Avoid_: Renderer-only validation, post-execution rejection
 
 **Side-effect-free SELECT Target**:
-A first-demo supported explain target that is a `SELECT` or set operation and does not carry `SelectIntoOpt` anywhere in the selected AST tree. `SELECT ... INTO OUTFILE` is syntactically a `SelectStmt`, but it is not side-effect-free and must be rejected before execution.
+A first-demo supported explain target that is a `SELECT` or set operation and does not carry `SelectIntoOpt` or locking `LockInfo` anywhere in the selected AST tree. `SELECT ... INTO OUTFILE` and `SELECT ... FOR UPDATE/FOR SHARE` are syntactically `SelectStmt`, but they are not side-effect-free and must be rejected before execution.
 _Avoid_: Any SelectStmt, SELECT-only without side-effect check
+
+**Component Snapshot Status**:
+A bounded renderer-internal status describing whether the `RURuntimeStats` component counter snapshot is usable, missing, non-v2, nil, or bypassed. It is used for SQL notes and tests; it is not the statement-level Render Status unless the whole output intentionally fails.
+_Avoid_: Raw error string, boolean-only snapshot check
+
+**PlanDigest Explain Target**:
+The existing `EXPLAIN [ANALYZE] <plan_digest>` path that resolves `ast.ExplainStmt.PlanDigest` through statement summary before planning. It is distinct from `ast.ExplainStmt.SQLDigest`, which belongs to `EXPLAIN EXPLORE`.
+_Avoid_: SQLDigest explain target, separate renderer digest lookup
