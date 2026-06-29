@@ -52,12 +52,16 @@ _Avoid_: Estimated rows, final result rows only
 The byte-shaped input to the demo formula for a plan node. It combines actual runtime row counts with the Row-width Factor and is therefore modeled, not sampled from runtime row bytes.
 _Avoid_: Network bytes, actual encoded bytes
 
+**Executor Counting Unit**:
+The existing RU v2 `Executor.Next` accounting unit for a concrete executor, either rows or cells (`rows * columns`). It is calibration evidence for `FORMAT='RU'`, but it is not automatically the SQL-visible `count` value in the first demo plan, where plan rows use RU Work Rows plus RU Work Bytes.
+_Avoid_: Plan-node count, row-width factor
+
 **Operator Weight Class**:
-A bounded class such as `l1`, `l2`, `l3`, or `unknown` used to pick a demo formula weight for a plan node. It should be derived from operator kind, not from plan ID or SQL text.
-_Avoid_: Dynamic metric label, billing tier
+A bounded class such as `l1`, `l2`, `l3`, or `unknown` used to pick a demo formula weight for an included plan node. It should be derived from operator kind, not from plan ID or SQL text. Component rows and excluded storage rows do not have an Operator Weight Class.
+_Avoid_: Dynamic metric label, billing tier, row kind
 
 **Demo Metric Status**:
-A bounded status label for demo Prometheus metrics, such as `success`, `unsupported_non_analyze`, `unsupported_non_select`, `unsupported_ru_version`, or `error`.
+A bounded status label for demo Prometheus metrics, such as `success`, `unsupported_non_analyze`, `unsupported_non_select`, `unsupported_ru_version`, `unsupported_for_connection`, or `error`.
 _Avoid_: SQL error text, statement digest
 
 **Row-width Source**:
@@ -67,3 +71,7 @@ _Avoid_: Table name, index name, sampled bytes
 **Render Status**:
 The bounded outcome recorded by Demo Metrics for one `FORMAT='RU'` attempt. It is derived from the renderer or format gate, not from raw error text.
 _Avoid_: SQL error message, stack trace
+
+**Pre-execution RU Gate**:
+The validation point that rejects unsupported `FORMAT='RU'` statements before `EXPLAIN ANALYZE` executes the target statement. It prevents the first demo from mutating data through rejected non-SELECT explain targets.
+_Avoid_: Renderer-only validation, post-execution rejection

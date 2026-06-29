@@ -25,6 +25,8 @@ During demo validation, the implementation must also emit low-cardinality Promet
 - [x] 2026-06-30: Re-audited the plan against current parser, plan builder, flat-plan, metrics, runtime-stats, and testing-flow code paths; tightened SELECT-only gating, output row source semantics, unsupported-status metrics, and Bazel/test requirements.
 - [x] 2026-06-30: Re-audited the RU v2 snapshot and metrics boundaries; tightened component-row weight source, bypassed metrics handling, numeric formatting, and metric status de-duplication guidance.
 - [x] 2026-06-30: Incorporated a read-only subagent audit; made operator classification, row field semantics, plan-digest behavior, and row-width metric observation explicit.
+- [x] 2026-06-30: Re-checked hard-coded explain-format test lists and current RU v2 executor counting units; tightened the plan so `ru` is not added to plain-EXPLAIN format loops and rows/cells executor counters are treated as calibration input, not silently reused as the SQL-visible plan formula.
+- [x] 2026-06-30: Incorporated a second read-only audit: moved SELECT-only rejection to a pre-execution gate, split `operatorClass` from row kind, added concrete row-width helper guidance, added `unsupported_for_connection`, and documented that runtime-info string helpers must not be reused for RU attribution.
 - [ ] Implement format parsing, validation, and result schema.
 - [ ] Implement TiDB-side RU estimation for SELECT `EXPLAIN ANALYZE`.
 - [ ] Add Demo Metrics for workload-level Grafana validation.
@@ -81,6 +83,21 @@ During demo validation, the implementation must also emit low-cardinality Promet
 - Observation: current RU v2 executor class mapping is wider than the first rough operator examples.
   Evidence: `pkg/executor/internal/exec/executor.go` maps `BatchPointGet`, `PointGet`, and `Limit` to L1; `Expand`, `HashAgg`, joins, index/table/mem readers, `Projection`, `Selection`, `SelectLock`, `TableDual`, `TopN`, `UnionScan`, and `Window` to L2; and `Sort` plus `StreamAgg` to L3.
 
+- Observation: current RU v2 executor mapping also carries a counting-unit choice, not only an L1/L2/L3 weight class. `PointGet`, `BatchPointGet`, `Limit`, `Projection`, `SelectLock`, index-lookup join variants, `TopN`, and `Sort` use cells; many other mapped executors use rows.
+  Evidence: `pkg/executor/internal/exec/executor.go` stores `useCells` in `ruv2ExecutorMetric`, and `addRUV2ExecutorMetricCached` records `inCells + outCells` when `useCells` is true, otherwise `inRows + outRows`.
+
+- Observation: some tests have local hard-coded explain-format lists that exercise plain `EXPLAIN`, not `EXPLAIN ANALYZE`.
+  Evidence: `pkg/executor/explain_test.go::TestExplainFormatInCtx` loops over `EXPLAIN ANALYZE FORMAT = ...`, while `pkg/planner/core/casetest/plancache/plan_cache_suite_test.go` loops over plain `EXPLAIN FORMAT = ...` queries.
+
+- Observation: `EXPLAIN ANALYZE` executes the target statement before calling `Explain.RenderResult`.
+  Evidence: `pkg/executor/explain.go` runs the analyze executor in `ExplainExec.generateExplainInfo`, registers runtime stats, and only then calls `e.explain.RenderResult()` from `Next`.
+
+- Observation: existing runtime-info helpers merge root and cop stats for display, and can replace `actRows` with cop rows when cop stats exist.
+  Evidence: `pkg/planner/core/common_plans.go::getRuntimeInfoStr` calls `getRuntimeInfo`, appends `copStats.String()`, and sets `actRows` from `copStats.GetActRows()` when cop stats are present.
+
+- Observation: row-width helper methods have plan-type-specific semantics. Reader helpers such as `PhysicalTableReader.GetAvgRowSize`, `PhysicalIndexLookUpReader.GetAvgTableRowSize`, `PhysicalIndexMergeReader.GetAvgTableRowSize`, `PointGetPlan.GetAvgRowSize`, and `BatchPointGetPlan.GetAvgRowSize` describe included root plan output width. Scan helpers such as `PhysicalTableScan.GetScanRowSize` and `PhysicalIndexScan.GetScanRowSize` describe pushed-down scan output and are mainly storage/excluded-row evidence in this first demo.
+  Evidence: helper definitions live under `pkg/planner/core/operator/physicalop`, while generic fallback row-size logic lives in `pkg/planner/cardinality/row_size.go`.
+
 ## Decision Log
 
 - Decision: `FORMAT='RU'` is initially valid only with `EXPLAIN ANALYZE`.
@@ -136,7 +153,7 @@ During demo validation, the implementation must also emit low-cardinality Promet
   Date/Author: 2026-06-30 / Codex
 
 - Decision: enforce the SELECT-only demo gate from `Explain.ExecStmt` before relying on `FlatPlanTree.GetSelectPlan()`.
-  Rationale: the grammar allows non-SELECT explain targets and `GetSelectPlan()` skips DML wrappers, so using the skipped subtree as proof of SELECT support would accidentally allow statements that the first demo must reject. `*ast.SelectStmt` and `*ast.SetOprStmt` are allowed; DML, `ALTER TABLE`, `IMPORT INTO`, nil `ExecStmt`, and `EXPLAIN FOR CONNECTION` are unsupported for the first demo.
+  Rationale: the grammar allows non-SELECT explain targets and `GetSelectPlan()` skips DML wrappers, so using the skipped subtree as proof of SELECT support would accidentally allow statements that the first demo must reject. The gate must run before `ExplainExec.generateExplainInfo` executes the target statement. `*ast.SelectStmt` and `*ast.SetOprStmt` are allowed; DML, `ALTER TABLE`, `IMPORT INTO`, `*ast.ExecuteStmt` if ever reachable, nil `ExecStmt`, and `EXPLAIN FOR CONNECTION` are unsupported for the first demo.
   Date/Author: 2026-06-30 / Codex
 
 - Decision: split the SQL row's overall `source` from a new `rowWidthSource` column.
@@ -144,7 +161,7 @@ During demo validation, the implementation must also emit low-cardinality Promet
   Date/Author: 2026-06-30 / Codex
 
 - Decision: record unsupported Demo Metric status at the gate that rejects the statement.
-  Rationale: `unsupported_non_analyze` can be returned from `prepareSchema` before the renderer runs, while `unsupported_non_select`, `success`, and renderer `error` statuses are known in `RenderResult`. Counting only renderer exits would miss planning-time format rejections.
+  Rationale: `unsupported_non_analyze`, `unsupported_non_select`, and `unsupported_for_connection` are returned before the renderer runs, while `success` and renderer `error` statuses are known in `RenderResult`. Counting only renderer exits would miss planning-time format rejections and would reject non-SELECT statements too late.
   Date/Author: 2026-06-30 / Codex
 
 - Decision: keep bare `FORMAT=RU` and `EXPLAIN FORMAT='RU' FOR CONNECTION` out of the first demo.
@@ -167,6 +184,22 @@ During demo validation, the implementation must also emit low-cardinality Promet
   Rationale: `buildExplain` already replaces `explain.Stmt` with the hinted statement from `getHintedStmtThroughPlanDigest`; the RU renderer should apply the same SELECT-only gate to that resolved `ExecStmt`. Missing digest resolution, nil `ExecStmt`, and non-SELECT resolved statements remain unsupported for `FORMAT='RU'`.
   Date/Author: 2026-06-30 / Codex
 
+- Decision: do not add `types.ExplainFormatRU` mechanically to every hard-coded explain-format list.
+  Rationale: `ru` is valid only for `EXPLAIN ANALYZE` in the first demo. Plain `EXPLAIN FORMAT='RU'` must keep returning the analyze-required unsupported error, so tests that iterate plain explain formats should either leave `ru` out or add a dedicated unsupported assertion.
+  Date/Author: 2026-06-30 / Codex
+
+- Decision: the current RU v2 executor `useCells` mapping is a calibration reference, not the first demo's SQL-visible plan-row formula.
+  Rationale: the first output contract uses `workRows`, `workBytes`, and `unit = row_byte_model` so users can see a row-width-adjusted attribution model. If implementation later decides to count some operators as cells to match RU v2 more closely, that must be an explicit formula/schema decision rather than a hidden change to `count`.
+  Date/Author: 2026-06-30 / Codex
+
+- Decision: `operatorClass` means only the plan-node RU weight class.
+  Rationale: row kind is already represented by `section`, and storage exclusion is represented by `section = excluded` plus `source = excluded_storage`. Reusing `operatorClass` for `component` or `storage` would mix a formula weight class with row categorization.
+  Date/Author: 2026-06-30 / Codex
+
+- Decision: `EXPLAIN FORMAT='RU' FOR CONNECTION ...` should use a distinct Demo Metric status, `unsupported_for_connection`, if the metrics package is available at the rejection gate.
+  Rationale: for-connection explain is neither non-analyze on an `Explain` object nor a non-SELECT analyze target; it is a separate plan-builder gate and should not be forced into the wrong status bucket.
+  Date/Author: 2026-06-30 / Codex
+
 ## Outcomes & Retrospective
 
 The detailed implementation plan has been iterated and anchored to current source locations. Feature implementation is still not started; this document is ready to guide a follow-up implementation pass.
@@ -183,21 +216,29 @@ The AST grammar for explain targets is wider than this demo. `ExplainableStmt` i
 
 `EXPLAIN FOR CONNECTION` is separate from `EXPLAIN ANALYZE`. `buildExplainFor` currently supports only `brief`, `row`, and `verbose`; keep `FORMAT='RU' FOR CONNECTION` unsupported in the first demo because it does not execute the target statement and cannot produce Observed Explain RU.
 
+The SELECT-only gate is a pre-execution safety gate. Put it in `buildExplainPlan` or `Explain.prepareSchema`, not only in `Explain.RenderResult`, because `ExplainExec.generateExplainInfo` executes the target before rendering. The helper can still live near `Explain.prepareSchema`, but it must return an error while the plan is being built so DML, `ALTER TABLE`, `IMPORT INTO`, and any future direct `EXECUTE` target are not executed under `FORMAT='RU'`.
+
+Prepared `EXECUTE` is out of scope for the first demo. The current parser's `ExplainableStmt` does not include `ExecuteStmt`, and `EXPLAIN FOR CONNECTION` can flatten plans that came from `EXECUTE`; keep those rejected for `FORMAT='RU'` until a later design defines how prepared parameters and wrapped `Execute` plans should be attributed.
+
 Current RU v2 statement accounting lives in `pkg/util/execdetails/ruv2_metrics.go`. `RUV2Metrics.CalculateRUValues(weights)` calculates the current TiDB-side RU v2 value from weighted counters. `RUV2Metrics.TotalRU(weights, tiKVRU, tiFlashRU)` adds TiKV and TiFlash RU, and `RURuntimeStats.String()` uses that total for current v2 `EXPLAIN ANALYZE` output. The TiDB-side counters include result chunk cells, executor level counters, planning counters, resource-manager counters, weighted write-key counters, parser counters, and transaction counters. `write_size` is recorded as shadow accounting but has no `RUV2Weights.WriteSize` field today.
 
 The `RURuntimeStats` object registered for `EXPLAIN ANALYZE` stores both the RU v2 metrics snapshot and the `RUV2Weights` captured from the session at registration time. Use those stored weights for the whole RU output when the snapshot is usable and the weights are non-zero. A usable v2 component snapshot means `RUVersion == rmclient.RUVersionV2`, `Metrics != nil`, and `!Metrics.Bypass()`. Do not call `RURuntimeStats.String()` to decide whether the snapshot is usable; inspect the fields directly so storage RU formatting and empty-string behavior do not leak into this renderer.
 
 Current executor-side RU v2 instrumentation lives in `pkg/executor/internal/exec/executor.go`. It observes `Executor.Next` calls, accumulates child output rows or cells as input, and records by concrete executor type. This is useful as a reference, but it is not directly plan-node attribution.
 
+The existing executor RU v2 mapping has two independent concepts: the weight class (`ExecutorL1`, `ExecutorL2`, or `ExecutorL3`) and the count unit (`rows` or `cells`). The first demo should mirror the weight-class intent for operator classification, but keep the SQL-visible plan formula as `row_byte_model`. Do not silently use `inCells + outCells` for `count` on only some operators unless the formula, schema notes, and tests are changed to say that `count` may be cells.
+
+Do not reuse existing display helpers such as `getRuntimeInfoStr` or `prepareOperatorInfo` as the data source for RU rows. They format mixed explain output and intentionally merge root/coprocessor display strings. `FORMAT='RU'` needs direct reads from `RuntimeStatsColl` so local root rows, direct local child rows, and excluded storage rows stay separated.
+
 Row-width estimates live in `pkg/planner/cardinality/row_size.go`. For this demo, a Row-width Factor is an estimate from planner statistics or a schema-based fallback, not observed runtime bytes.
 
 Metrics are defined under `pkg/metrics`, with RU v2 examples in `pkg/metrics/ru_v2.go` and registration in `pkg/metrics/metrics.go`. The demo should follow that pattern but keep its metrics separate from the existing `ruv2` subsystem because these metrics explain `FORMAT='RU'` output and are not the current statement accounting source of truth. `pkg/planner/core` already has a `pkg/metrics` dependency, but adding files under `pkg/planner/core` or `pkg/metrics` requires `make bazel_prepare` so explicit `BUILD.bazel` source lists stay correct.
 
-The implementation should use `CONTEXT.md` as the glossary for this feature. Important terms are `Observed Explain RU`, `TiDB-side RU`, `Component Row`, `Plan-node Attribution`, `Row-width Factor`, `Local Plan Node`, `Excluded Storage Node`, `RU Work Rows`, `RU Work Bytes`, `Operator Weight Class`, `Row-width Source`, `Render Status`, and `Demo Metrics`.
+The implementation should use `CONTEXT.md` as the glossary for this feature. Important terms are `Observed Explain RU`, `TiDB-side RU`, `Component Row`, `Plan-node Attribution`, `Row-width Factor`, `Local Plan Node`, `Excluded Storage Node`, `RU Work Rows`, `RU Work Bytes`, `Executor Counting Unit`, `Operator Weight Class`, `Row-width Source`, `Render Status`, and `Demo Metrics`.
 
 ## Implementation Requirements
 
-`EXPLAIN ANALYZE FORMAT='RU'` must be accepted by explain-format validation, but `EXPLAIN FORMAT='RU'` without `ANALYZE` must fail with a clear unsupported error. The first demo must also fail closed for non-SELECT targets. The preferred implementation is an AST helper in `pkg/planner/core/common_plans.go`, for example `isExplainRUSelectOnly(e.ExecStmt)`, that returns true only for `*ast.SelectStmt` and `*ast.SetOprStmt`. It must return false for DML, `ALTER TABLE`, `IMPORT INTO`, nil `ExecStmt`, and any future explain target not explicitly allowed. If the implementation also inspects the flattened plan as defense in depth, it must inspect the original leading flat operator before any `GetSelectPlan()` skip.
+`EXPLAIN ANALYZE FORMAT='RU'` must be accepted by explain-format validation, but `EXPLAIN FORMAT='RU'` without `ANALYZE` must fail with a clear unsupported error. The first demo must also fail closed for non-SELECT targets before the analyzed target statement can execute. The preferred implementation is an AST helper in `pkg/planner/core/common_plans.go`, for example `isExplainRUSelectOnly(e.ExecStmt)`, called from `buildExplainPlan` or `prepareSchema`, that returns true only for `*ast.SelectStmt` and `*ast.SetOprStmt`. It must return false for DML, `ALTER TABLE`, `IMPORT INTO`, `*ast.ExecuteStmt` if it becomes reachable, nil `ExecStmt`, and any future explain target not explicitly allowed. A renderer-only gate is insufficient because it would run after `ExplainExec.generateExplainInfo` has already executed the target. If the implementation also inspects the flattened plan as defense in depth, it must inspect the original leading flat operator before any `GetSelectPlan()` skip.
 
 `EXPLAIN ANALYZE FORMAT='RU' '<plan_digest>'` is in scope only after the existing planner digest path resolves the digest to a SELECT or set-operation statement through `getHintedStmtThroughPlanDigest`. The renderer should not add a separate digest lookup. If digest resolution fails, produces no `ExecStmt`, or resolves to a non-SELECT statement, return the existing resolution error or `unsupported_non_select` as appropriate.
 
@@ -215,16 +256,16 @@ SQL output formatting must be deterministic. The implementation should centraliz
 
 The schema fields have these row-specific meanings:
 
-- `summary` total row: `component = total_tidb_ru`; `count`, `weight`, `rowWidth`, and `workBytes` are empty; `tidbRU` is the sum of included component and plan rows; `source = summary_total`.
-- `summary` component row: `component` is the exported RU v2 counter name; `unit` is a bounded unit such as `cells`, `plans`, `paths`, `requests`, `parses`, or `transactions`; `count` is the counter value; `weight` is the unscaled component weight from the resolved weights; `tidbRU = RUScale * weight * count`; `source = component_counter`.
-- `plan` row: `component` is the normalized operator name; `count` is `workRows`; `weight` is the unscaled operator class weight from the resolved weights; `rowWidth` is the output row-width factor for this plan node; `workBytes` is the full modeled input-plus-output byte term; `tidbRU` uses the full plan formula, including `workRows`, `workBytes`, and `explainRUByteWeight`; `unit = row_byte_model`; `source = plan_model`.
-- `excluded` row: `count`, `weight`, `rowWidth`, `workBytes`, and `tidbRU` are empty unless the implementation intentionally exposes observed storage row count as `count`; `operatorClass = storage`; `source = excluded_storage`; `note = excluded_storage_ru`.
+- `summary` total row: `component = total_tidb_ru`; `operatorClass` is empty; `count`, `weight`, `rowWidth`, and `workBytes` are empty; `tidbRU` is the sum of included component and plan rows; `source = summary_total`.
+- `summary` component row: `component` is the exported RU v2 counter name; `operatorClass` is empty; `unit` is a bounded unit such as `cells`, `plans`, `paths`, `requests`, `parses`, or `transactions`; `count` is the counter value; `weight` is the unscaled component weight from the resolved weights; `tidbRU = RUScale * weight * count`; `source = component_counter`.
+- `plan` row: `component` is the normalized operator name; `operatorClass` is the formula weight class `l1`, `l2`, `l3`, or `unknown`; `count` is `workRows`; `weight` is the unscaled operator class weight from the resolved weights; `rowWidth` is the output row-width factor for this plan node; `workBytes` is the full modeled input-plus-output byte term; `tidbRU` uses the full plan formula, including `workRows`, `workBytes`, and `explainRUByteWeight`; `unit = row_byte_model`; `source = plan_model`.
+- `excluded` row: `operatorClass` is empty; `count`, `weight`, `rowWidth`, `workBytes`, and `tidbRU` are empty unless the implementation intentionally exposes observed storage row count as `count`; `source = excluded_storage`; `note = excluded_storage_ru`.
 
 The metrics must be low-cardinality. Do not use SQL text, SQL digest, plan ID, table name, index name, resource group, database, connection ID, or raw error text as labels. Unsupported and error counters must use bounded Render Status values, not the error string.
 
 ## Milestones
 
-Milestone 1 proves the format gate and SQL result contract. After this milestone, quoted `FORMAT='RU'` is a recognized explain format, `EXPLAIN FORMAT='RU'` fails because analyze is required, bare `FORMAT=RU` is either still a parser error or explicitly implemented with parser regeneration, non-SELECT analyze targets fail closed for the first demo, resolved plan-digest targets reuse the same SELECT-only gate, `EXPLAIN FORMAT='RU' FOR CONNECTION ...` remains unsupported, and `EXPLAIN ANALYZE FORMAT='RU' SELECT 1` returns the RU schema with placeholder or minimal rows through the new renderer path. This milestone is accepted by focused tests around explain format validation, schema preparation, statement-context format propagation, a testkit query that checks deterministic columns, unsupported-error tests for non-analyze, non-SELECT, and for-connection cases, and a digest-path test or helper test that proves the gate is applied after digest resolution.
+Milestone 1 proves the format gate and SQL result contract. After this milestone, quoted `FORMAT='RU'` is a recognized explain format, `EXPLAIN FORMAT='RU'` fails because analyze is required, bare `FORMAT=RU` is either still a parser error or explicitly implemented with parser regeneration, non-SELECT analyze targets fail closed before execution for the first demo, resolved plan-digest targets reuse the same SELECT-only gate, `EXPLAIN FORMAT='RU' FOR CONNECTION ...` remains unsupported, and `EXPLAIN ANALYZE FORMAT='RU' SELECT 1` returns the RU schema with placeholder or minimal rows through the new renderer path. This milestone is accepted by focused tests around explain format validation, schema preparation, statement-context format propagation, a testkit query that checks deterministic columns, unsupported-error tests for non-analyze, non-SELECT, and for-connection cases, and a digest-path test or helper test that proves the gate is applied after digest resolution. Include a non-SELECT test that would visibly mutate data if executed, and assert the data remains unchanged after the unsupported `EXPLAIN ANALYZE FORMAT='RU'` attempt. The implementation must also audit hard-coded explain-format lists and add `ru` only to analyze-capable loops; plain-EXPLAIN loops should keep `ru` out and use a dedicated unsupported test instead.
 
 Milestone 2 proves local plan-node attribution without storage RU. After this milestone, the renderer consumes the flattened physical plan and `RuntimeStatsColl`, separates local root nodes from TiKV/TiFlash storage nodes, computes deterministic work rows and modeled work bytes, assigns bounded operator classes, and produces plan rows whose TiDB-side RU is the sum of the demo formula. This milestone is accepted by same-package estimator tests for local nodes, storage exclusion, unknown-operator fallback, row-width fallback, and formula determinism.
 
@@ -236,9 +277,9 @@ Milestone 5 proves integration readiness. After this milestone, focused planner,
 
 ## Plan of Work
 
-Milestone 1 adds the new format and rejects unsupported use. Add `ExplainFormatRU = "ru"` to `pkg/types/explain_format.go` and include it in `ExplainFormats`. This lets `pkg/planner/core/preprocess.go` accept the quoted string format through its existing `types.ExplainFormats` loop. Do not edit `pkg/parser/parser.y` for bare `FORMAT=RU` in the first demo. In `pkg/planner/core/common_plans.go`, make `prepareSchema` accept `FORMAT='RU'` only when `Analyze` is true. In non-analyze mode, record `unsupported_non_analyze`, return a clear unsupported-format error before a schema is installed, and leave other formats unchanged. In `RenderResult`, route `FORMAT='RU'` to a new renderer instead of `ExplainFlatPlanInRowFormat`, after verifying that `e.ExecStmt` is SELECT-only.
+Milestone 1 adds the new format and rejects unsupported use. Add `ExplainFormatRU = "ru"` to `pkg/types/explain_format.go` and include it in `ExplainFormats`. This lets `pkg/planner/core/preprocess.go` accept the quoted string format through its existing `types.ExplainFormats` loop. Do not edit `pkg/parser/parser.y` for bare `FORMAT=RU` in the first demo. In `pkg/planner/core/common_plans.go`, make `prepareSchema` accept `FORMAT='RU'` only when `Analyze` is true. In non-analyze mode, record `unsupported_non_analyze`, return a clear unsupported-format error before a schema is installed, and leave other formats unchanged. Apply the SELECT-only gate from `buildExplainPlan` or `prepareSchema` before execution can start. In `RenderResult`, route already-validated `FORMAT='RU'` statements to a new renderer instead of `ExplainFlatPlanInRowFormat`.
 
-Also update statement-context tests that enumerate explain formats. `executor.ResetContextOfStmt` already lowercases `ExplainStmt.Format`, but `pkg/executor/explain_test.go::TestExplainFormatInCtx` keeps a hard-coded format list and should include `types.ExplainFormatRU` once the format constant exists.
+Also update statement-context tests that enumerate explain formats. `executor.ResetContextOfStmt` already lowercases `ExplainStmt.Format`, but `pkg/executor/explain_test.go::TestExplainFormatInCtx` keeps a hard-coded `EXPLAIN ANALYZE` format list and should include `types.ExplainFormatRU` once the format constant exists. Do not add `types.ExplainFormatRU` to hard-coded lists that intentionally run plain `EXPLAIN FORMAT = ...` over many query shapes, such as the plan-cache warning loop in `pkg/planner/core/casetest/plancache/plan_cache_suite_test.go`; for those suites, add a separate assertion that `EXPLAIN FORMAT='RU' ...` is rejected because analyze is required.
 
 The first result schema should be stable and explicit:
 
@@ -260,7 +301,7 @@ The first result schema should be stable and explicit:
     source
     note
 
-`section` is `summary`, `plan`, or `excluded`. `id` is empty for component rows and the explain plan ID for plan-node rows. `component` names either a statement component such as `result_chunk_cells`, the summary component `total_tidb_ru`, or a plan-node operator such as `Projection`. `operatorClass` is a bounded value such as `component`, `l1`, `l2`, `l3`, `unknown`, or `storage`. `rowWidthSource` names where the Row-width Factor came from, for example `operator_helper`, `plan_stats`, `schema_type_width`, or `schema_fallback`. `source` names where the SQL row came from, for example `summary_total`, `component_counter`, `plan_model`, or `excluded_storage`.
+`section` is `summary`, `plan`, or `excluded`. `id` is empty for component rows and the explain plan ID for plan-node rows. `component` names either a statement component such as `result_chunk_cells`, the summary component `total_tidb_ru`, or a plan-node operator such as `Projection`. `operatorClass` is empty outside included plan rows; for included plan rows it is only `l1`, `l2`, `l3`, or `unknown`. `rowWidthSource` names where the Row-width Factor came from, for example `operator_helper`, `plan_stats`, `schema_type_width`, or `schema_fallback`. `source` names where the SQL row came from, for example `summary_total`, `component_counter`, `plan_model`, or `excluded_storage`.
 
 Milestone 2 implements an internal TiDB-side estimator. Add a new file such as `pkg/planner/core/explain_ru.go`. Keep the public surface unexported unless tests need a narrow exported seam. The renderer should consume already available explain-time inputs: `base.PlanContext`, the original target plan, `FlatPhysicalPlan`, `RuntimeStatsColl`, and resolved `execdetails.RUV2Weights`. It should not read mutable global statement metrics after the statement has finished.
 
@@ -307,13 +348,15 @@ The first demo formula must be explicit in code and tests. A reasonable starting
 
 If the implementation sees a local root operator not covered by this table, it should default to `ExecutorL2` with `note = operator_weight_default_l2`. This keeps the demo explainable while making future calibration local to `classifyExplainRUOperator`. `rowCountWeight` can start at `1.0`. `byteWeight` must be a named demo constant, for example `explainRUByteWeight`, and its value is a calibration point.
 
+Do not infer the SQL-visible `count` unit from the current RU v2 executor `useCells` flag in this first formula. Existing RU v2 uses cells for some concrete executors and rows for others, but `FORMAT='RU'` plan rows should initially report `count = workRows`, `unit = row_byte_model`, and `workBytes` separately. If calibration later requires per-operator cells, add an explicit formula branch, update the `unit` semantics, and add tests that distinguish row-count and cell-count operators.
+
 Milestone 3 adds statement component rows. The demo should include visible rows for TiDB-side work not owned by one plan node, such as parser, planning, transaction, resource-manager client requests, and result chunk output when those counters are available in the `RURuntimeStats.Metrics` snapshot. Use exported accessors on `RUV2Metrics` for these component rows; do not depend on unexported executor label snapshot helpers. For each non-plan component row, use:
 
     componentRU = RUScale * componentWeight * count
 
 Use the resolved `RUV2Weights` for these component mappings: `result_chunk_cells`, `plan_cnt`, `plan_derive_stats_paths`, `session_parser_total`, `txn_cnt`, `resource_manager_read_cnt`, and `resource_manager_write_cnt`. If the snapshot weights are zero-valued because a pure unit test constructed an incomplete object, the resolver should fall back to explicit session weights and the test should assert that behavior; production rendering should prefer non-zero snapshot weights. `write_keys` has a weight, but in a SELECT-only demo it should normally be zero; if it appears, show it as `excluded` with a note such as `unexpected_select_write_counter` or fail the SELECT-only gate after investigating why the counter exists. `write_size` is recorded by `RUV2Metrics` as shadow accounting but has no current `RUV2Weights.WriteSize`, so treat it as unweighted/excluded unless this demo defines a separate explicit weight. `executor_l5_insert_rows` is DML-specific and must not be folded into SELECT output. If a component is unavailable, nil, bypassed, or unsupported from `EXPLAIN ANALYZE` internals, show it as absent rather than inventing a value. Do not smear component costs onto the root plan node.
 
-The storage exclusion work should happen with plan-node attribution. If the flattened plan contains cop tasks, TiKV, or TiFlash operators, display rows with `section = excluded`, `operatorClass = storage`, `source = excluded_storage`, and `note = excluded_storage_ru`. Keep `tidbRU` empty or `0`, but do not add it to the TiDB-side total. The first demo must not imply that storage work is free.
+The storage exclusion work should happen with plan-node attribution. If the flattened plan contains cop tasks, TiKV, or TiFlash operators, display rows with `section = excluded`, empty `operatorClass`, `source = excluded_storage`, and `note = excluded_storage_ru`. Keep `tidbRU` empty or `0`, but do not add it to the TiDB-side total. The first demo must not imply that storage work is free.
 
 Milestone 4 adds Demo Metrics. Add `pkg/metrics/explain_ru.go`, initialize it from `InitMetrics`, and register the collectors from `RegisterMetrics`. Use exact metric names and labels unless implementation feedback shows a naming conflict:
 
@@ -341,7 +384,7 @@ Milestone 4 adds Demo Metrics. Add `pkg/metrics/explain_ru.go`, initialize it fr
     Prometheus name: tidb_explain_ru_render_duration_seconds
     Labels: status
 
-Allowed `status` values are `success`, `unsupported_non_analyze`, `unsupported_non_select`, `unsupported_ru_version`, and `error`. For observed RU, work rows, and work bytes, allowed `source` values should be bounded row sources such as `summary_total`, `component_counter`, `plan_model`, and `excluded_storage`. For `ExplainRURowWidth`, observe the SQL-visible plan-row `rowWidth` once for each included local plan row; this is the output row-width factor, not `inputRowWidth` and not both input and output widths. The `source` label for this histogram should use bounded Row-width Source values such as `operator_helper`, `plan_stats`, `schema_type_width`, and `schema_fallback`. Allowed `operator` values should come from a canonical bounded mapping based on operator kind; never use the plan ID.
+Allowed `status` values are `success`, `unsupported_non_analyze`, `unsupported_non_select`, `unsupported_ru_version`, `unsupported_for_connection`, and `error`. For observed RU, work rows, and work bytes, allowed `source` values should be bounded row sources such as `summary_total`, `component_counter`, `plan_model`, and `excluded_storage`. For `ExplainRURowWidth`, observe the SQL-visible plan-row `rowWidth` once for each included local plan row; this is the output row-width factor, not `inputRowWidth` and not both input and output widths. The `source` label for this histogram should use bounded Row-width Source values such as `operator_helper`, `plan_stats`, `schema_type_width`, and `schema_fallback`. Allowed `operator` values should come from a canonical bounded mapping based on operator kind; never use the plan ID.
 
 The metrics must not label by SQL text, SQL digest, plan ID, table name, index name, resource group, database, connection ID, or raw error text in the first demo. Grafana panels should be able to answer: total observed TiDB-side RU over time, component/operator contribution mix, work row and byte trends, row-width distribution, and error/unsupported counts.
 
@@ -353,6 +396,7 @@ The first implementation should isolate these points so calibration changes are 
 
 - `explainRUByteWeight`: decide the initial byte-to-row-equivalent coefficient and document the chosen value in code comments and tests.
 - Operator-class mapping: confirm whether reader nodes, joins, `TopN`, `Limit`, `Projection`, and `Selection` should follow the existing RU v2 L1/L2/L3 weights or need demo-specific weights.
+- Executor count-unit parity: decide whether the demo should continue using the row-byte model for all plan rows or introduce explicit per-operator cell counting to match current RU v2 `useCells` behavior for some executors.
 - Row-width source precedence: verify that helper-specific row sizes and generic `StatsInfo().HistColl` fallback produce stable enough values for common SELECT plans.
 - Missing `RURuntimeStats`: decide whether missing, non-v2, or nil-metrics RU snapshots should still return plan-only rows or fail the whole format as unsupported.
 - Excluded storage display: decide whether every storage node gets an `excluded` row or only storage subtrees with non-zero runtime rows are shown.
@@ -365,17 +409,18 @@ The first implementation should isolate these points so calibration changes are 
 
 2. Update `pkg/planner/core/preprocess.go` only if validation through `types.ExplainFormats` is insufficient. Prefer not adding format-specific validation there unless required. Do not update `pkg/parser/parser.y` unless choosing to support bare `FORMAT=RU`; if parser grammar is changed, regenerate parser outputs and run parser-specific validation.
 
-3. Update `pkg/planner/core/common_plans.go`:
+3. Update `pkg/planner/core/common_plans.go` and, if needed for clearer control flow, `pkg/planner/core/planbuilder.go`:
 
    - add the RU schema in `prepareSchema`;
    - reject `FORMAT='RU'` unless `Analyze` is true, recording `unsupported_non_analyze`;
    - add a helper such as `isExplainRUSelectOnly(ast.StmtNode) bool` that accepts only `*ast.SelectStmt` and `*ast.SetOprStmt`;
-   - reject non-SELECT targets for the first demo before rendering rows, recording `unsupported_non_select`;
-   - keep `EXPLAIN FORMAT='RU' FOR CONNECTION ...` unsupported in `buildExplainFor`;
+   - reject non-SELECT targets for the first demo from `buildExplainPlan` or `prepareSchema`, before `ExplainExec.generateExplainInfo` can execute the analyzed target, recording `unsupported_non_select`;
+   - keep direct prepared `EXECUTE` unsupported for the first demo if it becomes reachable through a future grammar path, and keep wrapped execute plans from `EXPLAIN FOR CONNECTION` unsupported;
+   - keep `EXPLAIN FORMAT='RU' FOR CONNECTION ...` unsupported in `buildExplainFor`, recording `unsupported_for_connection` if Demo Metrics can be used at that gate;
    - route `RenderResult` to a new `renderRUExplain` helper;
    - keep existing row, brief, verbose, plan_tree, and cost_trace behavior unchanged.
 
-4. Update explain-format tests that enumerate valid formats, especially `pkg/executor/explain_test.go::TestExplainFormatInCtx`. Add unsupported tests for non-analyze RU, non-SELECT RU, and for-connection RU.
+4. Update explain-format tests that enumerate valid formats. First run a focused search such as `rg -n "ExplainFormatBrief|ExplainFormatDOT|ExplainFormatHint|ExplainFormatROW|ExplainFormatVerbose|ExplainFormatTraditional|ExplainFormatBinary|ExplainFormatTiDBJSON|ExplainFormatCostTrace|ExplainFormatPlanCache|ExplainFormatPlanTree" pkg -g '*_test.go'` and classify each list by whether it runs `EXPLAIN ANALYZE` or plain `EXPLAIN`. Add `types.ExplainFormatRU` to analyze-capable lists such as `pkg/executor/explain_test.go::TestExplainFormatInCtx`. Do not add it to plain-EXPLAIN loops such as `pkg/planner/core/casetest/plancache/plan_cache_suite_test.go`; add unsupported tests for non-analyze RU, non-SELECT RU, and for-connection RU instead.
 
 5. Add `pkg/planner/core/explain_ru.go`. Include small internal types for row rendering and estimation, for example:
 
@@ -423,7 +468,16 @@ The first implementation should isolate these points so calibration changes are 
 
 7. Add the estimator helper with narrow interfaces. The helper should accept already-built plan/runtime inputs, not session-global state except for weights and metrics handles. Avoid introducing executor package dependencies. If a required helper would import executor internals, stop and instead add a small exported utility in `execdetails` or keep the first demo less exact with a documented note.
 
-8. Add row-width helpers in `pkg/planner/core/explain_ru.go`. Use local interfaces for existing helpers:
+8. Add row-width helpers in `pkg/planner/core/explain_ru.go`. Do not use one broad `GetAvgRowSize()` assertion for every type; bind helper methods only where their semantics match the row-width term being computed. The initial mapping should be:
+
+   - `*physicalop.PhysicalTableReader`: use `GetAvgRowSize()` as the included root reader output width.
+   - `*physicalop.PhysicalIndexLookUpReader`: use `GetAvgTableRowSize()` as the included root reader output width; do not use index partial response size as the final output row width.
+   - `*physicalop.PhysicalIndexMergeReader`: use `GetAvgTableRowSize()` as the included root reader output width; use partial-reader sizing only if a future excluded-storage row needs partial response bytes.
+   - `*physicalop.PointGetPlan` and `*physicalop.BatchPointGetPlan`: use `GetAvgRowSize()` as included output width.
+   - `*physicalop.PhysicalTableScan` and `*physicalop.PhysicalIndexScan`: use `GetScanRowSize()` only for excluded storage rows or storage-side diagnostics in this first demo, because their work is not included in TiDB-side RU.
+   - generic root operators such as `Projection`, `Selection`, `Limit`, `TopN`, `Sort`, joins, aggregations, windows, CTE readers, and unknown local nodes: use `StatsInfo().HistColl` plus schema fallback.
+
+   Use local interfaces for existing helpers where useful:
 
        type avgRowSizer interface {
            GetAvgRowSize() float64
@@ -435,7 +489,7 @@ The first implementation should isolate these points so calibration changes are 
 
    Prefer helper-specific row size only when the helper's semantics match the needed width, then stats-based `cardinality.GetAvgRowSize`, then schema type-width fallback.
 
-9. Add Demo Metrics in `pkg/metrics/explain_ru.go`, initialize them from `InitMetrics`, register them in `pkg/metrics/metrics.go`, and record them from the `FORMAT='RU'` gates and renderer. Record `unsupported_non_analyze` where `prepareSchema` rejects non-analyze RU. Record `unsupported_non_select`, `success`, and `error` in or around `RenderResult`. Avoid double counting if `prepareSchema` is called more than once on the same `Explain` object or if the renderer wraps an error path; a small unexported boolean/status field on `Explain` or a helper that records only once per terminal path is acceptable if needed.
+9. Add Demo Metrics in `pkg/metrics/explain_ru.go`, initialize them from `InitMetrics`, register them in `pkg/metrics/metrics.go`, and record them from the `FORMAT='RU'` gates and renderer. Record `unsupported_non_analyze` where `prepareSchema` rejects non-analyze RU. Record `unsupported_non_select` at the same pre-execution gate that rejects non-SELECT targets. Record `unsupported_for_connection` from `buildExplainFor` if the metrics package can be used there without an import cycle. Record `success` and `error` in or around `RenderResult`. Avoid double counting if `prepareSchema` is called more than once on the same `Explain` object or if the renderer wraps an error path; a small unexported boolean/status field on `Explain` or a helper that records only once per terminal path is acceptable if needed.
 
 10. Add tests in the nearest existing files:
 
@@ -464,13 +518,15 @@ Acceptance for the demo:
 - `EXPLAIN ANALYZE FORMAT='RU' SELECT 1` returns rows with the RU schema and at least one summary row plus one plan row.
 - `EXPLAIN ANALYZE FORMAT='RU' '<plan_digest>'` follows the same behavior after digest resolution when the resolved statement is SELECT or set-operation, and returns an existing digest resolution error or `unsupported_non_select` otherwise.
 - `EXPLAIN FORMAT='RU' SELECT 1` returns a clear unsupported error because analyze is required.
-- `EXPLAIN ANALYZE FORMAT='RU' INSERT/UPDATE/DELETE/REPLACE/ALTER TABLE/IMPORT INTO ...` returns a clear unsupported error in the first demo.
+- `EXPLAIN ANALYZE FORMAT='RU' INSERT/UPDATE/DELETE/REPLACE/ALTER TABLE/IMPORT INTO ...` returns a clear unsupported error in the first demo before the target statement executes. A mutation-oriented regression test must prove that rejected DML did not change table contents.
 - `EXPLAIN FORMAT='RU' FOR CONNECTION ...` remains unsupported, and bare `FORMAT=RU` is either a syntax error or is covered only if parser grammar support is intentionally added.
 - A simple table query shows plan-node attribution based on actual row counts and estimated row widths.
 - Queries with TiKV cop work do not include TiKV/TiFlash RU in the TiDB-side total and clearly mark storage RU as excluded if shown.
 - Prometheus exposes Demo Metrics that can be graphed in Grafana during workload runs, with no high-cardinality labels.
 - Component and plan rows use one resolved weight source for a given output; `RURuntimeStats.Weights` is preferred when a usable RU v2 snapshot exists, and bypassed/nil/non-v2 snapshots do not produce fake component RU.
 - SQL-visible numeric fields are formatted deterministically; empty values mean not applicable or excluded, while `0` means the formula ran and produced zero.
+- SQL-visible plan-row `count` and `unit` semantics are explicit. In the first demo, `count` is `workRows` and `unit` is `row_byte_model`; current RU v2 executor `useCells` behavior is used only as calibration evidence unless the plan is explicitly revised.
+- `operatorClass` is empty for summary, component, and excluded rows; for included plan rows it is only `l1`, `l2`, `l3`, or `unknown`.
 - Existing explain formats still pass their targeted tests.
 - The SQL-visible total is not a reformatted current printed `EXPLAIN ANALYZE` RU total or a raw `RUV2Metrics.CalculateRUValues()` total; it is the sum of non-plan component rows plus the explain-time plan-node model, and the output should make that boundary clear.
 
@@ -562,3 +618,7 @@ The metrics boundary should keep these concepts separate:
 2026-06-30: Re-audited RU v2 snapshot and metrics details. Added resolved weight-source guidance, bypassed-metrics handling, deterministic numeric formatting, and once-only Demo Metric status recording guidance.
 
 2026-06-30: Incorporated a read-only subagent audit. Made the initial operator-class table explicit, resolved the weight-source ambiguity by using one resolved weight source per output, defined row-specific `count`/`weight` semantics and precision, scoped the plan-digest path, and fixed the row-width histogram observation to the SQL-visible plan-row width.
+
+2026-06-30: Added a final pre-implementation audit note for hard-coded explain-format lists and current RU v2 executor counting units. The plan now tells the implementation agent not to add `ru` to plain-EXPLAIN loops and not to silently reuse per-executor cells as the SQL-visible plan-row `count`.
+
+2026-06-30: Incorporated an additional read-only audit. The plan now requires SELECT-only rejection before target execution, reserves `operatorClass` for plan-node weight classes only, gives specific row-width helper choices by plan type, adds `unsupported_for_connection`, excludes prepared `EXECUTE` from the first demo, and tells the renderer to read `RuntimeStatsColl` directly instead of reusing existing mixed display helpers.
