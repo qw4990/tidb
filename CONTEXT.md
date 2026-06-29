@@ -61,7 +61,7 @@ A bounded class such as `l1`, `l2`, `l3`, or `unknown` used to pick a demo formu
 _Avoid_: Dynamic metric label, billing tier, row kind
 
 **Demo Metric Status**:
-A bounded status label for demo Prometheus metrics, such as `success`, `unsupported_non_analyze`, `unsupported_non_select`, `unsupported_ru_version`, `unsupported_for_connection`, or `error`.
+A bounded status label for demo Prometheus metrics, such as `success`, `unsupported_non_analyze`, `unsupported_non_select`, `unsupported_side_effecting_select`, `unsupported_ru_version`, `unsupported_for_connection`, or `error`.
 _Avoid_: SQL error text, statement digest
 
 **Row-width Source**:
@@ -73,5 +73,9 @@ The bounded outcome recorded by Demo Metrics for one `FORMAT='RU'` attempt. It i
 _Avoid_: SQL error message, stack trace
 
 **Pre-execution RU Gate**:
-The validation point that rejects unsupported `FORMAT='RU'` statements before `EXPLAIN ANALYZE` executes the target statement. It prevents the first demo from mutating data through rejected non-SELECT explain targets.
+The validation point that rejects unsupported `FORMAT='RU'` statements before `EXPLAIN ANALYZE` executes the target statement. It prevents the first demo from mutating data through rejected non-SELECT or side-effecting SELECT explain targets.
 _Avoid_: Renderer-only validation, post-execution rejection
+
+**Side-effect-free SELECT Target**:
+A first-demo supported explain target that is a `SELECT` or set operation and does not carry `SelectIntoOpt` anywhere in the selected AST tree. `SELECT ... INTO OUTFILE` is syntactically a `SelectStmt`, but it is not side-effect-free and must be rejected before execution.
+_Avoid_: Any SelectStmt, SELECT-only without side-effect check
