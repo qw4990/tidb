@@ -45,11 +45,11 @@ A flattened plan node whose work runs in TiKV or TiFlash. The first demo may sho
 _Avoid_: Free storage work, missing cost
 
 **RU Work Rows**:
-The row-count input to the demo formula for a plan node. It is derived from actual `EXPLAIN ANALYZE` runtime row counts, usually the node output rows plus direct local child output rows.
-_Avoid_: Estimated rows, final result rows only
+The row-count input to the demo formula for a plan node. Output rows are observed from `EXPLAIN ANALYZE` runtime stats; input rows are a derived model input from direct local child output rows, not a runtime-observed executor input counter.
+_Avoid_: Estimated rows, final result rows only, actual executor input rows
 
 **RU Work Bytes**:
-The byte-shaped input to the demo formula for a plan node. It combines actual runtime row counts with the Row-width Factor and is therefore modeled, not sampled from runtime row bytes.
+The byte-shaped input to the demo formula for a plan node. It combines observed output rows, derived input rows, and the Row-width Factor, so it is modeled rather than sampled from runtime row bytes.
 _Avoid_: Network bytes, actual encoded bytes
 
 **Executor Counting Unit**:
@@ -84,6 +84,14 @@ _Avoid_: Any SelectStmt, SELECT-only without side-effect check
 A bounded renderer-internal status describing whether the `RURuntimeStats` component counter snapshot is usable, missing, non-v2, nil, or bypassed. It is used for SQL notes and tests; it is not the statement-level Render Status unless the whole output intentionally fails.
 _Avoid_: Raw error string, boolean-only snapshot check
 
+**Component Snapshot Metric**:
+A low-cardinality Demo Metric that records component snapshot availability separately from statement success, using bounded values such as `ok`, `missing`, `non_v2`, `nil_metrics`, and `bypassed`.
+_Avoid_: Treating snapshot absence as success-only, raw error label
+
 **PlanDigest Explain Target**:
 The existing `EXPLAIN [ANALYZE] <plan_digest>` path that resolves `ast.ExplainStmt.PlanDigest` through statement summary before planning. It is distinct from `ast.ExplainStmt.SQLDigest`, which belongs to `EXPLAIN EXPLORE`.
 _Avoid_: SQLDigest explain target, separate renderer digest lookup
+
+**Variable-assignment SELECT**:
+A syntactic SELECT that mutates session variables, such as `SELECT @a := 1`. It is outside the Side-effect-free SELECT Target scope and should be rejected before execution with the side-effecting SELECT status.
+_Avoid_: Read-only SELECT, harmless expression
