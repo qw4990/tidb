@@ -80,6 +80,13 @@ type RuntimeStats interface {
 	Tp() int
 }
 
+// HashTableRuntimeStats exposes the number of rows admitted into a hash join's
+// lookup state.
+type HashTableRuntimeStats interface {
+	RuntimeStats
+	HashTableRows() int64
+}
+
 type basicCopRuntimeStats struct {
 	loop      int32
 	rows      int64
