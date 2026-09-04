@@ -14,11 +14,17 @@ go_library(
 go_test(
     name = "diagnosticmode_test",
     timeout = "short",
-    srcs = ["mode_test.go"],
+    srcs = [
+        "mode_server_test.go",
+        "mode_test.go",
+    ],
     embed = [":diagnosticmode"],
     flaky = True,
     shard_count = 2,
     deps = [
+        "//pkg/server",
+        "//pkg/server/tests/servertestkit",
+        "//pkg/testkit/testsetup",
         "//pkg/util/intest",
         "@com_github_stretchr_testify//require",
     ],
