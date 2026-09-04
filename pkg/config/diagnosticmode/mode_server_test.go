@@ -44,7 +44,7 @@ func TestDumpTiDBServerGoroutinesInDiagnosticMode(t *testing.T) {
 
 	require.True(t, diagnosticmode.Enabled())
 
-	server, cfg := startTiDBServerWithStatusHTTPConfigured(t)
+	server, cfg := startTiDBServer(t)
 	require.True(t, cfg.Status.ReportStatus)
 	statusOn, statusAddr := server.GetStatusServerAddr()
 	require.False(t, statusOn)
@@ -58,12 +58,27 @@ func TestDumpTiDBServerGoroutinesInDiagnosticMode(t *testing.T) {
 	dump := buf.String()
 	require.Contains(t, dump, "goroutine ")
 	require.Contains(t, dump, "github.com/pingcap/tidb/pkg/server.(*Server).startNetworkListener")
-	require.NotContains(t, dump, "github.com/pingcap/tidb/pkg/server.(*Server).startHTTPServer")
-	require.NotContains(t, dump, "github.com/pingcap/tidb/pkg/server.(*Server).startStatusServerAndRPCServer")
+	backgroundGoroutines := []struct {
+		taskName   string
+		goroutines []string
+	}{
+		{
+			taskName: "HTTPServer",
+			goroutines: []string{
+				"github.com/pingcap/tidb/pkg/server.(*Server).startHTTPServer",
+				"github.com/pingcap/tidb/pkg/server.(*Server).startStatusServerAndRPCServer",
+			},
+		},
+	}
+	for _, backgroundGoroutine := range backgroundGoroutines {
+		for _, goroutine := range backgroundGoroutine.goroutines {
+			require.NotContains(t, dump, goroutine, "%s background goroutine should not be started", backgroundGoroutine.taskName)
+		}
+	}
 	t.Logf("TiDB goroutine dump in diagnostic mode:\n%s", dump)
 }
 
-func startTiDBServerWithStatusHTTPConfigured(t *testing.T) (*tidbserver.Server, *config.Config) {
+func startTiDBServer(t *testing.T) (*tidbserver.Server, *config.Config) {
 	t.Helper()
 	if kerneltype.IsNextGen() {
 		testenv.UpdateConfigForNextgen(t)
