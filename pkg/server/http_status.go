@@ -45,6 +45,7 @@ import (
 	autoid "github.com/pingcap/tidb/pkg/autoid_service"
 	"github.com/pingcap/tidb/pkg/config"
 	"github.com/pingcap/tidb/pkg/config/deploymode"
+	"github.com/pingcap/tidb/pkg/config/diagnosticmode"
 	"github.com/pingcap/tidb/pkg/config/kerneltype"
 	"github.com/pingcap/tidb/pkg/kv"
 	"github.com/pingcap/tidb/pkg/parser/mysql"
@@ -75,7 +76,14 @@ import (
 
 const defaultStatusPort = 10080
 
+func (s *Server) statusHTTPEnabled() bool {
+	return s.cfg.Status.ReportStatus && !diagnosticmode.Enabled()
+}
+
 func (s *Server) startStatusHTTP() error {
+	if !s.statusHTTPEnabled() {
+		return nil
+	}
 	err := s.initHTTPListener()
 	if err != nil {
 		return err
