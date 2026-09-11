@@ -46,6 +46,7 @@ import (
 	"github.com/pingcap/tidb/pkg/bindinfo"
 	"github.com/pingcap/tidb/pkg/config"
 	"github.com/pingcap/tidb/pkg/config/deploymode"
+	"github.com/pingcap/tidb/pkg/config/diagnosticmode"
 	"github.com/pingcap/tidb/pkg/config/kerneltype"
 	"github.com/pingcap/tidb/pkg/ddl"
 	"github.com/pingcap/tidb/pkg/ddl/placement"
@@ -4744,11 +4745,8 @@ func bootstrapSessionImpl(ctx context.Context, store kv.Storage, createSessionsI
 
 	dom.LoadSigningCertLoop(cfg.Security.SessionTokenSigningCert, cfg.Security.SessionTokenSigningKey)
 
-	if raw, ok := store.(kv.EtcdBackend); ok {
-		err = raw.StartGCWorker()
-		if err != nil {
-			return nil, err
-		}
+	if err = startGCWorker(store); err != nil {
+		return nil, err
 	}
 
 	// This only happens in testing, since the failure of loading or parsing sql file
@@ -4762,6 +4760,17 @@ func bootstrapSessionImpl(ctx context.Context, store kv.Storage, createSessionsI
 		return nil, err
 	}
 	return dom, err
+}
+
+func startGCWorker(store kv.Storage) error {
+	if diagnosticmode.Enabled() {
+		logutil.BgLogger().Info("don't run TiKV GC worker", zap.String("reason", "diagnostic mode"))
+		return nil
+	}
+	if raw, ok := store.(kv.EtcdBackend); ok {
+		return raw.StartGCWorker()
+	}
+	return nil
 }
 
 // GetDomain gets the associated domain for store.

@@ -53,11 +53,24 @@ func TestDumpTiDBServerGoroutinesInDiagnosticMode(t *testing.T) {
 	var buf bytes.Buffer
 	goroutineProfile := pprof.Lookup("goroutine")
 	require.NotNil(t, goroutineProfile)
-	require.NoError(t, goroutineProfile.WriteTo(&buf, 2))
+	// RunInGoTestChan closes after launching the listener, but the goroutine
+	// may not have entered startNetworkListener yet. Wait for that frame before
+	// using the snapshot to check the diagnostic startup behavior.
+	require.Eventually(t, func() bool {
+		buf.Reset()
+		if err := goroutineProfile.WriteTo(&buf, 2); err != nil {
+			return false
+		}
+		return bytes.Contains(buf.Bytes(), []byte("github.com/pingcap/tidb/pkg/server.(*Server).startNetworkListener"))
+	}, 10*time.Second, 10*time.Millisecond, "network listener did not appear in the goroutine profile")
 
 	dump := buf.String()
 	require.Contains(t, dump, "goroutine ")
 	require.Contains(t, dump, "github.com/pingcap/tidb/pkg/server.(*Server).startNetworkListener")
+	// This mockstore snapshot is a smoke check, not proof that every startup
+	// path was exercised: Log Backup needs PD/etcd, TiKV GC needs a real store,
+	// cross-keyspace GC needs a nextgen SYSTEM keyspace, and the Runaway watch
+	// cache needs a resource controller. Their startup gates also need targeted tests.
 	backgroundGoroutines := []struct {
 		taskName   string
 		goroutines []string
@@ -67,6 +80,42 @@ func TestDumpTiDBServerGoroutinesInDiagnosticMode(t *testing.T) {
 			goroutines: []string{
 				"github.com/pingcap/tidb/pkg/server.(*Server).startHTTPServer",
 				"github.com/pingcap/tidb/pkg/server.(*Server).startStatusServerAndRPCServer",
+			},
+		},
+		{
+			taskName: "TTL",
+			goroutines: []string{
+				"github.com/pingcap/tidb/pkg/ttl/ttlworker.(*JobManager).jobLoop",
+				"github.com/pingcap/tidb/pkg/ttl/ttlworker.(*ttlScanWorker).loop",
+				"github.com/pingcap/tidb/pkg/ttl/ttlworker.(*ttlDeleteWorker).loop",
+			},
+		},
+		{
+			taskName: "Log Backup",
+			goroutines: []string{
+				"github.com/pingcap/tidb/br/pkg/streamhelper/daemon.(*OwnerDaemon).Begin.func1",
+				"github.com/pingcap/tidb/br/pkg/streamhelper.AdvancerExt.startListen.func3",
+				"github.com/pingcap/tidb/br/pkg/streamhelper.(*CheckpointAdvancer).StartTaskListener.func1",
+				"github.com/pingcap/tidb/br/pkg/streamhelper.(*CheckpointAdvancer).SpawnSubscriptionHandler.func1",
+				"github.com/pingcap/tidb/br/pkg/streamhelper.(*CheckpointAdvancer).runLogBackupConfigUpdater",
+				"github.com/pingcap/tidb/br/pkg/streamhelper.(*CheckpointAdvancer).OnBecomeOwner.func1",
+			},
+		},
+		{
+			taskName: "Runaway",
+			goroutines: []string{
+				"github.com/pingcap/tidb/pkg/resourcegroup/runaway.(*Manager).RunawayRecordFlushLoop",
+				"github.com/pingcap/tidb/pkg/resourcegroup/runaway.(*Manager).RunawayWatchSyncLoop",
+				"github.com/pingcap/tidb/pkg/resourcegroup/runaway.NewRunawayManager.gowrap1",
+			},
+		},
+		{
+			taskName: "GC",
+			goroutines: []string{
+				"github.com/pingcap/tidb/pkg/store/gcworker.(*GCWorker).start",
+				"github.com/pingcap/tidb/pkg/domain/crossks.(*Manager).RunSystemKSGCLoop",
+				"github.com/pingcap/tidb/pkg/domain.(*Domain).DumpFileGcCheckerLoop.func1",
+				"github.com/pingcap/tidb/pkg/resourcegroup/runaway.(*Manager).deleteExpiredRows",
 			},
 		},
 	}
