@@ -16,7 +16,6 @@ package session
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/pingcap/tidb/pkg/config"
 	"github.com/pingcap/tidb/pkg/domain"
@@ -97,27 +96,21 @@ func bootstrapSessionImplDiagnostic(ctx context.Context, store kv.Storage) (_ *d
 	if err = dom.LoadSysVarCacheLoop(sessions[sysvarSession]); err != nil {
 		return nil, err
 	}
-	fmt.Println("================================1")
 	// Binding cache sizing depends on the sysvar cache.
-	// if err = dom.LoadBindingHandle(); err != nil {
-	// 	return nil, err
-	// }
-	fmt.Println("================================2")
+	if err = dom.LoadBindingHandle(); err != nil {
+		return nil, err
+	}
 	if err = executor.LoadExprPushdownBlacklist(sessions[querySession]); err != nil {
 		return nil, err
 	}
-	fmt.Println("================================3")
 	if err = executor.LoadOptRuleBlacklist(ctx, sessions[querySession]); err != nil {
 		return nil, err
 	}
-	fmt.Println("================================4")
 	if cfg.DisaggregatedTiFlash && !cfg.UseAutoScaler {
 		if err = dom.WatchTiFlashComputeNodeChange(); err != nil {
 			return nil, err
 		}
 	}
-
-	fmt.Println("================================5")
 
 	// Query execution and diagnostic endpoints need these handles, but not
 	// automatic capture, dump-file GC, or historical-statistics persistence.
@@ -125,27 +118,13 @@ func bootstrapSessionImplDiagnostic(ctx context.Context, store kv.Storage) (_ *d
 	dom.SetupDumpFileGCChecker(sessions[planReplayerSession])
 	dom.SetupHistoricalStatsWorker(sessions[historicalStatsSession])
 	dom.SetupExtractHandle([]sessionctx.Context{sessions[extractSession]})
-
-	fmt.Println("================================6")
-
 	concurrency := cfg.Performance.StatsLoadConcurrency
 	if concurrency == 0 {
 		concurrency = syncload.GetSyncLoadConcurrencyByCPU()
 	}
-
-	fmt.Println("================================7")
-
-	// if err = dom.LoadStatsDiagnostic(ctx, max(concurrency, 0)); err != nil {
-	// 	return nil, err
-	// }
-
-	fmt.Println("================================8")
-
-	// dom.InitInstancePlanCache()
-
+	if err = dom.LoadStatsDiagnostic(ctx, max(concurrency, 0)); err != nil {
+		return nil, err
+	}
 	dom.LoadSigningCertLoop(cfg.Security.SessionTokenSigningCert, cfg.Security.SessionTokenSigningKey)
-
-	fmt.Println("================================9")
-
 	return dom, nil
 }
