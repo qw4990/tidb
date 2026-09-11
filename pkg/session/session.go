@@ -4416,6 +4416,7 @@ func InitMDLVariableForBootstrap(store kv.Storage) error {
 }
 
 // InitTiDBSchemaCacheSize initializes the tidb schema cache size.
+// Diagnostic mode uses the default locally without persisting missing metadata.
 func InitTiDBSchemaCacheSize(store kv.Storage) error {
 	var (
 		isNull bool
@@ -4430,7 +4431,9 @@ func InitTiDBSchemaCacheSize(store kv.Storage) error {
 		}
 		if isNull {
 			size = vardef.DefTiDBSchemaCacheSize
-			return t.SetSchemaCacheSize(size)
+			if !diagnosticmode.Enabled() {
+				return t.SetSchemaCacheSize(size)
+			}
 		}
 		return nil
 	})
@@ -4442,6 +4445,7 @@ func InitTiDBSchemaCacheSize(store kv.Storage) error {
 }
 
 // InitMDLVariable initializes the metadata lock variable.
+// Diagnostic mode does not persist the fallback for missing metadata.
 func InitMDLVariable(store kv.Storage) error {
 	isNull := false
 	enable := false
@@ -4456,9 +4460,10 @@ func InitMDLVariable(store kv.Storage) error {
 			// Workaround for version: nightly-2022-11-07 to nightly-2022-11-17.
 			enable = true
 			logutil.BgLogger().Warn("metadata lock is null")
-			err = t.SetMetadataLock(true)
-			if err != nil {
-				return err
+			if !diagnosticmode.Enabled() {
+				if err = t.SetMetadataLock(true); err != nil {
+					return err
+				}
 			}
 		}
 		return nil
@@ -4494,11 +4499,21 @@ func BootstrapSession4DistExecution(store kv.Storage) (*domain.Domain, error) {
 // - initialization global variables from system table that's required to use sessionCtx,
 // such as system time zone
 // - start domain and other routines.
+// Diagnostic mode only loads existing metadata and skips bootstrap and upgrades.
 func bootstrapSessionImpl(ctx context.Context, store kv.Storage, createSessionsImpl func(store kv.Storage, cnt int) ([]*session, error), extWorkloadMgr extworkload.Manager) (*domain.Domain, error) {
 	ver := getStoreBootstrapVersionWithCache(store)
 	failpoint.InjectCall("afterGetStoreBootstrapVersion", ver)
+	diagnostic := diagnosticmode.Enabled()
+	if diagnostic && ver == notBootstrapped {
+		return nil, errors.New("diagnostic mode requires an already bootstrapped keyspace")
+	}
 	if kv.IsUserKS(store) {
 		targetVer := currentBootstrapVersion
+		if diagnostic {
+			// The diagnostic instance keeps the stored version rather than upgrading
+			// the user keyspace to the version of its binary.
+			targetVer = ver
+		}
 		systemKSVer := waitSystemBootVersion()
 		if systemKSVer == notBootstrapped {
 			logutil.BgLogger().Fatal("SYSTEM keyspace is not bootstrapped")
@@ -4511,7 +4526,7 @@ func bootstrapSessionImpl(ctx context.Context, store kv.Storage, createSessionsI
 
 	ctx = kv.WithInternalSourceType(ctx, kv.InternalTxnBootstrap)
 	cfg := config.GetGlobalConfig()
-	if len(cfg.Instance.PluginLoad) > 0 {
+	if !diagnostic && len(cfg.Instance.PluginLoad) > 0 {
 		err := plugin.Load(context.Background(), plugin.Config{
 			Plugins:   strings.Split(cfg.Instance.PluginLoad, ","),
 			PluginDir: cfg.Instance.PluginDir,
@@ -4520,26 +4535,33 @@ func bootstrapSessionImpl(ctx context.Context, store kv.Storage, createSessionsI
 			return nil, err
 		}
 	}
-	if kerneltype.IsNextGen() {
-		if err := bootstrapSchemas(store); err != nil {
+	if !diagnostic {
+		// These initializers can create system tables and advance their own
+		// versions even when the core bootstrap version is already current.
+		if kerneltype.IsNextGen() {
+			if err := bootstrapSchemas(store); err != nil {
+				return nil, err
+			}
+		}
+		if err := InitDDLTables(store); err != nil {
 			return nil, err
 		}
 	}
-	err := InitDDLTables(store)
+	err := InitTiDBSchemaCacheSize(store)
 	if err != nil {
 		return nil, err
 	}
-	err = InitTiDBSchemaCacheSize(store)
-	if err != nil {
-		return nil, err
-	}
-	if ver < currentBootstrapVersion {
+	if !diagnostic && ver < currentBootstrapVersion {
 		err = runInBootstrapSession(store, ver, domainCreateOptions{extWorkloadMgr: extWorkloadMgr})
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		logutil.BgLogger().Info("cluster already bootstrapped", zap.Int64("version", ver))
+		if diagnostic {
+			logutil.BgLogger().Info("skip bootstrap and upgrade in diagnostic mode", zap.Int64("version", ver))
+		} else {
+			logutil.BgLogger().Info("cluster already bootstrapped", zap.Int64("version", ver))
+		}
 		err = InitMDLVariable(store)
 		if err != nil {
 			return nil, err
@@ -4556,7 +4578,7 @@ func bootstrapSessionImpl(ctx context.Context, store kv.Storage, createSessionsI
 	}
 
 	// Initialize persisted collation and time zone before starter SQL starts a full domain.
-	if deploymode.IsStarter() {
+	if !diagnostic && deploymode.IsStarter() {
 		if err = upgradeStarterBootstrap(store); err != nil {
 			return nil, err
 		}
@@ -4647,14 +4669,17 @@ func bootstrapSessionImpl(ctx context.Context, store kv.Storage, createSessionsI
 		}
 	}
 
-	if err = extensionimpl.Bootstrap(context.Background(), dom); err != nil {
-		return nil, err
-	}
-
-	if len(cfg.Instance.PluginLoad) > 0 {
-		err := plugin.Init(context.Background(), plugin.Config{EtcdClient: dom.GetEtcdClient()})
-		if err != nil {
+	if !diagnostic {
+		// Bootstrap hooks and plugin callbacks can write through SQL or etcd.
+		if err = extensionimpl.Bootstrap(context.Background(), dom); err != nil {
 			return nil, err
+		}
+
+		if len(cfg.Instance.PluginLoad) > 0 {
+			err := plugin.Init(context.Background(), plugin.Config{EtcdClient: dom.GetEtcdClient()})
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -4694,7 +4719,7 @@ func bootstrapSessionImpl(ctx context.Context, store kv.Storage, createSessionsI
 	dom.SetupHistoricalStatsWorker(ses[8])
 	dom.StartHistoricalStatsWorker()
 	failToLoadOrParseSQLFile := false // only used for unit test
-	if runBootstrapSQLFile {
+	if !diagnostic && runBootstrapSQLFile {
 		pm := &privileges.UserPrivileges{
 			Handle: dom.PrivilegeHandle(),
 		}
@@ -5085,6 +5110,11 @@ func mustGetStoreBootstrapVersion(store kv.Storage) int64 {
 }
 
 func getStoreBootstrapVersionWithCache(store kv.Storage) int64 {
+	if diagnosticmode.Enabled() {
+		// The cache records only whether bootstrap completed, and a cache hit
+		// reports this binary's version. Diagnostic startup needs the stored version.
+		return mustGetStoreBootstrapVersion(store)
+	}
 	// check in memory
 	_, ok := store.GetOption(StoreBootstrappedKey)
 	if ok {
