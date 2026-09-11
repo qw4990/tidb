@@ -1645,8 +1645,7 @@ func (do *Domain) BindingHandle() bindinfo.BindingHandle {
 // InitBindingHandle create a goroutine loads BindInfo in a loop, it should
 // be called only once in BootstrapSession.
 func (do *Domain) InitBindingHandle() error {
-	do.bindHandle.Store(bindinfo.NewBindingHandle(do.sysSessionPool))
-	err := do.BindingHandle().LoadFromStorageToCache(true, false)
+	err := do.LoadBindingHandle()
 	if err != nil || bindinfo.Lease == 0 {
 		return err
 	}
@@ -1659,6 +1658,12 @@ func (do *Domain) InitBindingHandle() error {
 	}
 	do.globalBindHandleWorkerLoop(owner)
 	return nil
+}
+
+// LoadBindingHandle loads existing bindings without starting binding maintenance.
+func (do *Domain) LoadBindingHandle() error {
+	do.bindHandle.Store(bindinfo.NewBindingHandle(do.sysSessionPool))
+	return do.BindingHandle().LoadFromStorageToCache(true, false)
 }
 
 func (do *Domain) globalBindHandleWorkerLoop(owner owner.Manager) {
@@ -2158,6 +2163,10 @@ func (do *Domain) initStats(ctx context.Context) {
 }
 
 func (do *Domain) loadStatsWorker() {
+	do.loadStatsWorkerWithInit(true)
+}
+
+func (do *Domain) loadStatsWorkerWithInit(initialize bool) {
 	defer util.Recover(metrics.LabelDomain, "loadStatsWorker", nil, false)
 	lease := do.statsLease
 	if lease == 0 {
@@ -2174,7 +2183,9 @@ func (do *Domain) loadStatsWorker() {
 	do.cancelFns.fns = append(do.cancelFns.fns, cancelFunc)
 	do.cancelFns.mu.Unlock()
 
-	do.initStats(ctx)
+	if initialize {
+		do.initStats(ctx)
+	}
 	statsHandle := do.StatsHandle()
 	var err error
 	for {
