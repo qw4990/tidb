@@ -2163,10 +2163,6 @@ func (do *Domain) initStats(ctx context.Context) {
 }
 
 func (do *Domain) loadStatsWorker() {
-	do.loadStatsWorkerWithInit(true)
-}
-
-func (do *Domain) loadStatsWorkerWithInit(initialize bool) {
 	defer util.Recover(metrics.LabelDomain, "loadStatsWorker", nil, false)
 	lease := do.statsLease
 	if lease == 0 {
@@ -2178,14 +2174,14 @@ func (do *Domain) loadStatsWorkerWithInit(initialize bool) {
 		logutil.BgLogger().Info("loadStatsWorker exited.")
 	}()
 
-	ctx, cancelFunc := context.WithCancel(context.Background())
+	// Inherit Domain cancellation even if Close runs before this worker starts.
+	ctx, cancelFunc := context.WithCancel(do.ctx)
+	defer cancelFunc()
 	do.cancelFns.mu.Lock()
 	do.cancelFns.fns = append(do.cancelFns.fns, cancelFunc)
 	do.cancelFns.mu.Unlock()
 
-	if initialize {
-		do.initStats(ctx)
-	}
+	do.initStats(ctx)
 	statsHandle := do.StatsHandle()
 	var err error
 	for {

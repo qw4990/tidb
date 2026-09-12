@@ -125,6 +125,7 @@ func bootstrapSessionImplDiagnostic(ctx context.Context, store kv.Storage) (_ *d
 	if err = dom.LoadStatsDiagnostic(ctx, max(concurrency, 0)); err != nil {
 		return nil, err
 	}
+	dom.InitInstancePlanCache()
 	dom.LoadSigningCertLoop(cfg.Security.SessionTokenSigningCert, cfg.Security.SessionTokenSigningKey)
 	return dom, nil
 }

@@ -59,7 +59,7 @@ func (do *Domain) StartDiagnostic() error {
 	return nil
 }
 
-// LoadStatsDiagnostic initializes existing statistics and starts only readers.
+// LoadStatsDiagnostic creates the stats handle and starts only readers.
 // No DDL subscription, ownership, statement-delta collection, auto analyze,
 // statistics GC, or usage/history persistence is started.
 func (do *Domain) LoadStatsDiagnostic(ctx context.Context, concurrency int) error {
@@ -69,22 +69,16 @@ func (do *Domain) LoadStatsDiagnostic(ctx context.Context, concurrency int) erro
 		return err
 	}
 	do.statsHandle.Store(statsHandle)
-	cfg := config.GetGlobalConfig().Performance
-	if !cfg.SkipInitStats {
-		if cfg.LiteInitStats {
-			err = statsHandle.InitStatsLite(ctx, do.InfoSchema())
-		} else {
-			err = statsHandle.InitStats(ctx, do.InfoSchema())
-		}
-	}
-	close(statsHandle.InitStatsDone)
-	if err != nil {
-		return err
-	}
+	// Initial stats loading waits for the SessionManager, which is installed
+	// after BootstrapSession returns. Keep it off the bootstrap goroutine.
 	if do.statsLease >= 0 {
+		do.wg.Run(do.loadStatsWorker, "loadStatsWorker")
+	} else {
+		// A negative lease disables periodic refresh, but diagnostic startup
+		// still loads existing stats once and signals InitStatsDone.
 		do.wg.Run(func() {
-			do.loadStatsWorkerWithInit(false)
-		}, "loadStatsWorker")
+			do.initStats(do.ctx)
+		}, "initStats")
 	}
 	do.StartLoadStatsSubWorkers(concurrency)
 	if do.statsLease > 0 {

@@ -510,7 +510,7 @@ func (s *Server) Run(dom *domain.Domain) error {
 		mppcoordmanager.InstanceMPPCoordinatorManager.InitServerAddr(s.GetStatusServerAddr())
 	}
 	if config.GetGlobalConfig().Performance.ForceInitStats && dom != nil {
-		// <-dom.StatsHandle().InitStatsDone
+		<-dom.StatsHandle().InitStatsDone
 	}
 	// If error should be reported and exit the server it can be sent on this
 	// channel. Otherwise, end with sending a nil error to signal "done"
