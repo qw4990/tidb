@@ -69,68 +69,87 @@ func TestTiDBServerGoroutinesInDiagnosticMode(t *testing.T) {
 	require.Contains(t, dump, "goroutine ")
 	require.Contains(t, dump, "github.com/pingcap/tidb/pkg/server.(*Server).startNetworkListener")
 
-	fmt.Println("========================================================================")
-	fmt.Println(dump)
-	fmt.Println("========================================================================")
+	assertDiagnosticGoroutineAllowlist(t, buf.Bytes())
+	t.Logf("TiDB goroutine dump in diagnostic mode:\n%s", dump)
+}
 
-	// This mockstore snapshot is a smoke check, not proof that every startup
-	// path was exercised: Log Backup needs PD/etcd, TiKV GC needs a real store,
-	// cross-keyspace GC needs a nextgen SYSTEM keyspace, and the Runaway watch
-	// cache needs a resource controller. Their startup gates also need targeted tests.
-	backgroundGoroutines := []struct {
-		taskName   string
-		goroutines []string
-	}{
-		{
-			taskName: "HTTPServer",
-			goroutines: []string{
-				"github.com/pingcap/tidb/pkg/server.(*Server).startHTTPServer",
-				"github.com/pingcap/tidb/pkg/server.(*Server).startStatusServerAndRPCServer",
-			},
-		},
-		{
-			taskName: "TTL",
-			goroutines: []string{
-				"github.com/pingcap/tidb/pkg/ttl/ttlworker.(*JobManager).jobLoop",
-				"github.com/pingcap/tidb/pkg/ttl/ttlworker.(*ttlScanWorker).loop",
-				"github.com/pingcap/tidb/pkg/ttl/ttlworker.(*ttlDeleteWorker).loop",
-			},
-		},
-		{
-			taskName: "Log Backup",
-			goroutines: []string{
-				"github.com/pingcap/tidb/br/pkg/streamhelper/daemon.(*OwnerDaemon).Begin.func1",
-				"github.com/pingcap/tidb/br/pkg/streamhelper.AdvancerExt.startListen.func3",
-				"github.com/pingcap/tidb/br/pkg/streamhelper.(*CheckpointAdvancer).StartTaskListener.func1",
-				"github.com/pingcap/tidb/br/pkg/streamhelper.(*CheckpointAdvancer).SpawnSubscriptionHandler.func1",
-				"github.com/pingcap/tidb/br/pkg/streamhelper.(*CheckpointAdvancer).runLogBackupConfigUpdater",
-				"github.com/pingcap/tidb/br/pkg/streamhelper.(*CheckpointAdvancer).OnBecomeOwner.func1",
-			},
-		},
-		{
-			taskName: "Runaway",
-			goroutines: []string{
-				"github.com/pingcap/tidb/pkg/resourcegroup/runaway.(*Manager).RunawayRecordFlushLoop",
-				"github.com/pingcap/tidb/pkg/resourcegroup/runaway.(*Manager).RunawayWatchSyncLoop",
-				"github.com/pingcap/tidb/pkg/resourcegroup/runaway.NewRunawayManager.gowrap1",
-			},
-		},
-		{
-			taskName: "GC",
-			goroutines: []string{
-				"github.com/pingcap/tidb/pkg/store/gcworker.(*GCWorker).start",
-				"github.com/pingcap/tidb/pkg/domain/crossks.(*Manager).RunSystemKSGCLoop",
-				"github.com/pingcap/tidb/pkg/domain.(*Domain).DumpFileGcCheckerLoop.func1",
-				"github.com/pingcap/tidb/pkg/resourcegroup/runaway.(*Manager).deleteExpiredRows",
-			},
-		},
+func assertDiagnosticGoroutineAllowlist(t *testing.T, dump []byte) {
+	t.Helper()
+	// Outside the embedded storage fixture, each group must contain an explicitly
+	// allowed function. Match the worker rather than its changing leaf frame.
+	// Do not allow generic wrappers such as WaitGroup.Run or testing.tRunner.
+	// This allowlist covers the mockstore fixture, not a real PD/TiKV deployment.
+	allowedFunctions := []string{
+		// Test harness, profile collection, and process-wide observability.
+		"testing.(*M).Run",
+		"TestTiDBServerGoroutinesInDiagnosticMode",
+		"go.opencensus.io/stats/view.(*worker).start",
+		"github.com/golang/glog.(*fileSink).flushDaemon",
+
+		// unistore and cache
+		"badger", "unistore", "ristretto", "gp.worker",
+
+		// Storage client metadata, timestamps, and resource control.
+		"github.com/tikv/client-go/v2/internal/locate.(*bgRunner).schedule.func1",
+		"github.com/tikv/client-go/v2/internal/locate.(*bgRunner).scheduleWithTrigger.func1",
+		"github.com/tikv/client-go/v2/oracle/oracles.(*pdOracle).updateTS",
+		"github.com/tikv/client-go/v2/tikv.(*KVStore).runTxnSafePointUpdater",
+		"github.com/tikv/client-go/v2/tikv.(*KVStore).safeTSUpdater",
+		"github.com/tikv/pd/client/resource_group/controller.(*ResourceGroupsController).Start.func1",
+
+		// Diagnostic Domain coordination, cache refresh, and statistics readers.
+		"ServerInfoSyncLoop",
+		"TopologySyncLoop",
+		"MDLCheckLoop",
+		"(*Syncer).SyncLoop",
+		"topNSlowQueryLoop",
+		"LoadPrivilegeLoop",
+		"LoadSysVarCacheLoop",
+		"LoadBindingLoop",
+		"LoadStatsDiagnostic",
+		"(*statsSyncLoad).SubLoadWorker",
+
+		// SQL listener and the diagnostic HTTP allowlist.
+		"server.(*Server).Run",
+		"server.(*Server).startNetworkListener",
+		"server.(*Server).startDiagnosticHTTP.func1",
 	}
-	for _, backgroundGoroutine := range backgroundGoroutines {
-		for _, goroutine := range backgroundGoroutine.goroutines {
-			require.NotContains(t, dump, goroutine, "%s background goroutine should not be started", backgroundGoroutine.taskName)
+
+	header, stacks, ok := bytes.Cut(bytes.TrimSpace(dump), []byte("\n"))
+	require.True(t, ok, "missing goroutine profile header or stacks")
+	var total int
+	_, err := fmt.Sscanf(string(header), "goroutine profile: total %d", &total)
+	require.NoError(t, err, "invalid goroutine profile header: %s", header)
+	require.Positive(t, total)
+
+	groups := bytes.Split(bytes.TrimSpace(stacks), []byte("\n\n"))
+	var checked int
+	for _, group := range groups {
+		groupHeader, _, ok := bytes.Cut(group, []byte("\n"))
+		require.True(t, ok, "goroutine group has no frames: %s", group)
+		var count int
+		var marker string
+		_, err := fmt.Sscanf(string(groupHeader), "%d %s", &count, &marker)
+		require.NoError(t, err, "invalid goroutine group header: %s", groupHeader)
+		require.Equal(t, "@", marker)
+		require.Positive(t, count)
+		checked += count
+
+		allowed := false
+		for _, function := range allowedFunctions {
+			// The tab and '+' delimit the full function name in debug=1 output,
+			// preventing a match on an unlisted closure or a similar name.
+			if bytes.Contains(group, []byte(function)) {
+				allowed = true
+				break
+			}
+		}
+		if !allowed {
+			t.Errorf("goroutine group is not in the diagnostic allowlist (%d goroutines):\n%s", count, group)
 		}
 	}
-	t.Logf("TiDB goroutine dump in diagnostic mode:\n%s", dump)
+	require.Equal(t, total, checked, "not all goroutines were checked")
+	t.Logf("Checked %d goroutines in %d aggregated groups against the diagnostic allowlist", checked, len(groups))
 }
 
 func startTiDBServer(t *testing.T) (*tidbserver.Server, *config.Config) {
