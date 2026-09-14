@@ -32,6 +32,7 @@ import (
 // not implicitly run in diagnostic mode. In particular, this path must not
 // create/upgrade system tables, persist bootstrap versions, or run startup hooks.
 func bootstrapSessionImplDiagnostic(ctx context.Context, store kv.Storage) (_ *domain.Domain, err error) {
+	// step1: load metadata from an already bootstrapped store.
 	ctx = kv.WithInternalSourceType(ctx, kv.InternalTxnBootstrap)
 	ver, err := domain.LoadDiagnosticMetadata(ctx, store)
 	if err != nil {
@@ -39,25 +40,93 @@ func bootstrapSessionImplDiagnostic(ctx context.Context, store kv.Storage) (_ *d
 	}
 	logutil.BgLogger().Info("initialize diagnostic session without bootstrap or upgrade", zap.Int64("version", ver))
 
-	// Table construction captures the collation setting. Read persisted global
-	// settings with the temporary system-table Domain before creating this Domain.
+	// step2: initialize the system time zone and collation mode.
 	if err = initGlobalVarFromSystemDB(ctx, store); err != nil {
 		return nil, err
 	}
+
+	// step3: get the Domain that owns this store's query runtime.
 	dom, err := domap.Get(store)
 	if err != nil {
 		return nil, err
 	}
-	const (
-		querySession = iota
-		privilegeSession
-		sysvarSession
-		planReplayerSession
-		historicalStatsSession
-		extractSession
-		sessionCount
-	)
-	sessions := make([]*session, sessionCount)
+	defer func() {
+		if err != nil {
+			dom.Close()
+		}
+	}()
+
+	// step4: prepare restricted sessions for the individual services.
+	sessions, err := createDiagnosticSessions(store, dom)
+	if err != nil {
+		return nil, err
+	}
+
+	// step5: start the background services needed by diagnostic queries.
+	if err = dom.StartDiagnostic(); err != nil {
+		return nil, err
+	}
+
+	// step6: rebuild the in-memory lookup structures for LIST COLUMNS partitions.
+	rebuildAllPartitionValueMapAndSorted(ctx, sessions[diagnosticQuerySession])
+
+	// step7: initialize the privilege cache, global variable cache, and binding cache.
+	cfg := config.GetGlobalConfig()
+	if !cfg.Security.SkipGrantTable {
+		if err = dom.LoadPrivilegeLoop(sessions[diagnosticPrivilegeSession]); err != nil {
+			return nil, err
+		}
+	}
+	if err = dom.LoadSysVarCacheLoop(sessions[diagnosticSysvarSession]); err != nil {
+		return nil, err
+	}
+	if err = dom.LoadBindingHandle(); err != nil {
+		return nil, err
+	}
+
+	// step8: load expression pushdown and optimizer rule restrictions.
+	if err = executor.LoadExprPushdownBlacklist(sessions[diagnosticQuerySession]); err != nil {
+		return nil, err
+	}
+	if err = executor.LoadOptRuleBlacklist(ctx, sessions[diagnosticQuerySession]); err != nil {
+		return nil, err
+	}
+
+	// step9: set up some handles.
+	dom.SetupPlanReplayerHandle(sessions[diagnosticPlanReplayerSession], nil)
+	dom.SetupDumpFileGCChecker(sessions[diagnosticPlanReplayerSession])
+	dom.SetupHistoricalStatsWorker(sessions[diagnosticHistoricalStatsSession])
+	dom.SetupExtractHandle([]sessionctx.Context{sessions[diagnosticExtractSession]})
+
+	// step10: create the stats handle and start asynchronous statistics readers.
+	concurrency := cfg.Performance.StatsLoadConcurrency
+	if concurrency == 0 {
+		concurrency = syncload.GetSyncLoadConcurrencyByCPU()
+	}
+	if err = dom.LoadStatsDiagnostic(ctx, max(concurrency, 0)); err != nil {
+		return nil, err
+	}
+
+	// step11: configure the session-token signing certificate and private key.
+	dom.LoadSigningCertLoop(cfg.Security.SessionTokenSigningCert, cfg.Security.SessionTokenSigningKey)
+	return dom, nil
+}
+
+const (
+	diagnosticQuerySession = iota
+	diagnosticPrivilegeSession
+	diagnosticSysvarSession
+	diagnosticPlanReplayerSession
+	diagnosticHistoricalStatsSession
+	diagnosticExtractSession
+	diagnosticSessionCount
+)
+
+// createDiagnosticSessions registers Domain cleanup before creating restricted
+// sessions. The caller must close the Domain on any subsequent startup error,
+// including a failure to create one of these sessions.
+func createDiagnosticSessions(store kv.Storage, dom *domain.Domain) ([]*session, error) {
+	sessions := make([]*session, diagnosticSessionCount)
 	dom.SetOnClose(func() {
 		for _, s := range sessions {
 			if s != nil {
@@ -70,62 +139,13 @@ func bootstrapSessionImplDiagnostic(ctx context.Context, store kv.Storage) (_ *d
 		}
 		domap.Delete(store)
 	})
-	defer func() {
-		if err != nil {
-			dom.Close()
-		}
-	}()
 	for i := range sessions {
-		sessions[i], err = createSessionWithOpt(store, dom, dom.GetSchemaValidator(), dom.InfoCache(), nil)
+		s, err := createSessionWithOpt(store, dom, dom.GetSchemaValidator(), dom.InfoCache(), nil)
 		if err != nil {
 			return nil, err
 		}
-		sessions[i].GetSessionVars().InRestrictedSQL = true
+		sessions[i] = s
+		s.GetSessionVars().InRestrictedSQL = true
 	}
-	if err = dom.StartDiagnostic(); err != nil {
-		return nil, err
-	}
-	rebuildAllPartitionValueMapAndSorted(ctx, sessions[querySession])
-
-	cfg := config.GetGlobalConfig()
-	if !cfg.Security.SkipGrantTable {
-		if err = dom.LoadPrivilegeLoop(sessions[privilegeSession]); err != nil {
-			return nil, err
-		}
-	}
-	if err = dom.LoadSysVarCacheLoop(sessions[sysvarSession]); err != nil {
-		return nil, err
-	}
-	// Binding cache sizing depends on the sysvar cache.
-	if err = dom.LoadBindingHandle(); err != nil {
-		return nil, err
-	}
-	if err = executor.LoadExprPushdownBlacklist(sessions[querySession]); err != nil {
-		return nil, err
-	}
-	if err = executor.LoadOptRuleBlacklist(ctx, sessions[querySession]); err != nil {
-		return nil, err
-	}
-	if cfg.DisaggregatedTiFlash && !cfg.UseAutoScaler {
-		if err = dom.WatchTiFlashComputeNodeChange(); err != nil {
-			return nil, err
-		}
-	}
-
-	// Query execution and diagnostic endpoints need these handles, but not
-	// automatic capture, dump-file GC, or historical-statistics persistence.
-	dom.SetupPlanReplayerHandle(sessions[planReplayerSession], nil)
-	dom.SetupDumpFileGCChecker(sessions[planReplayerSession])
-	dom.SetupHistoricalStatsWorker(sessions[historicalStatsSession])
-	dom.SetupExtractHandle([]sessionctx.Context{sessions[extractSession]})
-	concurrency := cfg.Performance.StatsLoadConcurrency
-	if concurrency == 0 {
-		concurrency = syncload.GetSyncLoadConcurrencyByCPU()
-	}
-	if err = dom.LoadStatsDiagnostic(ctx, max(concurrency, 0)); err != nil {
-		return nil, err
-	}
-	dom.InitInstancePlanCache()
-	dom.LoadSigningCertLoop(cfg.Security.SessionTokenSigningCert, cfg.Security.SessionTokenSigningKey)
-	return dom, nil
+	return sessions, nil
 }
