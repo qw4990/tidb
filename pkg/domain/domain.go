@@ -1666,6 +1666,34 @@ func (do *Domain) LoadBindingHandle() error {
 	return do.BindingHandle().LoadFromStorageToCache(true, false)
 }
 
+// LoadBindingLoop loads bindings and periodically refreshes the cache without
+// starting ownership, GC, or usage persistence. The caller owns handle cleanup.
+func (do *Domain) LoadBindingLoop() error {
+	if err := do.LoadBindingHandle(); err != nil {
+		return err
+	}
+	if bindinfo.Lease == 0 {
+		return nil
+	}
+
+	do.wg.Run(func() {
+		defer util.Recover(metrics.LabelDomain, "loadBindingLoop", nil, false)
+		ticker := time.NewTicker(bindinfo.Lease)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-do.exit:
+				return
+			case <-ticker.C:
+				if err := do.BindingHandle().LoadFromStorageToCache(false, false); err != nil {
+					logutil.BgLogger().Error("update bindinfo failed", zap.Error(err))
+				}
+			}
+		}
+	}, "loadBindingLoop")
+	return nil
+}
+
 func (do *Domain) globalBindHandleWorkerLoop(owner owner.Manager) {
 	do.wg.Run(func() {
 		defer func() {

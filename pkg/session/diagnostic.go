@@ -76,7 +76,7 @@ func bootstrapSessionImplDiagnostic(ctx context.Context, store kv.Storage) (_ *d
 	if err = dom.LoadSysVarCacheLoop(sessions[diagnosticSysvarSession]); err != nil {
 		return nil, err
 	}
-	if err = dom.LoadBindingHandle(); err != nil {
+	if err = dom.LoadBindingLoop(); err != nil {
 		return nil, err
 	}
 
