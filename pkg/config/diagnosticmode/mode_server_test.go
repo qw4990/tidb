@@ -16,6 +16,7 @@ package diagnosticmode_test
 
 import (
 	"bytes"
+	"fmt"
 	"runtime/pprof"
 	"testing"
 	"time"
@@ -33,7 +34,7 @@ import (
 	"go.opencensus.io/stats/view"
 )
 
-func TestDumpTiDBServerGoroutinesInDiagnosticMode(t *testing.T) {
+func TestTiDBServerGoroutinesInDiagnosticMode(t *testing.T) {
 	if !intest.InTest {
 		t.Skip("diagnosticmode.SetForTest requires the intest build tag")
 	}
@@ -67,6 +68,11 @@ func TestDumpTiDBServerGoroutinesInDiagnosticMode(t *testing.T) {
 	dump := buf.String()
 	require.Contains(t, dump, "goroutine ")
 	require.Contains(t, dump, "github.com/pingcap/tidb/pkg/server.(*Server).startNetworkListener")
+
+	fmt.Println("========================================================================")
+	fmt.Println(dump)
+	fmt.Println("========================================================================")
+
 	// This mockstore snapshot is a smoke check, not proof that every startup
 	// path was exercised: Log Backup needs PD/etcd, TiKV GC needs a real store,
 	// cross-keyspace GC needs a nextgen SYSTEM keyspace, and the Runaway watch
