@@ -55,7 +55,6 @@ func (do *Domain) StartDiagnostic() error {
 			return err
 		}
 	}
-	do.initInferenceProviders()
 	return nil
 }
 
