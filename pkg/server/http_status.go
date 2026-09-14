@@ -82,7 +82,7 @@ func (s *Server) statusHTTPEnabled() bool {
 
 // fullStatusServerEnabled reports whether cluster HTTP APIs and gRPC are available.
 func (s *Server) fullStatusServerEnabled() bool {
-	return s.statusHTTPEnabled() && !diagnosticmode.Enabled()
+	return s.statusHTTPEnabled()
 }
 
 func (s *Server) startStatusHTTP() error {
