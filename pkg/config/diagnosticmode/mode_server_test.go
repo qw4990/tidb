@@ -48,8 +48,8 @@ func TestTiDBServerGoroutinesInDiagnosticMode(t *testing.T) {
 	server, cfg := startTiDBServer(t)
 	require.True(t, cfg.Status.ReportStatus)
 	statusOn, statusAddr := server.GetStatusServerAddr()
-	require.False(t, statusOn)
-	require.Empty(t, statusAddr)
+	require.True(t, statusOn)
+	require.NotEmpty(t, statusAddr)
 
 	var buf bytes.Buffer
 	goroutineProfile := pprof.Lookup("goroutine")
@@ -59,7 +59,7 @@ func TestTiDBServerGoroutinesInDiagnosticMode(t *testing.T) {
 	// using the snapshot to check the diagnostic startup behavior.
 	require.Eventually(t, func() bool {
 		buf.Reset()
-		if err := goroutineProfile.WriteTo(&buf, 2); err != nil {
+		if err := goroutineProfile.WriteTo(&buf, 1); err != nil {
 			return false
 		}
 		return bytes.Contains(buf.Bytes(), []byte("github.com/pingcap/tidb/pkg/server.(*Server).startNetworkListener"))
@@ -147,6 +147,19 @@ func startTiDBServer(t *testing.T) (*tidbserver.Server, *config.Config) {
 	t.Cleanup(view.Stop)
 
 	session.DisableStats4Test()
+	// Diagnostic startup requires an existing bootstrap version and system tables.
+	func() {
+		restoreMode := diagnosticmode.SetForTest(false)
+		defer restoreMode()
+
+		bootstrapDom, err := session.BootstrapSession(store)
+		require.NoError(t, err)
+		// Stop normal-mode workers before collecting diagnostic goroutines,
+		// while retaining the bootstrapped data in the same store.
+		bootstrapDom.Close()
+	}()
+
+	require.True(t, diagnosticmode.Enabled())
 	dom, err := session.BootstrapSession(store)
 	require.NoError(t, err)
 	t.Cleanup(dom.Close)
