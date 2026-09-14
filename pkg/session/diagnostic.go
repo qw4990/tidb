@@ -21,7 +21,6 @@ import (
 	"github.com/pingcap/tidb/pkg/domain"
 	"github.com/pingcap/tidb/pkg/executor"
 	"github.com/pingcap/tidb/pkg/kv"
-	"github.com/pingcap/tidb/pkg/sessionctx"
 	"github.com/pingcap/tidb/pkg/statistics/handle/syncload"
 	"github.com/pingcap/tidb/pkg/util/logutil"
 	"go.uber.org/zap"
@@ -67,10 +66,7 @@ func bootstrapSessionImplDiagnostic(ctx context.Context, store kv.Storage) (_ *d
 		return nil, err
 	}
 
-	// step6: rebuild the in-memory lookup structures for LIST COLUMNS partitions.
-	rebuildAllPartitionValueMapAndSorted(ctx, sessions[diagnosticQuerySession])
-
-	// step7: initialize the privilege cache, global variable cache, and binding cache.
+	// step6: initialize the privilege cache, global variable cache, and binding cache.
 	cfg := config.GetGlobalConfig()
 	if !cfg.Security.SkipGrantTable {
 		if err = dom.LoadPrivilegeLoop(sessions[diagnosticPrivilegeSession]); err != nil {
@@ -84,7 +80,7 @@ func bootstrapSessionImplDiagnostic(ctx context.Context, store kv.Storage) (_ *d
 		return nil, err
 	}
 
-	// step8: load expression pushdown and optimizer rule restrictions.
+	// step7: load expression pushdown and optimizer rule restrictions.
 	if err = executor.LoadExprPushdownBlacklist(sessions[diagnosticQuerySession]); err != nil {
 		return nil, err
 	}
@@ -92,13 +88,7 @@ func bootstrapSessionImplDiagnostic(ctx context.Context, store kv.Storage) (_ *d
 		return nil, err
 	}
 
-	// step9: set up some handles.
-	dom.SetupPlanReplayerHandle(sessions[diagnosticPlanReplayerSession], nil)
-	dom.SetupDumpFileGCChecker(sessions[diagnosticPlanReplayerSession])
-	dom.SetupHistoricalStatsWorker(sessions[diagnosticHistoricalStatsSession])
-	dom.SetupExtractHandle([]sessionctx.Context{sessions[diagnosticExtractSession]})
-
-	// step10: create the stats handle and start asynchronous statistics readers.
+	// step8: create the stats handle and start asynchronous statistics readers.
 	concurrency := cfg.Performance.StatsLoadConcurrency
 	if concurrency == 0 {
 		concurrency = syncload.GetSyncLoadConcurrencyByCPU()
@@ -106,9 +96,6 @@ func bootstrapSessionImplDiagnostic(ctx context.Context, store kv.Storage) (_ *d
 	if err = dom.LoadStatsDiagnostic(ctx, max(concurrency, 0)); err != nil {
 		return nil, err
 	}
-
-	// step11: configure the session-token signing certificate and private key.
-	dom.LoadSigningCertLoop(cfg.Security.SessionTokenSigningCert, cfg.Security.SessionTokenSigningKey)
 	return dom, nil
 }
 
@@ -116,9 +103,6 @@ const (
 	diagnosticQuerySession = iota
 	diagnosticPrivilegeSession
 	diagnosticSysvarSession
-	diagnosticPlanReplayerSession
-	diagnosticHistoricalStatsSession
-	diagnosticExtractSession
 	diagnosticSessionCount
 )
 
