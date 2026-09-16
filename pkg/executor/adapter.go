@@ -1757,7 +1757,7 @@ func (a *ExecStmt) FinishExecuteStmt(txnTS uint64, err error, hasMoreResults boo
 		}
 	}
 	a.updatePrevStmt()
-	a.recordLastQueryInfo(err)
+	a.recordLastQueryInfo(err, statementRUTotal)
 	a.recordAffectedRows2Metrics()
 	a.observePhaseDurations(sessVars.InRestrictedSQL, execDetail.CommitDetail)
 	executeDuration := sessVars.GetExecuteDuration()
@@ -1852,7 +1852,7 @@ func firstStatementRUTotal(statementRUTotal []float64) float64 {
 	return statementRUTotal[0]
 }
 
-func (a *ExecStmt) recordLastQueryInfo(err error) {
+func (a *ExecStmt) recordLastQueryInfo(err error, statementRUTotal float64) {
 	sessVars := a.Ctx.GetSessionVars()
 	// Record diagnostic information for DML statements
 	recordLastQuery := false
@@ -1863,11 +1863,7 @@ func (a *ExecStmt) recordLastQueryInfo(err error) {
 		recordLastQuery = true
 	}
 	if recordLastQuery {
-		var lastRUConsumption float64
-		if ruDetailRaw := a.GoCtx.Value(util.RUDetailsCtxKey); ruDetailRaw != nil {
-			ruDetail := ruDetailRaw.(*util.RUDetails)
-			lastRUConsumption = ruDetail.RRU() + ruDetail.WRU()
-		}
+		lastRUConsumption := statementRUTotal
 		failpoint.Inject("mockRUConsumption", func(_ failpoint.Value) {
 			lastRUConsumption = float64(len(sessVars.StmtCtx.OriginalSQL))
 		})

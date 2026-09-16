@@ -16,6 +16,7 @@ package executor_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"slices"
 	"sync"
@@ -35,6 +36,7 @@ import (
 	"github.com/pingcap/tidb/pkg/planner/core/base"
 	"github.com/pingcap/tidb/pkg/planner/core/operator/physicalop"
 	"github.com/pingcap/tidb/pkg/session"
+	"github.com/pingcap/tidb/pkg/sessionctx/sessionstates"
 	"github.com/pingcap/tidb/pkg/sessiontxn"
 	"github.com/pingcap/tidb/pkg/store/mockstore/unistore"
 	"github.com/pingcap/tidb/pkg/testkit"
@@ -2021,6 +2023,13 @@ func TestStatementRUReportModesSQL(t *testing.T) {
 					} else {
 						require.Zero(t, delta, sql)
 					}
+				}
+				switch stmtType {
+				case "select", "insert", "replace", "update", "delete":
+					rows := tk.MustQuery("select @@tidb_last_query_info").Rows()
+					var info sessionstates.QueryInfo
+					require.NoError(t, json.Unmarshal([]byte(rows[0][0].(string)), &info))
+					require.InDelta(t, total, info.RUConsumption, 1e-9, sql)
 				}
 			}
 			checkType("select * from ru_report_modes where id > 0", "select")
