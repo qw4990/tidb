@@ -141,7 +141,7 @@ func (a *ExecStmt) abortStatementRU() {
 	owner.finishOnce.Do(func() {
 		fullReport := owner.calculationSetup.fullReport
 		owner.calculationSetup = statementRUCalculationSetup{}
-		if fullReport {
+		if fullReport && a.statementRUV2Enabled() {
 			publishStatementRUFailureSafely(statementRUStatementError)
 		}
 	})
@@ -168,6 +168,8 @@ func (a *ExecStmt) finishStatementRU(terminalErr error) float64 {
 
 	finalized := statementRUFinalizedSnapshot{failure: statementRUNotFinished}
 	publishFinalized := false
+	// Use one version decision for metrics, PD, slow log, statement summary and TopRU.
+	reportRUV2 := a.statementRUV2Enabled()
 	owner.finishOnce.Do(func() {
 		calculationSetup := owner.calculationSetup
 		owner.calculationSetup = statementRUCalculationSetup{}
@@ -180,7 +182,7 @@ func (a *ExecStmt) finishStatementRU(terminalErr error) float64 {
 				publishFinalized = false
 				finalized.failure = statementRUPanic
 			}
-			if calculationSetup.fullReport && !publishFinalized {
+			if reportRUV2 && calculationSetup.fullReport && !publishFinalized {
 				publishStatementRUFailureSafely(finalized.failure)
 			}
 		}()
@@ -254,7 +256,7 @@ func (a *ExecStmt) finishStatementRU(terminalErr error) float64 {
 			owner.rootEOF.Load(),
 		)
 	})
-	if publishFinalized {
+	if publishFinalized && reportRUV2 {
 		finalized.ttlJob = owner.ttlJobAtInstall
 		publishStatementRUFinalizedSnapshot(a, finalized)
 		return finalized.result.TotalRU
@@ -550,10 +552,6 @@ func calculateStatementRUPlanChildFirst(
 	operator := tree[operatorIndex]
 	if operator == nil || operator.Origin == nil {
 		return statementRUOperatorResult{state: statementRUOperatorInvalid}
-	}
-	var beforeSubtree ruv2.StmtUnits
-	if operatorRUs != nil {
-		beforeSubtree = calculator.units
 	}
 	children := make([]statementRUOperatorResult, len(operator.ChildrenIdx))
 	childState := statementRUOperatorComplete
@@ -1024,16 +1022,23 @@ func calculateStatementRUPlanChildFirst(
 		if len(operatorRUs) != len(tree) {
 			return statementRUOperatorResult{state: statementRUOperatorInvalid}
 		}
-		cumUnits := calculator.units.Sub(beforeSubtree)
-		if operatorIndex == 0 {
-			selfUnits = selfUnits.Add(rootOwnedUnits)
-			cumUnits = cumUnits.Add(rootOwnedUnits)
-		}
 		weights := currentStatementRUWeights()
 		selfResult, _ := ruv2.Calculate(selfUnits, weights)
-		cumResult, _ := ruv2.Calculate(cumUnits, weights)
+		if engine == statementRUTiFlash {
+			selfResult.TotalRU *= statementRUTiFlashFactor
+		} else if reader, ok := operator.Origin.(*physicalop.PhysicalTableReader); ok && reader.StoreType == kv.TiFlash {
+			// The TiDB Reader owns the scan evidence, but its charge belongs to TiFlash.
+			selfResult.TotalRU += (statementRUTiFlashFactor - 1) * weights.ScanByte * selfUnits.ScanBytes
+		}
+		if operatorIndex == 0 {
+			rootResult, _ := ruv2.Calculate(rootOwnedUnits, weights)
+			selfResult.TotalRU += rootResult.TotalRU
+		}
 		operatorRUs[operatorIndex].SelfRU = selfResult.TotalRU
-		operatorRUs[operatorIndex].CumRU = cumResult.TotalRU
+		operatorRUs[operatorIndex].CumRU = selfResult.TotalRU
+		for _, childIndex := range operator.ChildrenIdx {
+			operatorRUs[operatorIndex].CumRU += operatorRUs[childIndex].CumRU
+		}
 	}
 
 	return statementRUOperatorResult{

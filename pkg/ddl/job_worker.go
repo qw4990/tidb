@@ -56,6 +56,7 @@ import (
 	"github.com/pingcap/tidb/pkg/util/traceevent"
 	"github.com/pingcap/tidb/pkg/util/tracing"
 	kvutil "github.com/tikv/client-go/v2/util"
+	rmclient "github.com/tikv/pd/client/resource_group/controller"
 	atomicutil "go.uber.org/atomic"
 	"go.uber.org/zap"
 )
@@ -605,9 +606,6 @@ func (w *worker) handleJobDone(jobCtx *jobContext, job *model.Job) error {
 		return err
 	}
 	if kerneltype.IsNextGen() && job.IsSynced() && job.RU > 0 {
-		metrics.RUV2Total.Add(job.RU)
-		metrics.RUV2BySQLTypeDDL.Add(job.RU)
-		metrics.RUV2ByEngineTiKV.Add(job.RU)
 		w.reportJobRUConsumption(job)
 	}
 	cleanupDDLReorgHandles(job, w.sess)
@@ -619,6 +617,13 @@ func (w *worker) reportJobRUConsumption(job *model.Job) {
 	if job.RU <= 0 {
 		return
 	}
+	versionProvider, ok := w.sess.GetDomain().(interface{ GetRUVersion() rmclient.RUVersion })
+	if !ok || versionProvider.GetRUVersion() != rmclient.RUVersionV2 {
+		return
+	}
+	metrics.RUV2Total.Add(job.RU)
+	metrics.RUV2BySQLTypeDDL.Add(job.RU)
+	metrics.RUV2ByEngineTiKV.Add(job.RU)
 	dctx := w.sess.GetDistSQLCtx()
 	if dctx == nil || dctx.RUConsumptionReporter == nil {
 		return

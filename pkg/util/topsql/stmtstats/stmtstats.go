@@ -58,6 +58,8 @@ type ExecFinishInfo struct {
 	OutNetworkBytes uint64
 	ExecDuration    time.Duration
 	TopRUEnabled    bool
+	// TotalRUV2 is finalized at statement completion; it is not sampled while executing.
+	TotalRUV2 float64
 }
 
 // StatementStats is a counter used locally in each session.
@@ -147,14 +149,14 @@ func (s *StatementStats) OnExecutionFinished(sqlDigest, planDigest []byte, info 
 	item.DurationCount++
 	item.NetworkOutBytes += info.OutNetworkBytes
 	if info.TopRUEnabled {
-		s.addRUOnFinishLocked(info.User, sqlDigest, planDigest, info.RUDetails, info.ExecDuration)
+		s.addRUOnFinishLocked(info.User, sqlDigest, planDigest, info.RUDetails, info.TotalRUV2, info.ExecDuration)
 	} else {
 		s.clearRUExecCtxLocked()
 	}
 	// Count more data here.
 }
 
-func (s *StatementStats) addRUOnFinishLocked(user string, sqlDigest, planDigest []byte, ru *util.RUDetails, execDuration time.Duration) {
+func (s *StatementStats) addRUOnFinishLocked(user string, sqlDigest, planDigest []byte, ru *util.RUDetails, totalRUV2 float64, execDuration time.Duration) {
 	if s.execCtx == nil {
 		// No matching begin was recorded, so delta cannot be computed correctly.
 		return
@@ -171,6 +173,9 @@ func (s *StatementStats) addRUOnFinishLocked(user string, sqlDigest, planDigest 
 	defer s.clearRUExecCtxLocked()
 
 	currentTotalRU := currentRUTotal(s.execCtx, ru)
+	if s.execCtx.RUVersion == rmclient.RUVersionV2 {
+		currentTotalRU = totalRUV2
+	}
 	if currentTotalRU <= 0 {
 		return
 	}

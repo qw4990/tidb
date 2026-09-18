@@ -19,6 +19,7 @@ import (
 
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/tidb/pkg/config"
+	"github.com/pingcap/tidb/pkg/domain"
 	"github.com/pingcap/tidb/pkg/kv"
 	"github.com/pingcap/tidb/pkg/metrics"
 	"github.com/pingcap/tidb/pkg/parser/ast"
@@ -28,7 +29,16 @@ import (
 	"github.com/pingcap/tidb/pkg/planner/core/operator/physicalop"
 	"github.com/pingcap/tidb/pkg/resourcegroup/ruv2"
 	"github.com/pingcap/tidb/pkg/sessionctx/variable"
+	rmclient "github.com/tikv/pd/client/resource_group/controller"
 )
+
+func (a *ExecStmt) statementRUV2Enabled() bool {
+	if a == nil || a.Ctx == nil {
+		return false
+	}
+	do := domain.GetDomain(a.Ctx)
+	return do != nil && do.GetRUVersion() == rmclient.RUVersionV2
+}
 
 // currentStatementRUWeights reads the loaded config rather than capturing
 // package-initialization defaults. RU v3 shares the ru-v2 config section while
@@ -101,7 +111,7 @@ func installStatementRUOwner(stmt *ExecStmt) {
 	fullReport := config.GetGlobalConfig().RUV2.ReportMode == config.RUReportModeFull
 	if !ok {
 		// Restricted work is outside the user-statement calibration population.
-		if fullReport && stmt != nil && stmt.Ctx != nil && stmt.Ctx.GetSessionVars() != nil &&
+		if fullReport && stmt.statementRUV2Enabled() && stmt.Ctx.GetSessionVars() != nil &&
 			!stmt.Ctx.GetSessionVars().InRestrictedSQL {
 			publishStatementRUFailureSafely(statementRUIneligible)
 		}
@@ -306,6 +316,9 @@ func (calculator statementRUCalculator) finalize() (statementRUFinalizedSnapshot
 		return statementRUFailed(statementRUOperatorInvalid), false
 	}
 	engineRU := calculator.engineResult(weights)
+	// Scale the weighted TiFlash result, keeping the underlying evidence raw.
+	result.TotalRU += (statementRUTiFlashFactor - 1) * engineRU.TiFlash
+	engineRU.TiFlash *= statementRUTiFlashFactor
 	for _, ru := range [...]float64{result.TotalRU, engineRU.TiDB, engineRU.TiKV, engineRU.TiFlash} {
 		if ru < 0 || math.IsNaN(ru) || math.IsInf(ru, 0) {
 			return statementRUFailed(statementRUOperatorInvalid), false

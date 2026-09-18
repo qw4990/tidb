@@ -239,6 +239,7 @@ go_library(
         "@com_github_tikv_pd_client//http",
         "@com_github_tikv_pd_client//opt",
         "@com_github_tikv_pd_client//pkg/caller",
+        "@com_github_tikv_pd_client//resource_group/controller",
         "@io_etcd_go_etcd_client_v3//:client",
         "@org_golang_x_sync//errgroup",
         "@org_uber_go_atomic//:atomic",

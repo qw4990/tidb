@@ -33,6 +33,8 @@ const (
 
 var statementRUEngineNames = [...]string{"tidb", "tikv", "tiflash"}
 
+const statementRUTiFlashFactor = 10
+
 // Operator work follows its execution engine. A TiDB Reader additionally owns
 // remote scan evidence, which is attributed to the corresponding storage engine.
 type statementRUComputeUnits struct {
