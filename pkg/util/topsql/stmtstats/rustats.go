@@ -58,7 +58,7 @@ type ExecutionContext struct {
 // RUIncrement represents a delta RU consumption for a specific RUKey.
 // This is the unit of data produced by StatementStats.MergeRUInto() and consumed by RUCollector.CollectRUIncrements().
 type RUIncrement struct {
-	// TotalRU is the delta RU consumption (RRU + WRU).
+	// TotalRU is the delta RU consumption: RRU + WRU for v1, or the statement result for v2.
 	TotalRU float64
 
 	// ExecCount is the number of SQL executions included in this increment.

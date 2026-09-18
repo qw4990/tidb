@@ -53,6 +53,8 @@ type ExecBeginInfo struct {
 
 // ExecFinishInfo carries optional execution-finish context for extensible stats collection.
 type ExecFinishInfo struct {
+	// RUV2Total is the finalized statement RU v2 result, available only at finish.
+	RUV2Total       float64
 	RUDetails       *util.RUDetails
 	User            string
 	OutNetworkBytes uint64
@@ -147,20 +149,20 @@ func (s *StatementStats) OnExecutionFinished(sqlDigest, planDigest []byte, info 
 	item.DurationCount++
 	item.NetworkOutBytes += info.OutNetworkBytes
 	if info.TopRUEnabled {
-		s.addRUOnFinishLocked(info.User, sqlDigest, planDigest, info.RUDetails, info.ExecDuration)
+		s.addRUOnFinishLocked(info, sqlDigest, planDigest)
 	} else {
 		s.clearRUExecCtxLocked()
 	}
 	// Count more data here.
 }
 
-func (s *StatementStats) addRUOnFinishLocked(user string, sqlDigest, planDigest []byte, ru *util.RUDetails, execDuration time.Duration) {
+func (s *StatementStats) addRUOnFinishLocked(info *ExecFinishInfo, sqlDigest, planDigest []byte) {
 	if s.execCtx == nil {
 		// No matching begin was recorded, so delta cannot be computed correctly.
 		return
 	}
 	key := RUKey{
-		User:       user,
+		User:       info.User,
 		SQLDigest:  BinaryDigest(sqlDigest),
 		PlanDigest: BinaryDigest(planDigest),
 	}
@@ -170,7 +172,7 @@ func (s *StatementStats) addRUOnFinishLocked(user string, sqlDigest, planDigest 
 	}
 	defer s.clearRUExecCtxLocked()
 
-	currentTotalRU := currentRUTotal(s.execCtx, ru)
+	currentTotalRU := currentRUTotal(s.execCtx, info.RUDetails, info.RUV2Total)
 	if currentTotalRU <= 0 {
 		return
 	}
@@ -185,7 +187,7 @@ func (s *StatementStats) addRUOnFinishLocked(user string, sqlDigest, planDigest 
 	}
 	incr := s.getOrCreateRUIncrementLocked(key)
 	incr.TotalRU += deltaRU
-	incr.ExecDuration += uint64(execDuration.Nanoseconds())
+	incr.ExecDuration += uint64(info.ExecDuration.Nanoseconds())
 }
 
 func (s *StatementStats) getOrCreateRUIncrementLocked(key RUKey) *RUIncrement {
@@ -228,7 +230,8 @@ func (s *StatementStats) sampleActiveRUDeltaLocked(result RUIncrementMap) RUIncr
 		return result
 	}
 
-	currentTotalRU := currentRUTotal(s.execCtx, s.execCtx.RUDetails)
+	// RU v2 is finalized at statement completion, so active ticks have no result yet.
+	currentTotalRU := currentRUTotal(s.execCtx, s.execCtx.RUDetails, 0)
 	deltaRU := currentTotalRU - s.execCtx.LastRUTotal
 	if deltaRU > 0 {
 		incr, ok := result[s.execCtx.Key]
@@ -243,8 +246,14 @@ func (s *StatementStats) sampleActiveRUDeltaLocked(result RUIncrementMap) RUIncr
 	return result
 }
 
-func currentRUTotal(execCtx *ExecutionContext, ruDetails *util.RUDetails) float64 {
-	if execCtx == nil || ruDetails == nil || NormalizeRUVersion(execCtx.RUVersion) == rmclient.RUVersionV2 {
+func currentRUTotal(execCtx *ExecutionContext, ruDetails *util.RUDetails, ruV2Total float64) float64 {
+	if execCtx == nil {
+		return 0
+	}
+	if NormalizeRUVersion(execCtx.RUVersion) == rmclient.RUVersionV2 {
+		return ruV2Total
+	}
+	if ruDetails == nil {
 		return 0
 	}
 	return ruDetails.RRU() + ruDetails.WRU()

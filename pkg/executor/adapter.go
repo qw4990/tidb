@@ -1811,7 +1811,7 @@ func (a *ExecStmt) FinishExecuteStmt(txnTS uint64, err error, hasMoreResults boo
 	// `LowSlowQuery` and `SummaryStmt` must be called before recording `PrevStmt`.
 	a.LogSlowQuery(txnTS, succ, hasMoreResults, statementRUTotal)
 	a.SummaryStmt(succ, statementRUTotal)
-	a.observeStmtFinishedForTopProfiling()
+	a.observeStmtFinishedForTopProfiling(statementRUTotal)
 	a.UpdatePlanCacheRuntimeInfo()
 	if sessVars.StmtCtx.IsTiFlash.Load() {
 		if succ {
@@ -2572,7 +2572,7 @@ func (a *ExecStmt) UpdatePlanCacheRuntimeInfo() {
 	a.Ctx.GetSessionVars().PlanCacheValue = nil // reset
 }
 
-func (a *ExecStmt) observeStmtFinishedForTopProfiling() {
+func (a *ExecStmt) observeStmtFinishedForTopProfiling(statementRUTotal ...float64) {
 	vars := a.Ctx.GetSessionVars()
 	if vars == nil {
 		return
@@ -2589,6 +2589,7 @@ func (a *ExecStmt) observeStmtFinishedForTopProfiling() {
 	}
 
 	finishInfo := &stmtstats.ExecFinishInfo{
+		RUV2Total:       firstStatementRUTotal(statementRUTotal),
 		OutNetworkBytes: vars.OutPacketBytes.Load(),
 		ExecDuration:    vars.GetTotalCostDuration(),
 		TopRUEnabled:    topRU,
